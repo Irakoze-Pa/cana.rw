@@ -1,0 +1,317 @@
+import mongoose from "mongoose";
+import PurchaseOrder from "./purchaseOrder.model";
+import RawMaterial from "../raw-materials/rawMaterial.model";
+
+// =====================================================
+// CREATE PURCHASE ORDER
+// =====================================================
+
+export const createPurchaseOrder = async (
+  data: any
+) => {
+  const purchaseOrder =
+    await PurchaseOrder.create(data);
+
+  return purchaseOrder;
+};
+
+// =====================================================
+// GET ALL PURCHASE ORDERS
+// =====================================================
+
+export const getPurchaseOrders = async () => {
+  const purchaseOrders =
+    await PurchaseOrder.find()
+      .populate("supplier")
+      .populate("items.rawMaterial")
+      .sort({ createdAt: -1 });
+
+  return purchaseOrders;
+};
+
+// =====================================================
+// GET PURCHASE ORDER BY ID
+// =====================================================
+
+export const getPurchaseOrderById = async (
+  id: string
+) => {
+  const purchaseOrder =
+    await PurchaseOrder.findById(id)
+      .populate("supplier")
+      .populate("items.rawMaterial");
+
+  return purchaseOrder;
+};
+
+// =====================================================
+// UPDATE PURCHASE ORDER STATUS
+// =====================================================
+
+export const updatePurchaseOrderStatus = async (
+  id: string,
+  status: string
+) => {
+  // ===================================================
+  // VALID STATUSES
+  // ===================================================
+
+  const allowedStatuses = [
+    "draft",
+    "pending_approval",
+    "approved",
+    "partially_received",
+    "received",
+    "cancelled",
+  ];
+
+  if (!allowedStatuses.includes(status)) {
+    throw new Error(
+      "Invalid purchase order status."
+    );
+  }
+
+  // ===================================================
+  // FIND PURCHASE ORDER
+  // ===================================================
+
+  const purchaseOrder =
+    await PurchaseOrder.findById(id);
+
+  if (!purchaseOrder) {
+    throw new Error(
+      "Purchase order not found."
+    );
+  }
+
+  // ===================================================
+  // RECEIVED IS FINAL
+  // ===================================================
+
+  if (purchaseOrder.status === "received") {
+    throw new Error(
+      "Purchase order has already been received and cannot be changed."
+    );
+  }
+
+  // ===================================================
+  // ONLY APPROVED CAN BECOME RECEIVED
+  // ===================================================
+
+  if (
+    status === "received" &&
+    purchaseOrder.status !== "approved"
+  ) {
+    throw new Error(
+      "Only approved purchase orders can be marked as received."
+    );
+  }
+
+  // ===================================================
+  // RECEIVE PURCHASE ORDER
+  // ===================================================
+
+  if (status === "received") {
+    // -------------------------------------------------
+    // VALIDATE ITEMS
+    // -------------------------------------------------
+
+    if (
+      !purchaseOrder.items ||
+      purchaseOrder.items.length === 0
+    ) {
+      throw new Error(
+        "Purchase order has no items to receive."
+      );
+    }
+
+    // -------------------------------------------------
+    // START TRANSACTION
+    // -------------------------------------------------
+
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      // ------------------------------------------------
+      // RELOAD PO INSIDE TRANSACTION
+      // ------------------------------------------------
+
+      const currentPurchaseOrder =
+        await PurchaseOrder.findById(id)
+          .session(session);
+
+      if (!currentPurchaseOrder) {
+        throw new Error(
+          "Purchase order not found."
+        );
+      }
+
+      // ------------------------------------------------
+      // DOUBLE RECEIVE PROTECTION
+      // ------------------------------------------------
+
+      if (
+        currentPurchaseOrder.status ===
+        "received"
+      ) {
+        throw new Error(
+          "Purchase order has already been received."
+        );
+      }
+
+      // ------------------------------------------------
+      // CHECK APPROVAL AGAIN
+      // ------------------------------------------------
+
+      if (
+        currentPurchaseOrder.status !==
+        "approved"
+      ) {
+        throw new Error(
+          "Only approved purchase orders can be marked as received."
+        );
+      }
+
+      // ------------------------------------------------
+      // UPDATE RAW MATERIAL STOCK
+      // ------------------------------------------------
+
+      for (
+        const item of currentPurchaseOrder.items
+      ) {
+        // ----------------------------------------------
+        // VALIDATE QUANTITY
+        // ----------------------------------------------
+
+        if (
+          !item.quantity ||
+          item.quantity <= 0
+        ) {
+          throw new Error(
+            "Purchase order contains an invalid quantity."
+          );
+        }
+
+        // ----------------------------------------------
+        // FIND RAW MATERIAL
+        // ----------------------------------------------
+
+        const rawMaterial =
+          await RawMaterial.findById(
+            item.rawMaterial
+          ).session(session);
+
+        if (!rawMaterial) {
+          throw new Error(
+            "Raw material not found."
+          );
+        }
+
+        // ----------------------------------------------
+        // UNIT VALIDATION
+        // ----------------------------------------------
+
+        if (
+          rawMaterial.unit
+            .trim()
+            .toLowerCase() !==
+          item.unit
+            .trim()
+            .toLowerCase()
+        ) {
+          throw new Error(
+            `Unit mismatch for raw material "${rawMaterial.name}".`
+          );
+        }
+
+        // ----------------------------------------------
+        // ADD RECEIVED QUANTITY TO STOCK
+        // ----------------------------------------------
+
+        rawMaterial.quantity +=
+          Number(item.quantity);
+
+        // ----------------------------------------------
+        // UPDATE LATEST COST
+        // ----------------------------------------------
+
+        rawMaterial.costPerUnit =
+          Number(item.unitPrice);
+
+        // ----------------------------------------------
+        // SAVE RAW MATERIAL
+        // ----------------------------------------------
+
+        await rawMaterial.save({
+          session,
+        });
+      }
+
+      // ------------------------------------------------
+      // CHANGE PURCHASE ORDER STATUS
+      // ------------------------------------------------
+
+      currentPurchaseOrder.status =
+        "received";
+
+      await currentPurchaseOrder.save({
+        session,
+      });
+
+      // ------------------------------------------------
+      // COMMIT TRANSACTION
+      // ------------------------------------------------
+
+      await session.commitTransaction();
+
+      return currentPurchaseOrder;
+    } catch (error) {
+      // ------------------------------------------------
+      // ROLLBACK
+      // ------------------------------------------------
+
+      await session.abortTransaction();
+
+      throw error;
+    } finally {
+      // ------------------------------------------------
+      // CLOSE SESSION
+      // ------------------------------------------------
+
+      await session.endSession();
+    }
+  }
+
+  // ===================================================
+  // NORMAL STATUS UPDATE
+  // ===================================================
+
+  purchaseOrder.status =
+    status as
+      | "draft"
+      | "pending_approval"
+      | "approved"
+      | "partially_received"
+      | "received"
+      | "cancelled";
+
+  await purchaseOrder.save();
+
+  return purchaseOrder;
+};
+
+// =====================================================
+// DELETE PURCHASE ORDER
+// =====================================================
+
+export const deletePurchaseOrder = async (
+  id: string
+) => {
+  const purchaseOrder =
+    await PurchaseOrder.findByIdAndDelete(id);
+
+  return purchaseOrder;
+};
