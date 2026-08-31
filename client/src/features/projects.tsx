@@ -16,7 +16,7 @@ import { useMemo, useState } from "react";
 
 import CanaProject1 from "@/assets/images/canaproject1.jpeg";
 import CanaProject2 from "@/assets/images/canaproject2.jpeg";
-import CanaProject3 from "@/assets/images/canaproject3.jpeg";
+import CanaProject3 from "@/assets/images/Canaproject3.jpeg";
 import CanaProject4 from "@/assets/images/canaproject4.jpeg";
 import CanaProject5 from "@/assets/images/canaproject5.jpeg";
 
