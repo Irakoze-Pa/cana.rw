@@ -41,6 +41,7 @@ export interface IUser extends Document {
 
   department?: Department;
   jobTitle?: string;
+  baseSalary: number;
 
   permissions: string[];
 
@@ -102,6 +103,12 @@ const userSchema = new Schema<IUser>(
       type: String,
       default: "",
       trim: true,
+    },
+
+    baseSalary: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
 
     permissions: {

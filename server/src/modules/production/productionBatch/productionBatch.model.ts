@@ -113,6 +113,8 @@ export interface IProductionBatch
 
   notes: string;
 
+  finishedGoodsPostedAt?: Date;
+
   // ---------------------------------------------------
   // TIMESTAMPS
   // ---------------------------------------------------
@@ -309,6 +311,10 @@ const productionBatchSchema =
         type: String,
         default: "",
         trim: true,
+      },
+
+      finishedGoodsPostedAt: {
+        type: Date,
       },
     },
     {

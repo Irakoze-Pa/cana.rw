@@ -8,6 +8,7 @@ import MainLayout from "@/layouts/MainLayout";
 
 import Home from "@/pages/Home";
 import NotFound from "@/pages/NotFound";
+import AppErrorPage from "@/pages/AppErrorPage";
 import ManagementPlaceholderPage from "@/pages/ManagementPlaceholderPage";
 import ProtectedRoutes from "@/routes/ProtectedRoutes";
 import AdminRoutes from "@/routes/AdminRoutes";
@@ -32,6 +33,8 @@ import ManagementLayout from "@/modules/dashboard/layouts/ManagementLayout";
 // =====================================================
 
 import CustomerDashboard from "@/modules/dashboard/pages/CustomerDashboard";
+import CustomerQuotationsPage from "@/modules/dashboard/pages/CustomerQuotationsPage";
+import CustomerOrdersPage from "@/modules/dashboard/pages/CustomerOrdersPage";
 import AdminDashboard from "@/modules/dashboard/pages/AdminDashboard";
 
 // =====================================================
@@ -46,12 +49,16 @@ import SuppliersPage from "@/modules/management/suppliers/pages/SuppliersPage";
 
 // Raw Materials
 import RawMaterialsPage from "@/modules/management/rawMaterial/pages/RawMaterialsPage";
+import RawMaterialLotsPage from "@/modules/management/rawMaterial/pages/RawMaterialLotsPage";
+import SupplierMaterialOffersPage from "@/modules/management/rawMaterial/pages/SupplierMaterialOffersPage";
 
 // =====================================================
 // INVENTORY MODULE
 // =====================================================
 
 import InventoryPage from "@/modules/management/inventory/pages/InventoryPage";
+import InventoryLedgerPage from "@/modules/management/inventory/pages/InventoryLedgerPage";
+import FinishedGoodsPage from "@/modules/management/inventory/pages/FinishedGoodsPage";
 
 // =====================================================
 // FORMULA MODULE
@@ -65,6 +72,16 @@ import FormulasPage from "@/modules/management/formula/pages/FormulaPage";
 
 import ProductionOrdersPage from "@/modules/management/production/pages/ProductionOrdersPage";
 import ProductionBatchesPage from "@/modules/management/production/pages/ProductionBatchesPage";
+import ProductionWorkspacePage from "@/modules/management/production/pages/ProductionWorkspacePage";
+import SalesOrdersPage from "@/modules/management/sales/SalesOrdersPage";
+import QuotationsPage from "@/modules/management/sales/QuotationsPage";
+import ProformaBuilderPage from "@/modules/management/sales/ProformaBuilderPage";
+import BillingPage from "@/modules/management/billing/BillingPage";
+import UsersPage from "@/modules/management/users/UsersPage";
+import ProfileSettingsPage from "@/modules/management/users/ProfileSettingsPage";
+import StaffPaymentsPage from "@/modules/management/users/StaffPaymentsPage";
+import CustomersPage from "@/modules/management/users/CustomersPage";
+import PayrollPage from "@/modules/management/users/PayrollPage";
 
 // =====================================================
 // RAW MATERIAL CONSUMPTION MODULE
@@ -87,6 +104,7 @@ import PaintsHome from "@/modules/cana-paints/pages/PaintsHome";
 import Products from "@/modules/cana-paints/pages/Products";
 import PaintingServices from "@/modules/cana-paints/pages/PaintingServices";
 import RequestQuote from "@/modules/cana-paints/quotations/RequestQuote";
+import EstimatedCostCalculator from "@/modules/cana-paints/pages/EstimatedCostCalculator";
 
 // =====================================================
 // CANA SERVICES
@@ -101,6 +119,10 @@ import Transport from "@/modules/cana-services/pages/Transport";
 // =====================================================
 
 const router = createBrowserRouter([
+  {
+    path: "*",
+    errorElement: <AppErrorPage />,
+  },
   // =====================================================
   // PUBLIC WEBSITE
   // =====================================================
@@ -108,6 +130,7 @@ const router = createBrowserRouter([
   {
     path: "/",
     element: <MainLayout />,
+    errorElement: <AppErrorPage />,
     children: [
       // -------------------------------------------------
       // HOME
@@ -160,6 +183,10 @@ const router = createBrowserRouter([
         path: "cana-paints/request-quote",
         element: <RequestQuote />,
       },
+      {
+        path: "cana-paints/estimate-cost",
+        element: <EstimatedCostCalculator />,
+      },
 
       // -------------------------------------------------
       // CANA SERVICES
@@ -188,6 +215,7 @@ const router = createBrowserRouter([
 
   {
     element: <ProtectedRoutes />,
+    errorElement: <AppErrorPage />,
     children: [
       {
         path: "/dashboard",
@@ -196,6 +224,18 @@ const router = createBrowserRouter([
           {
             index: true,
             element: <CustomerDashboard />,
+          },
+          {
+            path: "quotations",
+            element: <CustomerQuotationsPage />,
+          },
+          {
+            path: "quotations/:id",
+            element: <CustomerQuotationsPage />,
+          },
+          {
+            path: "orders",
+            element: <CustomerOrdersPage />,
           },
         ],
       },
@@ -238,6 +278,15 @@ const router = createBrowserRouter([
         element: <RawMaterialsPage />,
       },
 
+      {
+        path: "raw-materials/lots",
+        element: <RawMaterialLotsPage />,
+      },
+      {
+        path: "supplier-materials",
+        element: <SupplierMaterialOffersPage />,
+      },
+
       // =================================================
       // PROCUREMENT
       // =================================================
@@ -263,17 +312,22 @@ const router = createBrowserRouter([
 
       {
         path: "inventory/stock",
-        element: <ManagementPlaceholderPage title="Stock Movements" description="Review stock receipts, issues, adjustments, and transfers in one operational ledger." />,
+        element: <InventoryLedgerPage view="movements" />,
+      },
+
+      {
+        path: "inventory/finished-goods",
+        element: <FinishedGoodsPage />,
       },
 
       {
         path: "inventory/receipts",
-        element: <ManagementPlaceholderPage title="Goods Receipts" description="Record and verify deliveries from suppliers before they become available inventory." />,
+        element: <InventoryLedgerPage view="receipts" />,
       },
 
       {
         path: "inventory/reports",
-        element: <ManagementPlaceholderPage title="Inventory Reports" description="Export stock valuations, reorder indicators, and movement summaries." />,
+        element: <InventoryLedgerPage view="reports" />,
       },
 
       // -------------------------------------------------
@@ -299,7 +353,7 @@ const router = createBrowserRouter([
 
       {
         path: "production",
-        element: <ManagementPlaceholderPage title="Production Overview" description="Track current production health, capacity, and exceptions across orders and batches." />,
+        element: <ProductionWorkspacePage view="overview" />,
       },
 
       {
@@ -337,7 +391,7 @@ const router = createBrowserRouter([
 
       {
         path: "production/quality",
-        element: <ManagementPlaceholderPage title="Quality Control" description="Capture product inspections, approvals, and corrective actions for each production batch." />,
+        element: <ProductionWorkspacePage view="quality" />,
       },
 
       // =================================================
@@ -346,7 +400,7 @@ const router = createBrowserRouter([
 
       {
         path: "production/history",
-        element: <ManagementPlaceholderPage title="Production History" description="Review completed batches, material usage, yield, and production performance over time." />,
+        element: <ProductionWorkspacePage view="history" />,
       },
 
       // =================================================
@@ -355,7 +409,7 @@ const router = createBrowserRouter([
 
       {
         path: "production/waste",
-        element: <ManagementPlaceholderPage title="Waste & Rework" description="Record material losses and rework activities to improve production yield." />,
+        element: <ProductionWorkspacePage view="waste" />,
       },
 
       // =================================================
@@ -363,8 +417,23 @@ const router = createBrowserRouter([
       // =================================================
 
       {
+        path: "quotations",
+        element: <QuotationsPage />,
+      },
+
+      {
         path: "sales",
-        element: <ManagementPlaceholderPage title="Sales" description="Manage customer orders, invoices, and sales performance in one workspace." />,
+        element: <SalesOrdersPage />,
+      },
+
+      {
+        path: "sales/proforma",
+        element: <ProformaBuilderPage />,
+      },
+
+      {
+        path: "billing",
+        element: <BillingPage />,
       },
 
       // =================================================
@@ -373,7 +442,7 @@ const router = createBrowserRouter([
 
       {
         path: "customers",
-        element: <ManagementPlaceholderPage title="Customers" description="Maintain customer profiles, account history, and quotation activity." />,
+        element: <CustomersPage />,
       },
 
       // =================================================
@@ -382,8 +451,14 @@ const router = createBrowserRouter([
 
       {
         path: "staff",
-        element: <ManagementPlaceholderPage title="Staff Management" description="Manage staff accounts, roles, departments, and operational permissions." />,
+        element: <UsersPage />,
       },
+      {
+        path: "profile",
+        element: <ProfileSettingsPage />,
+      },
+      { path: "staff-payments", element: <StaffPaymentsPage /> },
+      { path: "payroll", element: <PayrollPage /> },
 
       // =================================================
       // REPORTS

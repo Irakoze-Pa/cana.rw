@@ -12,6 +12,8 @@ import ProductionBatch from "../productionBatch/productionBatch.model";
 
 import Inventory from "../../inventory/inventory.model";
 import InventoryTransaction from "../../inventory/inventoryTransaction.model";
+import RawMaterial from "../../raw-materials/rawMaterial.model";
+import RawMaterialLot from "../../raw-materials/rawMaterialLot.model";
 
 // =====================================================
 // TYPES
@@ -118,6 +120,108 @@ const roundNumber = (
   const factor = Math.pow(10, decimals);
 
   return Math.round(value * factor) / factor;
+};
+
+const syncRawMaterialInventorySnapshot = async (
+  rawMaterialId: mongoose.Types.ObjectId,
+  inventory: { quantity: number; reservedQuantity: number; availableQuantity: number; averageCostPerUnit: number },
+  session: mongoose.ClientSession
+) => {
+  await RawMaterial.findByIdAndUpdate(
+    rawMaterialId,
+    {
+      quantity: inventory.quantity,
+      reservedQuantity: inventory.reservedQuantity,
+      availableQuantity: inventory.availableQuantity,
+      costPerUnit: inventory.averageCostPerUnit,
+    },
+    { session }
+  );
+};
+
+const issueRawMaterialLot = async (
+  rawMaterialId: mongoose.Types.ObjectId,
+  lotNumber: string,
+  quantity: number,
+  unit: string,
+  session: mongoose.ClientSession
+) => {
+  const normalizedLotNumber = lotNumber.trim().toUpperCase();
+  const now = new Date();
+  const availableLotCount = await RawMaterialLot.countDocuments({
+    rawMaterial: rawMaterialId,
+    status: "available",
+    availableQuantity: { $gt: QUANTITY_TOLERANCE },
+    $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: now } }],
+  }).session(session);
+
+  if (!normalizedLotNumber) {
+    if (availableLotCount > 0) {
+      throw new Error("Select an available receipt lot before issuing a lot-tracked raw material.");
+    }
+    return;
+  }
+
+  const lot = await RawMaterialLot.findOne({
+    rawMaterial: rawMaterialId,
+    lotNumber: normalizedLotNumber,
+  }).session(session);
+
+  if (!lot) {
+    throw new Error(`Lot ${normalizedLotNumber} was not found for this raw material.`);
+  }
+
+  if (lot.status !== "available") {
+    throw new Error(`Lot ${normalizedLotNumber} is ${lot.status} and cannot be issued.`);
+  }
+
+  if (lot.expiresAt && lot.expiresAt <= now) {
+    await RawMaterialLot.findByIdAndUpdate(lot._id, { status: "expired" }, { session });
+    throw new Error(`Lot ${normalizedLotNumber} has expired and cannot be issued.`);
+  }
+
+  if (lot.unit.trim().toLowerCase() !== unit.trim().toLowerCase()) {
+    throw new Error(`Lot ${normalizedLotNumber} uses ${lot.unit}, but this consumption uses ${unit}.`);
+  }
+
+  if (Number(lot.availableQuantity) + QUANTITY_TOLERANCE < quantity) {
+    throw new Error(`Lot ${normalizedLotNumber} has only ${lot.availableQuantity} ${lot.unit} available.`);
+  }
+
+  const remaining = roundNumber(Number(lot.availableQuantity) - quantity);
+  const updated = await RawMaterialLot.findOneAndUpdate(
+    { _id: lot._id, status: "available", availableQuantity: { $gte: quantity } },
+    { $inc: { availableQuantity: -quantity }, $set: { status: remaining <= QUANTITY_TOLERANCE ? "consumed" : "available" } },
+    { new: true, session, runValidators: true }
+  );
+
+  if (!updated) {
+    throw new Error(`Lot ${normalizedLotNumber} changed before it could be issued. Please try again.`);
+  }
+};
+
+const returnRawMaterialLot = async (
+  rawMaterialId: mongoose.Types.ObjectId,
+  lotNumber: string,
+  quantity: number,
+  session: mongoose.ClientSession
+) => {
+  const normalizedLotNumber = lotNumber.trim().toUpperCase();
+  if (!normalizedLotNumber) return;
+
+  const lot = await RawMaterialLot.findOne({ rawMaterial: rawMaterialId, lotNumber: normalizedLotNumber }).session(session);
+  if (!lot) {
+    throw new Error(`Lot ${normalizedLotNumber} was not found for this raw material return.`);
+  }
+  if (lot.status === "quarantined" || lot.status === "expired") {
+    throw new Error(`Lot ${normalizedLotNumber} is ${lot.status}; it cannot receive returned production material.`);
+  }
+
+  await RawMaterialLot.findByIdAndUpdate(
+    lot._id,
+    { $inc: { availableQuantity: quantity }, $set: { status: "available" } },
+    { session, runValidators: true }
+  );
 };
 
 // =====================================================
@@ -1144,6 +1248,14 @@ export const issueMaterialConsumption =
               );
             }
 
+            await issueRawMaterialLot(
+              item.rawMaterial,
+              prepared.lotNumber,
+              quantity,
+              item.unit,
+              session
+            );
+
             const quantityBefore =
               available;
 
@@ -1206,6 +1318,12 @@ export const issueMaterialConsumption =
               );
             }
 
+            await syncRawMaterialInventorySnapshot(
+              item.rawMaterial,
+              updatedInventory,
+              session
+            );
+
             await InventoryTransaction.create(
               [
                 {
@@ -1228,6 +1346,10 @@ export const issueMaterialConsumption =
 
                   unit:
                     item.unit,
+
+                  lotNumber:
+                    prepared.lotNumber ||
+                    undefined,
 
                   unitCost:
                     toNumber(
@@ -2371,6 +2493,19 @@ export const returnMaterialConsumption =
               );
             }
 
+            await returnRawMaterialLot(
+              item.rawMaterial,
+              item.lotNumber || "",
+              quantity,
+              session
+            );
+
+            await syncRawMaterialInventorySnapshot(
+              item.rawMaterial,
+              updatedInventory,
+              session
+            );
+
             await InventoryTransaction.create(
               [
                 {
@@ -2393,6 +2528,10 @@ export const returnMaterialConsumption =
 
                   unit:
                     item.unit,
+
+                  lotNumber:
+                    item.lotNumber ||
+                    undefined,
 
                   unitCost:
                     toNumber(

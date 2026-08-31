@@ -1,8 +1,11 @@
 import { Router } from "express";
 
 import inventoryController from "./inventory.controller";
+import { protect, authorizeRoles } from "../../middleware/auth.middleware";
+import { UserRole } from "../../models/users";
 
 const router = Router();
+router.use(protect, authorizeRoles(UserRole.ADMIN, UserRole.STAFF));
 
 /* =========================================================
    SUMMARY / DASHBOARD

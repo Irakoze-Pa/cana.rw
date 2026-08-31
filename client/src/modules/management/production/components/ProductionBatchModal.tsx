@@ -550,7 +550,9 @@ export default function ProductionBatchModal({
                 ) =>
                   total +
                   numberValue(
-                    batch.plannedQuantity,
+                    batch.status === "Completed"
+                      ? batch.actualQuantity
+                      : batch.plannedQuantity,
                   ),
                 0,
               );
@@ -701,6 +703,7 @@ export default function ProductionBatchModal({
     setUnit(
       selectedOrder.unit || "",
     );
+
   }, [
     selectedOrder,
   ]);
@@ -739,12 +742,16 @@ export default function ProductionBatchModal({
     if (
       !isEdit &&
       selectedOrder.status !==
+        "Draft" &&
+      selectedOrder.status !==
+        "Planned" &&
+      selectedOrder.status !==
         "Released" &&
       selectedOrder.status !==
         "In Production"
     ) {
       return (
-        "A production batch can only be created for a Released or In Production production order."
+        "A production batch can only be created for a Draft, Planned, Released or In Production production order."
       );
     }
 
@@ -827,8 +834,8 @@ export default function ProductionBatchModal({
     }
 
     /*
-     * STRICT COMPLETION:
-     * actual must exactly equal planned.
+     * Completion requires output, but output may be below plan. The remaining
+     * production-order balance can then be scheduled as a make-up batch.
      */
     if (
       isEdit &&
@@ -838,9 +845,6 @@ export default function ProductionBatchModal({
         return "A completed production batch must have an actual produced quantity greater than 0.";
       }
 
-      if (actual !== planned) {
-        return "A production batch can only be completed when actual quantity equals planned quantity.";
-      }
     }
 
     return "";
@@ -1229,6 +1233,10 @@ export default function ProductionBatchModal({
                     .filter(
                       (order) =>
                         order.status ===
+                          "Draft" ||
+                        order.status ===
+                          "Planned" ||
+                        order.status ===
                           "Released" ||
                         order.status ===
                           "In Production",
@@ -1249,7 +1257,7 @@ export default function ProductionBatchModal({
                           —{" "}
                           {getProductName(
                             order,
-                          )}
+                          )} · {order.status}
                         </option>
                       ),
                     )}
@@ -1339,6 +1347,22 @@ export default function ProductionBatchModal({
                   </div>
 
                 </div>
+
+                {!isEdit &&
+                  remainingQuantity !== null && (
+                  <div className="mt-4 border-t border-gray-200 pt-4 text-xs leading-5 text-gray-600">
+                    Other active batches have allocated{" "}
+                    <span className="font-semibold text-gray-900">
+                      {Math.max(
+                        0,
+                        numberValue(
+                          selectedOrder.quantity,
+                        ) - remainingQuantity,
+                      ).toLocaleString()} {selectedOrder.unit}
+                    </span>
+                    . This new batch can use up to the remaining quantity shown above.
+                  </div>
+                )}
               </div>
             )}
 
@@ -1369,7 +1393,7 @@ export default function ProductionBatchModal({
               <div className="flex gap-3">
                 <input
                   type="number"
-                  min="0"
+                  min="0.01"
                   max={
                     !isEdit ||
                     canEditPlannedQuantity(
@@ -1404,6 +1428,28 @@ export default function ProductionBatchModal({
 
                   {unit || "Unit"}
                 </div>
+
+                {!isEdit &&
+                  remainingQuantity !== null &&
+                  remainingQuantity > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPlannedQuantity(
+                          String(
+                            remainingQuantity,
+                          ),
+                        )
+                      }
+                      disabled={
+                        submitting ||
+                        loadingBatches
+                      }
+                      className="shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                    >
+                      Use remaining
+                    </button>
+                  )}
               </div>
 
               <p className="mt-1.5 text-xs text-gray-500">
@@ -1456,6 +1502,18 @@ export default function ProductionBatchModal({
                   </div>
 
                 </div>
+
+                <p className="mt-4 border-t border-blue-200 pt-4 text-xs leading-5 text-blue-800">
+                  The batch stays <span className="font-semibold">Planned</span> until the production team marks it Ready and then In Progress. Finished-product stock is posted only when a batch is completed with an actual output quantity.
+                </p>
+
+                {selectedOrder &&
+                  (selectedOrder.status === "Draft" ||
+                    selectedOrder.status === "Planned") && (
+                    <p className="mt-3 text-xs leading-5 text-blue-800">
+                      Creating this first batch will release the production order after its material requirements are verified.
+                    </p>
+                  )}
               </div>
             )}
 
@@ -1514,7 +1572,7 @@ export default function ProductionBatchModal({
                         "Completed"
                         ? "Completed batches are locked."
                         : "Actual quantity can be entered only while production is In Progress or Paused."
-                      : "Enter the actual quantity produced so far."}
+                      : "Enter finished output. A short yield can be completed and scheduled later as a make-up batch."}
                   </p>
                 </div>
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   ChevronDown,
+  Calculator,
   Construction,
   FileText,
   Palette,
@@ -229,6 +230,7 @@ function MobileMenu({
                     to="/cana-paints/request-quote"
                     onClick={closeMenu}
                   />
+                  <MobileDropdownItem icon={<Calculator size={18} strokeWidth={1.8} />} title="Estimated Cost Calculator" description="Plan paint quantity and cost" to="/cana-paints/estimate-cost" onClick={closeMenu} />
 
                 </div>
 

@@ -12,10 +12,6 @@ import {
   updateRawMaterial,
 } from "../services/rawMaterialService";
 
-import { getSuppliers } from "../../suppliers/services/supplierService";
-
-import type { Supplier } from "../../suppliers/types/supplier.types";
-
 interface RawMaterialModalProps {
   isOpen: boolean;
   material?: RawMaterial | null;
@@ -26,7 +22,6 @@ interface RawMaterialModalProps {
 interface FormData {
   name: string;
   category: string;
-  supplier: string;
   unit: string;
   quantity: string;
   minimumStock: string;
@@ -37,7 +32,6 @@ interface FormData {
 const initialForm: FormData = {
   name: "",
   category: "",
-  supplier: "",
   unit: "",
   quantity: "",
   minimumStock: "",
@@ -53,53 +47,12 @@ function RawMaterialModal({
 }: RawMaterialModalProps) {
   const [loading, setLoading] = useState(false);
 
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-
-  const [suppliersLoading, setSuppliersLoading] =
-    useState(false);
-
   const [error, setError] = useState("");
 
   const [formData, setFormData] =
     useState<FormData>(initialForm);
 
   const isEditMode = Boolean(material);
-
-  // =====================================================
-  // LOAD SUPPLIERS
-  // =====================================================
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const loadSuppliers = async () => {
-      try {
-        setSuppliersLoading(true);
-        setError("");
-
-        const data = await getSuppliers();
-
-        setSuppliers(
-          Array.isArray(data) ? data : []
-        );
-      } catch (error) {
-        console.error(
-          "Failed to load suppliers:",
-          error
-        );
-
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Failed to load suppliers."
-        );
-      } finally {
-        setSuppliersLoading(false);
-      }
-    };
-
-    loadSuppliers();
-  }, [isOpen]);
 
   // =====================================================
   // LOAD MATERIAL WHEN EDITING
@@ -114,9 +67,6 @@ function RawMaterialModal({
 
         category:
           material.category ?? "",
-
-        supplier:
-          material.supplier?._id ?? "",
 
         unit:
           material.unit ?? "",
@@ -176,10 +126,6 @@ function RawMaterialModal({
 
     if (!formData.category) {
       return "Please select a category.";
-    }
-
-    if (!formData.supplier) {
-      return "Please select a supplier.";
     }
 
     if (!formData.unit) {
@@ -250,9 +196,7 @@ function RawMaterialModal({
        * The backend remains responsible for
        * final validation.
        */
-      const code =
-        material?.code ||
-        `RM-${Date.now()}`;
+      const code = material?.code;
 
       const quantity = Number(
         formData.quantity || 0
@@ -269,7 +213,7 @@ function RawMaterialModal({
       const payload = {
         name: formData.name.trim(),
 
-        code,
+        ...(code ? { code } : {}),
 
         category:
           formData.category.trim(),
@@ -277,14 +221,11 @@ function RawMaterialModal({
         unit:
           formData.unit,
 
-        quantity,
+        ...(!isEditMode ? { quantity } : {}),
 
         minimumStock,
 
         costPerUnit,
-
-        supplier:
-          formData.supplier,
 
         status:
           formData.status,
@@ -397,8 +338,8 @@ function RawMaterialModal({
               "
             >
               {isEditMode
-                ? "Update raw material information and stock settings."
-                : "Add a new raw material to your production inventory."}
+                ? "Update purchasing and production master data. Stock is controlled through Inventory."
+                : "Create the material master first. Add supplier offers and supplier-specific lots separately."}
             </p>
           </div>
 
@@ -596,79 +537,6 @@ function RawMaterialModal({
               </div>
 
               {/* ================================================= */}
-              {/* SUPPLIER */}
-              {/* ================================================= */}
-
-              <div>
-                <label
-                  htmlFor="supplier"
-                  className="
-                    mb-2
-                    block
-                    text-sm
-                    font-semibold
-                    text-gray-700
-                  "
-                >
-                  Supplier
-                </label>
-
-                <select
-                  id="supplier"
-                  name="supplier"
-                  value={formData.supplier}
-                  onChange={handleChange}
-                  required
-                  disabled={
-                    loading ||
-                    suppliersLoading
-                  }
-                  className="
-                    w-full
-                    rounded-xl
-                    border
-                    border-gray-200
-                    bg-white
-                    px-4
-                    py-3
-                    text-sm
-                    text-gray-900
-                    outline-none
-                    transition
-                    focus:border-red-500
-                    focus:ring-2
-                    focus:ring-red-100
-                    disabled:bg-gray-50
-                  "
-                >
-                  <option value="">
-                    {suppliersLoading
-                      ? "Loading suppliers..."
-                      : "Select supplier"}
-                  </option>
-
-                  {suppliers.map(
-                    (supplier) => (
-                      <option
-                        key={supplier._id}
-                        value={supplier._id}
-                      >
-                        {supplier.name} (
-                        {supplier.code})
-                      </option>
-                    )
-                  )}
-                </select>
-
-                {!suppliersLoading &&
-                  suppliers.length === 0 && (
-                    <p className="mt-1.5 text-xs text-red-500">
-                      No suppliers available.
-                    </p>
-                  )}
-              </div>
-
-              {/* ================================================= */}
               {/* UNIT */}
               {/* ================================================= */}
 
@@ -752,7 +620,7 @@ function RawMaterialModal({
                     text-gray-700
                   "
                 >
-                  Current Quantity
+                  Opening Quantity
                 </label>
 
                 <input
@@ -765,7 +633,7 @@ function RawMaterialModal({
                   onChange={handleChange}
                   placeholder="0"
                   required
-                  disabled={loading}
+                  disabled={loading || isEditMode}
                   className="
                     w-full
                     rounded-xl
@@ -786,9 +654,9 @@ function RawMaterialModal({
                 />
 
                 <p className="mt-1.5 text-xs text-gray-400">
-                  Current stock snapshot. Stock
-                  movements will later be managed by
-                  Inventory.
+                  {isEditMode
+                    ? "Stock is controlled by Inventory. Use a goods receipt or stock adjustment to change it."
+                    : "This is posted as an opening-balance transaction in Inventory."}
                 </p>
               </div>
 
@@ -860,7 +728,7 @@ function RawMaterialModal({
                     text-gray-700
                   "
                 >
-                  Cost Per Unit
+                  Opening Cost Per Unit
                 </label>
 
                 <div className="relative">
@@ -910,6 +778,7 @@ function RawMaterialModal({
                     RWF
                   </span>
                 </div>
+                <p className="mt-1.5 text-xs text-gray-400">Use this only for the opening stock valuation. Supplier purchase prices are maintained separately in Supplier Material Offers and are used when creating purchase orders.</p>
               </div>
 
               {/* ================================================= */}
@@ -1089,10 +958,7 @@ function RawMaterialModal({
 
             <button
               type="submit"
-              disabled={
-                loading ||
-                suppliersLoading
-              }
+              disabled={loading}
               className="
                 flex
                 items-center

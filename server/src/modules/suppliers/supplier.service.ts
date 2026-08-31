@@ -11,10 +11,19 @@ import type {
 export const createSupplier = async (
   data: Partial<ISupplier>
 ) => {
-  const existingSupplier =
-    await Supplier.findOne({
-      code: data.code,
-    });
+  const suppliedCode = String(data.code || "").trim().toUpperCase();
+  let code = suppliedCode;
+
+  if (!code) {
+    const count = await Supplier.countDocuments();
+    let sequence = count + 1;
+    do {
+      code = `SUP-${String(sequence).padStart(4, "0")}`;
+      sequence += 1;
+    } while (await Supplier.exists({ code }));
+  }
+
+  const existingSupplier = await Supplier.findOne({ code });
 
   if (existingSupplier) {
     throw new Error(
@@ -22,7 +31,7 @@ export const createSupplier = async (
     );
   }
 
-  return await Supplier.create(data);
+  return await Supplier.create({ ...data, code });
 };
 
 /* =========================

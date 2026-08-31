@@ -17,6 +17,10 @@ export interface IQuotation extends Document {
     | "Approved"
     | "Rejected";
 
+  reviewedBy?: mongoose.Types.ObjectId;
+  reviewNotes?: string;
+  salesOrder?: mongoose.Types.ObjectId;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -85,6 +89,23 @@ const quotationSchema =
           "Rejected",
         ],
         default: "Pending",
+      },
+
+      reviewedBy: {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+
+      reviewNotes: {
+        type: String,
+        trim: true,
+        maxlength: 2000,
+        default: "",
+      },
+
+      salesOrder: {
+        type: Schema.Types.ObjectId,
+        ref: "SalesOrder",
       },
     },
 

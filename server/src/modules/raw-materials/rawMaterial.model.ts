@@ -20,7 +20,8 @@ export interface IRawMaterial extends Document {
 
   costPerUnit: number;
 
-  supplier: mongoose.Types.ObjectId;
+  /** Legacy/default supplier reference only. Approved suppliers belong in SupplierMaterial offers. */
+  supplier?: mongoose.Types.ObjectId;
 
   status: "Active" | "Inactive";
 
@@ -132,12 +133,13 @@ const rawMaterialSchema =
       },
 
       // =====================================================
-      // SUPPLIER
+      // LEGACY DEFAULT SUPPLIER
+      // Supplier relationships are maintained in SupplierMaterial offers so a
+      // material can be purchased from many suppliers.
       // =====================================================
       supplier: {
         type: Schema.Types.ObjectId,
         ref: "Supplier",
-        required: true,
       },
 
       // =====================================================

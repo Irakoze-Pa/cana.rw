@@ -1,11 +1,10 @@
-import axios from "axios";
+import api from "@/services/api";
 
 // =====================================================
 // API
 // =====================================================
 
-const API_URL =
-  "http://localhost:5050/api/purchase-orders";
+const API_URL = "/purchase-orders";
 
 // =====================================================
 // STATUS
@@ -100,7 +99,7 @@ export interface CreatePurchaseOrderData {
 // =====================================================
 
 export async function getPurchaseOrders() {
-  const response = await axios.get(API_URL);
+  const response = await api.get(API_URL);
 
   return response.data;
 }
@@ -112,7 +111,7 @@ export async function getPurchaseOrders() {
 export async function getPurchaseOrderById(
   id: string
 ) {
-  const response = await axios.get(
+  const response = await api.get(
     `${API_URL}/${id}`
   );
 
@@ -126,7 +125,7 @@ export async function getPurchaseOrderById(
 export async function createPurchaseOrder(
   data: CreatePurchaseOrderData
 ) {
-  const response = await axios.post(
+  const response = await api.post(
     API_URL,
     data
   );
@@ -142,7 +141,7 @@ export async function updatePurchaseOrderStatus(
   id: string,
   status: PurchaseOrderStatus
 ) {
-  const response = await axios.patch(
+  const response = await api.patch(
     `${API_URL}/${id}/status`,
     {
       status,
@@ -159,7 +158,7 @@ export async function updatePurchaseOrderStatus(
 export async function deletePurchaseOrder(
   id: string
 ) {
-  const response = await axios.delete(
+  const response = await api.delete(
     `${API_URL}/${id}`
   );
 

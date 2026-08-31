@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-const WHATSAPP_NUMBER = "250795572029";
+const WHATSAPP_NUMBER = "250789408367";
 
 const whatsappMessage = encodeURIComponent(
   "Hello CANA Services, I am interested in your transport and delivery service. I would like to request more information."

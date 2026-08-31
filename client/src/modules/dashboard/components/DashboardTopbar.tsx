@@ -1,374 +1,55 @@
-import { useEffect, useState } from "react";
-import {
-  CalendarDays,
-  Clock3,
-  ChevronDown,
-  UserCircle,
-} from "lucide-react";
-
+import { Bell, CalendarDays, CheckCheck, ChevronDown, Clock3, FileText, LogOut, ReceiptText, RefreshCw, Settings2, ShoppingCart, TriangleAlert, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/authContext";
-
-function DashboardTopbar() {
-  const { user } = useAuth();
-
-  const [currentDate, setCurrentDate] = useState(
-    new Date()
-  );
-
-  // =====================================================
-  // LIVE DATE & TIME
-  // =====================================================
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setCurrentDate(new Date());
-    }, 1000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, []);
-
-  // =====================================================
-  // DATE
-  // =====================================================
-
-  const date = currentDate.toLocaleDateString("en-GB", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-
-  // =====================================================
-  // TIME
-  // =====================================================
-
-  const time = currentDate.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-
-  // =====================================================
-  // REAL USER DATA
-  // =====================================================
-
-  const fullName = user?.fullName || "User";
-
-  const email = user?.email || "";
-
-  const role = user?.role || "customer";
-
-  const company = user?.company || "";
-
-  // =====================================================
-  // USER INITIALS
-  // =====================================================
-
-  const initials = fullName
-    .trim()
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((name) => name.charAt(0).toUpperCase())
-    .join("");
-
-  // =====================================================
-  // FORMAT ROLE
-  // =====================================================
-
-  const formattedRole =
-    role.charAt(0).toUpperCase() +
-    role.slice(1);
-
-  // =====================================================
-  // FORMAT COMPANY
-  // =====================================================
-
-  const formattedCompany = company
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) =>
-      letter.toUpperCase()
-    );
-
-  return (
-    <header
-      className="
-        sticky
-        top-0
-        z-30
-        flex
-        min-h-16
-        items-center
-        justify-between
-        border-b
-        border-gray-200
-        bg-white/95
-        px-4
-        backdrop-blur
-        sm:px-6
-        lg:px-8
-      "
-    >
-      {/* =================================================
-          LEFT
-      ================================================= */}
-
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-gray-900">
-          Here We
-        </p>
-
-        <p className="hidden text-xs text-gray-500 sm:block">
-          welcome you, {fullName.split(" ")[0]}
-        </p>
-      </div>
-
-      {/* =================================================
-          RIGHT
-      ================================================= */}
-
-      <div className="flex items-center gap-3 sm:gap-5">
-
-        {/* =================================================
-            DATE
-        ================================================= */}
-
-        <div
-          className="
-            hidden
-            items-center
-            gap-2
-            lg:flex
-          "
-        >
-          <CalendarDays
-            size={16}
-            strokeWidth={2}
-            className="text-gray-400"
-          />
-
-          <span className="text-sm font-medium text-gray-600">
-            {date}
-          </span>
-        </div>
-
-        {/* =================================================
-            TIME
-        ================================================= */}
-
-        <div className="flex items-center gap-2">
-          <Clock3
-            size={16}
-            strokeWidth={2}
-            className="text-red-600"
-          />
-
-          <span
-            className="
-              font-mono
-              text-sm
-              font-semibold
-              tracking-tight
-              text-gray-900
-            "
-          >
-            {time}
-          </span>
-        </div>
-
-        {/* =================================================
-            DIVIDER
-        ================================================= */}
-
-        <div
-          className="
-            hidden
-            h-8
-            w-px
-            bg-gray-200
-            sm:block
-          "
-        />
-
-        {/* =================================================
-            USER
-        ================================================= */}
-
-        <div className="group relative">
-
-          {/* USER BUTTON */}
-
-          <button
-            type="button"
-            className="
-              flex
-              items-center
-              gap-2.5
-              rounded-xl
-              px-2
-              py-1.5
-              transition
-              hover:bg-gray-50
-            "
-          >
-
-            {/* AVATAR */}
-
-            <div
-              className="
-                flex
-                h-9
-                w-9
-                shrink-0
-                items-center
-                justify-center
-                rounded-full
-                bg-red-50
-                text-xs
-                font-bold
-                text-red-600
-              "
-            >
-              {initials || (
-                <UserCircle
-                  size={21}
-                  strokeWidth={1.8}
-                />
-              )}
-            </div>
-
-            {/* USER INFO */}
-
-            <div className="hidden min-w-0 text-left md:block">
-
-              <p
-                className="
-                  max-w-40
-                  truncate
-                  text-sm
-                  font-semibold
-                  text-gray-900
-                "
-              >
-                {fullName}
-              </p>
-
-              <p
-                className="
-                  max-w-40
-                  truncate
-                  text-xs
-                  text-gray-500
-                "
-              >
-                {formattedRole}
-              </p>
-
-            </div>
-
-            <ChevronDown
-              size={15}
-              strokeWidth={2}
-              className="
-                hidden
-                text-gray-400
-                transition
-                md:block
-              "
-            />
-
-          </button>
-
-          {/* =================================================
-              USER DROPDOWN
-          ================================================= */}
-
-          <div
-            className="
-              invisible
-              absolute
-              right-0
-              top-full
-              mt-2
-              w-64
-              translate-y-1
-              rounded-xl
-              border
-              border-gray-200
-              bg-white
-              p-2
-              opacity-0
-              shadow-lg
-              transition-all
-              duration-150
-              group-hover:visible
-              group-hover:translate-y-0
-              group-hover:opacity-100
-            "
-          >
-
-            {/* USER HEADER */}
-
-            <div className="border-b border-gray-100 px-3 py-3">
-
-              <p className="truncate text-sm font-semibold text-gray-900">
-                {fullName}
-              </p>
-
-              {email && (
-                <p className="mt-1 truncate text-xs text-gray-500">
-                  {email}
-                </p>
-              )}
-
-            </div>
-
-            {/* USER DETAILS */}
-
-            <div className="space-y-2 px-3 py-3">
-
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">
-                  Role
-                </span>
-
-                <span className="text-xs font-semibold capitalize text-gray-900">
-                  {formattedRole}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-gray-500">
-                  Company
-                </span>
-
-                <span className="truncate text-xs font-semibold text-gray-900">
-                  {formattedCompany}
-                </span>
-              </div>
-
-              {user?.phone && (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs text-gray-500">
-                    Phone
-                  </span>
-
-                  <span className="truncate text-xs font-semibold text-gray-900">
-                    {user.phone}
-                  </span>
-                </div>
-              )}
-
-            </div>
-
-          </div>
-
-        </div>
-      </div>
-    </header>
-  );
+import api from "@/services/api";
+
+type Notice = { id: string; title: string; description: string; to: string; tone: "red" | "amber" | "blue" | "green"; kind: "quote" | "order" | "production" | "stock" | "billing" };
+type RecordData = Record<string, unknown>;
+const titles: Record<string, string> = { "/management": "Operations overview", "/management/inventory": "Inventory control", "/management/production": "Production workspace", "/management/purchase-orders": "Procurement", "/management/sales": "Sales orders", "/management/staff": "Staff & access", "/dashboard": "My workspace", "/dashboard/quotations": "My quotations", "/dashboard/orders": "My orders" };
+const icons = { quote: FileText, order: ShoppingCart, production: Settings2, stock: TriangleAlert, billing: ReceiptText };
+const tones = { red: "bg-red-50 text-red-700", amber: "bg-amber-50 text-amber-700", blue: "bg-blue-50 text-blue-700", green: "bg-emerald-50 text-emerald-700" };
+const rows = (payload: unknown): RecordData[] => Array.isArray((payload as { data?: unknown[] })?.data) ? ((payload as { data: RecordData[] }).data) : [];
+const countText = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+
+export default function DashboardTopbar() {
+  const { user, logout } = useAuth(); const location = useLocation(); const navigate = useNavigate();
+  const [profileOpen, setProfileOpen] = useState(false); const [noticeOpen, setNoticeOpen] = useState(false); const [loading, setLoading] = useState(false); const [notices, setNotices] = useState<Notice[]>([]); const [dismissed, setDismissed] = useState<string[]>([]); const [now, setNow] = useState(new Date());
+  const isManagement = user?.role === "admin" || user?.role === "staff";
+  const title = useMemo(() => Object.entries(titles).find(([path]) => location.pathname === path)?.[1] || (isManagement ? "CANA operations" : "My workspace"), [location.pathname, isManagement]);
+  const initials = user?.fullName.split(" ").map((name) => name[0]).join("").slice(0, 2).toUpperCase() || "U";
+  const storageKey = `cana-notice-dismissed:${user?._id || "anonymous"}`;
+
+  useEffect(() => { try { setDismissed(JSON.parse(localStorage.getItem(storageKey) || "[]")); } catch { setDismissed([]); } }, [storageKey]);
+  useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 30000); return () => window.clearInterval(timer); }, []);
+
+  const loadNotices = useCallback(async () => {
+    if (!user) return; setLoading(true);
+    try {
+      if (!isManagement) {
+        const [quoteResult, orderResult] = await Promise.allSettled([api.get("/quotations/my"), api.get("/sales-orders/my")]);
+        const quotes = quoteResult.status === "fulfilled" ? rows(quoteResult.value.data) : []; const orders = orderResult.status === "fulfilled" ? rows(orderResult.value.data) : [];
+        const reviewed = quotes.filter((quote) => ["Reviewed", "Approved", "Rejected"].includes(String(quote.status)));
+        const activeOrders = orders.filter((order) => !["delivered", "cancelled"].includes(String(order.status).toLowerCase()));
+        setNotices([...(reviewed.length ? [{ id: `customer-quotes-${reviewed.map((quote) => `${quote._id}:${quote.status}`).join(",")}`, title: "Quotation update", description: `${countText(reviewed.length, "quotation")} has been reviewed.`, to: "/dashboard/quotations", tone: "blue" as const, kind: "quote" as const }] : []), ...(activeOrders.length ? [{ id: `customer-orders-${activeOrders.map((order) => `${order._id}:${order.status}`).join(",")}`, title: "Order in progress", description: `${countText(activeOrders.length, "order")} is being processed.`, to: "/dashboard/orders", tone: "green" as const, kind: "order" as const }] : [])]);
+        return;
+      }
+      const results = await Promise.allSettled([api.get("/quotations"), api.get("/sales-orders"), api.get("/production-orders"), api.get("/production-batches"), api.get("/raw-materials"), api.get("/billing/invoices")]);
+      const [quotes, orders, productionOrders, batches, materials, invoices] = results.map((result) => result.status === "fulfilled" ? rows(result.value.data) : []);
+      const pendingQuotes = quotes.filter((quote) => quote.status === "Pending");
+      const incompleteOrders = orders.filter((order) => !["delivered", "cancelled"].includes(String(order.status).toLowerCase()));
+      const openProduction = productionOrders.filter((order) => !["Completed", "Cancelled"].includes(String(order.status)));
+      const activeBatches = batches.filter((batch) => ["Ready", "In Progress", "Paused"].includes(String(batch.status)));
+      const lowStock = materials.filter((material) => Boolean(material.isLowStock) || (String(material.status) === "Active" && Number(material.availableQuantity ?? material.quantity ?? 0) <= Number(material.minimumStock ?? 0)));
+      const unpaidInvoices = invoices.filter((invoice) => Number(invoice.balance || 0) > 0 && String(invoice.status).toLowerCase() !== "void");
+      setNotices([...(pendingQuotes.length ? [{ id: `quotes-${pendingQuotes.map((quote) => quote._id).join(",")}`, title: "New quotation requests", description: `${countText(pendingQuotes.length, "customer quotation")} awaiting sales review.`, to: "/management/quotations", tone: "red" as const, kind: "quote" as const }] : []), ...(incompleteOrders.length ? [{ id: `orders-${incompleteOrders.map((order) => `${order._id}:${order.status}`).join(",")}`, title: "Sales orders need follow-up", description: `${countText(incompleteOrders.length, "order")} not yet completed or delivered.`, to: "/management/sales", tone: "amber" as const, kind: "order" as const }] : []), ...(openProduction.length ? [{ id: `production-${openProduction.map((order) => `${order._id}:${order.status}`).join(",")}`, title: "Production work is open", description: `${countText(openProduction.length, "production order")} requires planning or execution.`, to: "/management/production/orders", tone: "blue" as const, kind: "production" as const }] : []), ...(activeBatches.length ? [{ id: `batches-${activeBatches.map((batch) => `${batch._id}:${batch.status}`).join(",")}`, title: "Batches require attention", description: `${countText(activeBatches.length, "batch")} is ready, running, or paused.`, to: "/management/production/batches", tone: "amber" as const, kind: "production" as const }] : []), ...(lowStock.length ? [{ id: `stock-${lowStock.map((material) => `${material._id}:${material.availableQuantity}`).join(",")}`, title: "Raw-material stock risk", description: `${countText(lowStock.length, "material")} at or below its minimum stock level.`, to: "/management/raw-materials", tone: "red" as const, kind: "stock" as const }] : []), ...(unpaidInvoices.length ? [{ id: `billing-${unpaidInvoices.map((invoice) => `${invoice._id}:${invoice.balance}`).join(",")}`, title: "Outstanding client payments", description: `${countText(unpaidInvoices.length, "invoice")} still has a balance to collect.`, to: "/management/billing", tone: "red" as const, kind: "billing" as const }] : [])]);
+    } finally { setLoading(false); }
+  }, [isManagement, user]);
+
+  useEffect(() => { void loadNotices(); const timer = window.setInterval(() => void loadNotices(), 60000); return () => window.clearInterval(timer); }, [loadNotices]);
+  const visible = notices.filter((notice) => !dismissed.includes(notice.id));
+  const dismissAll = () => { const next = Array.from(new Set([...dismissed, ...notices.map((notice) => notice.id)])); setDismissed(next); localStorage.setItem(storageKey, JSON.stringify(next)); };
+  const follow = (notice: Notice) => { const next = Array.from(new Set([...dismissed, notice.id])); setDismissed(next); localStorage.setItem(storageKey, JSON.stringify(next)); setNoticeOpen(false); navigate(notice.to); };
+
+  return <header className="sticky top-0 z-30 flex min-h-20 items-center justify-between gap-4 border-b border-slate-200/80 bg-white/90 px-5 py-3 shadow-sm backdrop-blur-xl sm:px-8"><div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-[.18em] text-red-600">CANA workspace</p><h1 className="mt-1 truncate text-lg font-bold text-slate-950">{title}</h1></div><div className="flex items-center gap-2 sm:gap-3"><div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500 md:flex"><CalendarDays size={15} />{now.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })}<span className="mx-1 h-4 border-l border-slate-200" /><Clock3 size={15} />{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div><div className="relative"><button type="button" aria-label="Open notifications" onClick={() => { setNoticeOpen((value) => !value); setProfileOpen(false); }} className="relative rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50"><Bell size={19} />{visible.length > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">{visible.length > 9 ? "9+" : visible.length}</span>}</button>{noticeOpen && <section className="absolute right-0 mt-2 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><p className="font-bold text-slate-900">Notifications</p><p className="text-xs text-slate-500">Live operational follow-up</p></div><div className="flex items-center gap-1"><button type="button" onClick={() => void loadNotices()} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Refresh"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></button>{visible.length > 0 && <button type="button" onClick={dismissAll} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" title="Mark all read"><CheckCheck size={16} /></button>}<button type="button" onClick={() => setNoticeOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close notifications"><X size={16} /></button></div></div><div className="max-h-[28rem] overflow-y-auto p-2">{loading && !notices.length ? <p className="p-5 text-center text-sm text-slate-500">Checking operations…</p> : visible.length ? visible.map((notice) => { const Icon = icons[notice.kind]; return <button type="button" key={notice.id} onClick={() => follow(notice)} className="flex w-full gap-3 rounded-xl p-3 text-left transition hover:bg-slate-50"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tones[notice.tone]}`}><Icon size={17} /></span><span className="min-w-0"><span className="block text-sm font-semibold text-slate-900">{notice.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-500">{notice.description}</span></span></button>; }) : <div className="p-7 text-center"><CheckCheck className="mx-auto text-emerald-500" size={26} /><p className="mt-2 text-sm font-semibold text-slate-800">You are up to date</p><p className="mt-1 text-xs text-slate-500">No current follow-up requires attention.</p></div>}</div></section>}</div><div className="relative"><button type="button" onClick={() => { setProfileOpen((value) => !value); setNoticeOpen(false); }} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 pr-2.5 transition hover:bg-slate-50"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 text-xs font-bold text-white">{initials}</span><span className="hidden text-left sm:block"><span className="block max-w-28 truncate text-sm font-semibold text-slate-900">{user?.fullName}</span><span className="block text-xs capitalize text-slate-500">{user?.role}</span></span><ChevronDown size={15} className="text-slate-400" /></button>{profileOpen && <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-xl"><p className="px-3 py-2 text-xs capitalize text-slate-500">{user?.department || "General workspace"}</p><button type="button" onClick={() => { logout(); navigate("/", { replace: true }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><LogOut size={16} />Sign out</button></div>}</div></div></header>;
 }
-
-export default DashboardTopbar;

@@ -8,7 +8,7 @@ import {
 
 import type { Product } from "./product.types";
 
-const API_URL = import.meta.env.VITE_API_URL || "/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
 
 interface ProductTableProps {
   onEdit: (product: Product) => void;

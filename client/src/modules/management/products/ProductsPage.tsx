@@ -88,6 +88,7 @@ function ProductsPage() {
             <option value="Exterior">Exterior</option>
             <option value="Primer">Primer</option>
             <option value="Undercoat">Undercoat</option>
+            <option value="Wall Master">Wall Master / Putty</option>
             <option value="Other">Other</option>
           </select>
 

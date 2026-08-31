@@ -5,7 +5,7 @@ import type {
 } from "../types/materialConsumption.types";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5050/api";
+  import.meta.env.VITE_API_URL || (import.meta.env.VITE_API_URL || "/api/v1");
 
 const BASE_URL = `${API_BASE_URL}/material-consumptions`;
 

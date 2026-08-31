@@ -5,7 +5,7 @@
 export interface SupplierSummary {
   _id: string;
   name: string;
-  code: string;
+  code?: string;
 }
 
 // =========================================================
@@ -52,7 +52,7 @@ export interface RawMaterial {
   /**
    * Populated supplier.
    */
-  supplier: SupplierSummary;
+  supplier?: SupplierSummary;
 
   status: "Active" | "Inactive";
 
@@ -75,7 +75,7 @@ export interface RawMaterial {
 export interface CreateRawMaterialData {
   name: string;
 
-  code: string;
+  code?: string;
 
   category: string;
 
@@ -105,7 +105,7 @@ export interface CreateRawMaterialData {
 
   costPerUnit: number;
 
-  supplier: string;
+  supplier?: string;
 
   status?: "Active" | "Inactive";
 }

@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import PurchaseOrder from "./purchaseOrder.model";
 import RawMaterial from "../raw-materials/rawMaterial.model";
+import Inventory from "../inventory/inventory.model";
+import InventoryTransaction from "../inventory/inventoryTransaction.model";
 
 // =====================================================
 // CREATE PURCHASE ORDER
@@ -9,8 +11,13 @@ import RawMaterial from "../raw-materials/rawMaterial.model";
 export const createPurchaseOrder = async (
   data: any
 ) => {
-  const purchaseOrder =
-    await PurchaseOrder.create(data);
+  let poNumber = String(data.poNumber || "").trim().toUpperCase();
+  if (!poNumber) {
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const count = await PurchaseOrder.countDocuments({ poNumber: new RegExp(`^PO-${today}-`) });
+    poNumber = `PO-${today}-${String(count + 1).padStart(3, "0")}`;
+  }
+  const purchaseOrder = await PurchaseOrder.create({ ...data, poNumber });
 
   return purchaseOrder;
 };
@@ -234,6 +241,8 @@ export const updatePurchaseOrderStatus = async (
         rawMaterial.quantity +=
           Number(item.quantity);
 
+        rawMaterial.availableQuantity = Number(rawMaterial.quantity) - Number(rawMaterial.reservedQuantity || 0);
+
         // ----------------------------------------------
         // UPDATE LATEST COST
         // ----------------------------------------------
@@ -248,6 +257,58 @@ export const updatePurchaseOrderStatus = async (
         await rawMaterial.save({
           session,
         });
+
+        // ----------------------------------------------
+        // POST GOODS RECEIPT TO THE RAW-MATERIAL LEDGER
+        // ----------------------------------------------
+        const currentInventory = await Inventory.findOne({ rawMaterial: rawMaterial._id }).session(session);
+        const before = currentInventory?.quantity ?? 0;
+        const after = Number((before + Number(item.quantity)).toFixed(6));
+        const previousValue = before * (currentInventory?.averageCostPerUnit ?? 0);
+        const averageCost = after > 0
+          ? Number(((previousValue + Number(item.quantity) * Number(item.unitPrice)) / after).toFixed(6))
+          : 0;
+        const minimumStock = rawMaterial.minimumStock ?? 0;
+        const status = after <= 0 ? "Out of Stock" : after <= minimumStock ? "Low Stock" : "Available";
+
+        const inventory = currentInventory
+          ? await Inventory.findByIdAndUpdate(currentInventory._id, {
+              $inc: { quantity: Number(item.quantity), availableQuantity: Number(item.quantity) },
+              $set: { averageCostPerUnit: averageCost, status, lastTransactionAt: new Date() },
+            }, { new: true, session })
+          : await Inventory.create([{
+              rawMaterial: rawMaterial._id,
+              rawMaterialName: rawMaterial.name,
+              rawMaterialCode: rawMaterial.code,
+              unit: rawMaterial.unit,
+              quantity: after,
+              reservedQuantity: 0,
+              availableQuantity: after,
+              minimumStock,
+              averageCostPerUnit: averageCost,
+              status,
+              lastTransactionAt: new Date(),
+            }], { session }).then(([created]) => created);
+
+        if (!inventory) throw new Error("Unable to post the goods receipt to inventory.");
+
+        await InventoryTransaction.create([{
+          inventory: inventory._id,
+          rawMaterial: rawMaterial._id,
+          rawMaterialName: rawMaterial.name,
+          rawMaterialCode: rawMaterial.code,
+          type: "Purchase",
+          quantity: Number(item.quantity),
+          unit: rawMaterial.unit,
+          unitCost: Number(item.unitPrice),
+          totalCost: Number((Number(item.quantity) * Number(item.unitPrice)).toFixed(2)),
+          quantityBefore: before,
+          quantityAfter: after,
+          referenceType: "PurchaseOrder",
+          referenceId: currentPurchaseOrder._id,
+          purchaseOrder: currentPurchaseOrder._id,
+          transactionDate: new Date(),
+        }], { session });
       }
 
       // ------------------------------------------------

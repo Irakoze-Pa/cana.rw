@@ -14,7 +14,7 @@ import logo from "@/assets/logocanan.png";
 function Footer() {
   const year = new Date().getFullYear();
 
-  const whatsappNumber = "250795572029";
+  const whatsappNumber = "250789408367";
 
   const whatsappMessage =
     "Hello CANA Group, I would like to know more about your products and services.";

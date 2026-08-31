@@ -1,794 +1,441 @@
-import { useEffect, useState } from "react";
-
+import { useEffect, useMemo, useState } from "react";
 import {
+  Boxes,
+  ChevronDown,
+  Factory,
   LayoutDashboard,
   Package,
   PackageOpen,
-  Factory,
-  Boxes,
   ShoppingCart,
-  Users,
   Truck,
   UserCog,
-  BarChart3,
-  Settings,
-  LogOut,
-  ChevronDown,
-  ChevronLeft,
+  Warehouse,
+  History,
+  ArrowDownToLine,
+  FileBarChart,
   ClipboardList,
   Layers,
   FlaskConical,
   PackageCheck,
-  History,
-  Warehouse,
-  ArrowDownToLine,
-  FileBarChart,
-  Gauge,
+  ShieldCheck,
+  FileText,
+  ReceiptText,
+  House,
+  Settings,
+  Banknote,
 } from "lucide-react";
-
-import {
-  NavLink,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
-
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/authContext";
 import logo from "@/assets/logocanan.png";
 
-/* ========================================================================== */
-/* TYPES                                                                      */
-/* ========================================================================== */
-
-interface ManagementSidebarProps {
-  sidebarOpen: boolean;
-  onToggle: () => void;
-}
-
-interface SidebarItem {
-  name: string;
-  path: string;
+type Item = {
+  label: string;
+  to: string;
   icon: React.ElementType;
+  departments?: string[];
+  companies?: string[];
+  roles?: string[];
   end?: boolean;
-}
-
-/* ========================================================================== */
-/* INVENTORY                                                                  */
-/* ========================================================================== */
-
-const inventoryItems: SidebarItem[] = [
+};
+type Group = {
+  label: string;
+  icon: React.ElementType;
+  companies?: string[];
+  items: Item[];
+};
+const groups: Group[] = [
   {
-    name: "Current Stock",
-    path: "/management/inventory",
-    icon: Warehouse,
-    end: true,
+    label: "Product catalogue",
+    icon: Package,
+    companies: ["cana_paints", "cana_group"],
+    items: [
+      {
+        label: "Product catalogue",
+        to: "/management/products",
+        icon: Package,
+        departments: ["sales", "management"],
+      },
+    ],
   },
   {
-    name: "Stock Movements",
-    path: "/management/inventory/stock",
-    icon: History,
+    label: "Inventory & stores",
+    icon: Boxes,
+    companies: ["cana_paints", "cana_group"],
+    items: [
+      {
+        label: "Raw-material stock",
+        to: "/management/inventory",
+        icon: Warehouse,
+        end: true,
+        departments: ["procurement", "warehouse", "production", "management"],
+      },
+      {
+        label: "Finished goods & transfers",
+        to: "/management/inventory/finished-goods",
+        icon: PackageCheck,
+        departments: ["sales", "warehouse", "production", "management"],
+      },
+      {
+        label: "Stock movements",
+        to: "/management/inventory/stock",
+        icon: History,
+        departments: ["procurement", "warehouse", "production", "management"],
+      },
+      {
+        label: "Goods receipts",
+        to: "/management/inventory/receipts",
+        icon: ArrowDownToLine,
+        departments: ["procurement", "warehouse", "management"],
+      },
+      {
+        label: "Inventory reports",
+        to: "/management/inventory/reports",
+        icon: FileBarChart,
+        departments: ["procurement", "warehouse", "production", "management"],
+      },
+    ],
   },
   {
-    name: "Goods Receipts",
-    path: "/management/inventory/receipts",
-    icon: ArrowDownToLine,
-  },
-  {
-    name: "Inventory Reports",
-    path: "/management/inventory/reports",
-    icon: FileBarChart,
-  },
-];
-
-/* ========================================================================== */
-/* PRODUCTION                                                                 */
-/* ========================================================================== */
-
-const productionItems: SidebarItem[] = [
-  {
-    name: "Overview",
-    path: "/management/production",
-    icon: Gauge,
-    end: true,
-  },
-  {
-    name: "Production Orders",
-    path: "/management/production/orders",
-    icon: ClipboardList,
-  },
-  {
-    name: "Active Batches",
-    path: "/management/production/batches",
-    icon: Layers,
-  },
-  {
-    name: "Formulas / Recipes",
-    path: "/management/production/formulas",
-    icon: FlaskConical,
-  },
-  {
-    name: "Material Consumption",
-    path: "/management/production/consumption",
-    icon: PackageCheck,
-  },
-  {
-    name: "Production History",
-    path: "/management/production/history",
-    icon: History,
-  },
-];
-
-/* ========================================================================== */
-/* PROCUREMENT                                                                */
-/* ========================================================================== */
-
-const procurementItems: SidebarItem[] = [
-  {
-    name: "Suppliers",
-    path: "/management/suppliers",
+    label: "Procurement & materials",
     icon: Truck,
+    companies: ["cana_paints", "cana_group"],
+    items: [
+      {
+        label: "Suppliers",
+        to: "/management/suppliers",
+        icon: Truck,
+        departments: ["procurement", "management"],
+      },
+      {
+        label: "Raw-material catalogue",
+        to: "/management/raw-materials",
+        icon: PackageOpen,
+        departments: ["procurement", "warehouse", "production", "management"],
+      },
+      {
+        label: "Purchase orders",
+        to: "/management/purchase-orders",
+        icon: ClipboardList,
+        departments: ["procurement", "finance", "management"],
+      },
+      {
+        label: "Supplier material offers",
+        to: "/management/supplier-materials",
+        icon: PackageOpen,
+        departments: ["procurement", "management"],
+      },
+      {
+        label: "Material lots & traceability",
+        to: "/management/raw-materials/lots",
+        icon: Layers,
+        departments: ["procurement", "warehouse", "production", "management"],
+      },
+    ],
   },
   {
-    name: "Purchase Orders",
-    path: "/management/purchase-orders",
-    icon: ClipboardList,
+    label: "Production",
+    icon: Factory,
+    companies: ["cana_paints", "cana_group"],
+    items: [
+      {
+        label: "Overview",
+        to: "/management/production",
+        icon: Factory,
+        end: true,
+        departments: ["production", "management"],
+      },
+      {
+        label: "Production orders",
+        to: "/management/production/orders",
+        icon: ClipboardList,
+        departments: ["production", "management"],
+      },
+      {
+        label: "Batches",
+        to: "/management/production/batches",
+        icon: Layers,
+        departments: ["production", "management"],
+      },
+      {
+        label: "Formulas",
+        to: "/management/production/formulas",
+        icon: FlaskConical,
+        departments: ["production", "management"],
+      },
+      {
+        label: "Material consumption",
+        to: "/management/production/consumption",
+        icon: PackageCheck,
+        departments: ["production", "management"],
+      },
+      {
+        label: "Quality & release queue",
+        to: "/management/production/quality",
+        icon: ClipboardList,
+        departments: ["production", "management"],
+      },
+      {
+        label: "Output variance",
+        to: "/management/production/waste",
+        icon: FileBarChart,
+        departments: ["production", "management"],
+      },
+      {
+        label: "Production history",
+        to: "/management/production/history",
+        icon: History,
+        departments: ["production", "management"],
+      },
+    ],
+  },
+  {
+    label: "Sales & finance",
+    icon: ShoppingCart,
+    items: [
+      {
+        label: "Customers",
+        to: "/management/customers",
+        icon: UserCog,
+        departments: ["sales", "customer_service", "management"],
+      },
+      {
+        label: "Quotation queue",
+        to: "/management/quotations",
+        icon: FileText,
+        departments: ["sales", "customer_service", "management"],
+      },
+      {
+        label: "Sales orders",
+        to: "/management/sales",
+        icon: ShoppingCart,
+        departments: ["sales", "customer_service", "finance", "management"],
+      },
+      {
+        label: "Proforma builder",
+        to: "/management/sales/proforma",
+        icon: FileText,
+        departments: ["sales", "customer_service", "management"],
+      },
+      {
+        label: "Invoices & payments",
+        to: "/management/billing",
+        icon: ReceiptText,
+        departments: ["sales", "finance", "management"],
+      },
+    ],
+  },
+  {
+    label: "People & payroll",
+    icon: Banknote,
+    items: [
+      {
+        label: "Staff directory & roles",
+        to: "/management/staff",
+        icon: UserCog,
+        departments: ["management"],
+      },
+      {
+        label: "Payroll workspace",
+        to: "/management/payroll",
+        icon: Banknote,
+        roles: ["admin"],
+      },
+    ],
   },
 ];
 
-/* ========================================================================== */
-/* COMPONENT                                                                  */
-/* ========================================================================== */
-
-function ManagementSidebar({
+export default function ManagementSidebar({
   sidebarOpen,
   onToggle,
-}: ManagementSidebarProps) {
-  const { logout, user } = useAuth();
-
+}: {
+  sidebarOpen: boolean;
+  onToggle: () => void;
+}) {
+  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-
-  /* ------------------------------------------------------------------------ */
-  /* SECTION STATES                                                           */
-  /* ------------------------------------------------------------------------ */
-
-  const [inventoryOpen, setInventoryOpen] = useState(
-    location.pathname.startsWith("/management/inventory"),
+  const isAdmin = user?.role === "admin";
+  const visibleGroups = useMemo(
+    () =>
+      groups
+        .filter(
+          (group) =>
+            isAdmin ||
+            !group.companies ||
+            group.companies.includes(user?.company || ""),
+        )
+        .map((group) => ({
+          ...group,
+          items: group.items.filter(
+            (item) =>
+              isAdmin ||
+              ((!item.roles || item.roles.includes(user?.role || "")) &&
+                (!item.companies ||
+                  item.companies.includes(user?.company || "")) &&
+                (!item.departments ||
+                  item.departments.includes(user?.department || ""))),
+          ),
+        }))
+        .filter((group) => group.items.length > 0),
+    [isAdmin, user?.company, user?.department, user?.role],
   );
-
-  const [productionOpen, setProductionOpen] = useState(
-    location.pathname.startsWith("/management/production"),
-  );
-
-  const [procurementOpen, setProcurementOpen] = useState(
-    location.pathname.startsWith("/management/suppliers") ||
-      location.pathname.startsWith("/management/purchase-orders"),
-  );
-
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   useEffect(() => {
-    if (location.pathname.startsWith("/management/inventory")) {
-      setInventoryOpen(true);
-    }
-
-    if (location.pathname.startsWith("/management/production")) {
-      setProductionOpen(true);
-    }
-
-    if (
-      location.pathname.startsWith("/management/suppliers") ||
-      location.pathname.startsWith("/management/purchase-orders")
-    ) {
-      setProcurementOpen(true);
-    }
-  }, [location.pathname]);
-
-  /* ------------------------------------------------------------------------ */
-  /* ACTIVE STATES                                                            */
-  /* ------------------------------------------------------------------------ */
-
-  const isDashboardActive = location.pathname === "/management";
-
-  const isProductsActive = location.pathname.startsWith(
-    "/management/products",
-  );
-
-  const isRawMaterialsActive = location.pathname.startsWith(
-    "/management/raw-materials",
-  );
-
-  const isInventoryActive = location.pathname.startsWith(
-    "/management/inventory",
-  );
-
-  const isProductionActive = location.pathname.startsWith(
-    "/management/production",
-  );
-
-  const isSalesActive = location.pathname.startsWith(
-    "/management/sales",
-  );
-
-  const isCustomersActive = location.pathname.startsWith(
-    "/management/customers",
-  );
-
-  const isStaffActive = location.pathname.startsWith(
-    "/management/staff",
-  );
-
-  const isReportsActive = location.pathname.startsWith(
-    "/management/reports",
-  );
-
-  const isSettingsActive = location.pathname.startsWith(
-    "/management/settings",
-  );
-
-  const isProcurementActive =
-    location.pathname.startsWith("/management/suppliers") ||
-    location.pathname.startsWith("/management/purchase-orders");
-
-  /* ------------------------------------------------------------------------ */
-  /* MAIN LINK                                                                */
-  /* ------------------------------------------------------------------------ */
-
-  const mainLinkClass = ({
-    isActive,
-  }: {
-    isActive: boolean;
-  }) =>
-    [
-      "group",
-      "relative",
-      "flex",
-      "items-center",
-      "gap-3",
-      "rounded-xl",
-      "py-3",
-      "text-sm",
-      "font-semibold",
-      "select-none",
-      "transition-all",
-      "duration-200",
-      sidebarOpen ? "px-4" : "justify-center px-3",
-      isActive
-        ? "bg-gray-950 text-white shadow-sm shadow-gray-950/15"
-        : "text-gray-600 hover:bg-gray-100 hover:text-gray-950",
-    ].join(" ");
-
-  /* ------------------------------------------------------------------------ */
-  /* SUB LINK                                                                 */
-  /* ------------------------------------------------------------------------ */
-
-  const subLinkClass = ({
-    isActive,
-  }: {
-    isActive: boolean;
-  }) =>
-    [
-      "group",
-      "flex",
-      "items-center",
-      "gap-3",
-      "rounded-lg",
-      "px-3",
-      "py-2.5",
-      "text-sm",
-      "font-medium",
-      "transition-all",
-      "duration-200",
-      isActive
-        ? "bg-red-50 text-red-700 font-semibold"
-        : "text-gray-500 hover:bg-gray-50 hover:text-gray-900",
-    ].join(" ");
-
-  /* ------------------------------------------------------------------------ */
-  /* SECTION LABEL                                                             */
-  /* ------------------------------------------------------------------------ */
-
-  const sectionLabelClass =
-    "mb-2 px-4 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400";
-
-  /* ------------------------------------------------------------------------ */
-  /* LOGOUT                                                                    */
-  /* ------------------------------------------------------------------------ */
-
-  const handleLogout = () => {
-    logout();
-
-    navigate("/", {
-      replace: true,
-    });
-  };
-
-  /* ------------------------------------------------------------------------ */
-  /* COLLAPSIBLE SECTION                                                       */
-  /* ------------------------------------------------------------------------ */
-
-  const renderSection = (
-    label: string,
-    icon: React.ElementType,
-    open: boolean,
-    setOpen: React.Dispatch<React.SetStateAction<boolean>>,
-    active: boolean,
-    items: SidebarItem[],
-  ) => {
-    const SectionIcon = icon;
-
-    return (
-      <div>
-        <button
-          type="button"
-          onClick={() => {
-            if (!sidebarOpen) {
-              navigate(items[0].path);
-              return;
-            }
-
-            setOpen((previous) => !previous);
-          }}
-          aria-expanded={sidebarOpen ? open : undefined}
-          title={!sidebarOpen ? label : undefined}
-          className={[
-            "flex",
-            "w-full",
-            "items-center",
-            "rounded-xl",
-            "py-3",
-            "text-sm",
-            "font-semibold",
-            "transition-all",
-            "duration-200",
-            sidebarOpen ? "justify-between px-4" : "justify-center px-3",
-            active
-              ? "bg-gray-950 text-white shadow-sm shadow-gray-950/15"
-              : "text-gray-600 hover:bg-gray-100 hover:text-gray-950",
-          ].join(" ")}
-        >
-          <div className="flex items-center gap-3">
-            <SectionIcon size={20} strokeWidth={2} />
-
-            {sidebarOpen && <span>{label}</span>}
-          </div>
-
-          {sidebarOpen && (
-            <ChevronDown
-              size={17}
-              strokeWidth={2}
-              className={[
-                "transition-transform",
-                "duration-200",
-                open ? "rotate-180" : "",
-              ].join(" ")}
-            />
-          )}
-        </button>
-
-        {sidebarOpen && open && (
-          <div className="ml-4 mt-2 flex flex-col gap-1 border-l border-gray-200 pl-3">
-            {items.map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.end}
-                  className={subLinkClass}
-                >
-                  <Icon size={17} strokeWidth={2} />
-
-                  <span>{item.name}</span>
-                </NavLink>
-              );
-            })}
-          </div>
-        )}
-      </div>
+    const active = visibleGroups.find((group) =>
+      group.items.some(
+        (item) =>
+          location.pathname === item.to ||
+          (item.to !== "/management" &&
+            location.pathname.startsWith(`${item.to}/`)),
+      ),
     );
-  };
-
-  /* ------------------------------------------------------------------------ */
-  /* RENDER                                                                    */
-  /* ------------------------------------------------------------------------ */
-
+    if (active) setOpen((current) => ({ ...current, [active.label]: true }));
+  }, [location.pathname, visibleGroups]);
   return (
-    <aside
-      className={[
-        "relative",
-        "flex",
-        "h-screen",
-        "shrink-0",
-        "flex-col",
-        "overflow-hidden",
-        "border-r",
-        "border-gray-200/80",
-        "bg-white",
-        "transition-all",
-        "duration-300",
-        "ease-in-out",
-        sidebarOpen ? "w-72" : "w-20",
-      ].join(" ")}
-    >
-      {/* ================================================================== */}
-      {/* BRAND                                                               */}
-      {/* ================================================================== */}
-
+    <div className="flex h-full flex-col border-r border-gray-200 bg-gray-100 text-gray-700">
       <div
-        className={[
-          "shrink-0",
-          "border-b",
-          "border-gray-100",
-          "bg-white",
-          "py-5",
-          "transition-all",
-          "duration-300",
-          sidebarOpen ? "px-5" : "px-3",
-        ].join(" ")}
+        className={`flex h-28 items-center border-b border-gray-200 ${sidebarOpen ? "justify-between px-5" : "justify-center px-3"}`}
       >
-        <div
-          className={[
-            "flex",
-            "items-center",
-            sidebarOpen ? "gap-4" : "justify-center",
-          ].join(" ")}
-        >
-          <div
-            className={[
-              "flex",
-              "shrink-0",
-              "items-center",
-              "justify-center",
-              "overflow-hidden",
-              "rounded-2xl",
-              "bg-white",
-              "transition-all",
-              "duration-300",
-              sidebarOpen ? "h-14 w-14" : "h-12 w-12",
-            ].join(" ")}
-          >
-            <img
-              src={logo}
-              alt="CANA"
-              className="h-full w-full object-contain"
-            />
-          </div>
-
+        <div className="flex items-center gap-3 overflow-hidden">
+          <img
+            src={logo}
+            alt="CANA"
+            className="h-16 w-16 rounded-2xl bg-white object-contain p-1.5 shadow-sm"
+          />
           {sidebarOpen && (
-            <div className="min-w-0">
-              <h3 className="truncate text-lg font-extrabold tracking-tight text-gray-950">
+            <div>
+              <p className="text-2xl font-extrabold tracking-[0.08em] text-gray-950">
                 CANA
-              </h3>
-
-              <p className="mt-0.5 truncate text-xs font-medium text-gray-500">
-                Operations workspace
+              </p>
+              <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.14em] text-red-600">
+                Operations hub
               </p>
             </div>
           )}
         </div>
+        <button
+          onClick={onToggle}
+          className="hidden rounded-lg p-2 text-gray-700 hover:bg-gray-300 lg:block"
+        >
+          {sidebarOpen ? "‹" : "›"}
+        </button>
       </div>
-
-      {/* ================================================================== */}
-      {/* COLLAPSE BUTTON                                                     */}
-      {/* ================================================================== */}
-
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-        title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-        className="
-          absolute
-          -right-3
-          top-[76px]
-          z-50
-          flex
-          h-7
-          w-7
-          items-center
-          justify-center
-          rounded-full
-          border
-          border-gray-200
-          bg-white
-          text-gray-600
-          shadow-sm
-          transition-all
-          hover:border-gray-300
-          hover:bg-gray-50
-          hover:text-gray-950
-        "
-      >
-        <ChevronLeft
-          size={16}
-          strokeWidth={2.5}
-          className={[
-            "transition-transform",
-            "duration-300",
-            sidebarOpen ? "rotate-0" : "rotate-180",
-          ].join(" ")}
-        />
-      </button>
-
-      {/* ================================================================== */}
-      {/* NAVIGATION                                                          */}
-      {/* ================================================================== */}
-
-      <nav
-        className="
-          flex
-          flex-1
-          flex-col
-          overflow-y-auto
-          px-3
-          py-5
-          scrollbar-thin
-          scrollbar-thumb-gray-200
-          scrollbar-track-transparent
-        "
-      >
-        {/* ---------------------------------------------------------------- */}
-        {/* CORE                                                              */}
-        {/* ---------------------------------------------------------------- */}
-
-        {sidebarOpen && (
-          <p className={sectionLabelClass}>Core</p>
-        )}
-
-        {/* DASHBOARD */}
-
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
         <NavLink
           to="/management"
           end
-          className={() =>
-            mainLinkClass({
-              isActive: isDashboardActive,
-            })
+          title={!sidebarOpen ? "Overview" : undefined}
+          className={({ isActive }) =>
+            `mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${isActive ? "bg-red-600 text-white" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`
           }
-          title={!sidebarOpen ? "Dashboard" : undefined}
         >
-          <LayoutDashboard size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>Dashboard</span>}
+          <LayoutDashboard size={19} />
+          {sidebarOpen && "Overview"}
         </NavLink>
-
-        {/* PRODUCTS */}
-
         <NavLink
-          to="/management/products"
-          className={() =>
-            mainLinkClass({
-              isActive: isProductsActive,
-            })
-          }
-          title={!sidebarOpen ? "Products" : undefined}
+          to="/"
+          end
+          title={!sidebarOpen ? "View CANA website" : undefined}
+          className="mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-300 hover:text-gray-900"
         >
-          <Package size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>Products</span>}
+          <House size={19} />
+          {sidebarOpen && "View CANA website"}
         </NavLink>
-
-        {/* RAW MATERIALS */}
-
         <NavLink
-          to="/management/raw-materials"
-          className={() =>
-            mainLinkClass({
-              isActive: isRawMaterialsActive,
-            })
+          to="/management/profile"
+          title={!sidebarOpen ? "My profile & settings" : undefined}
+          className={({ isActive }) =>
+            `mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${isActive ? "bg-red-600 text-white" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`
           }
-          title={!sidebarOpen ? "Raw Materials" : undefined}
         >
-          <PackageOpen size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>Raw Materials</span>}
+          <Settings size={19} />
+          {sidebarOpen && "My profile & settings"}
         </NavLink>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* OPERATIONS                                                        */}
-        {/* ---------------------------------------------------------------- */}
-
-        {sidebarOpen && (
-          <p className={`${sectionLabelClass} mt-6`}>
-            Operations
-          </p>
+        {!isAdmin && (
+          <NavLink
+            to="/management/staff-payments"
+            title={!sidebarOpen ? "My pay & advances" : undefined}
+            className={({ isActive }) =>
+              `mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${isActive ? "bg-red-600 text-white" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`
+            }
+          >
+            <Banknote size={19} />
+            {sidebarOpen && "My pay & advances"}
+          </NavLink>
         )}
-
-        {/* INVENTORY */}
-
-        {renderSection(
-          "Inventory",
-          Boxes,
-          inventoryOpen,
-          setInventoryOpen,
-          isInventoryActive,
-          inventoryItems,
-        )}
-
-        {/* PRODUCTION */}
-
-        <div className="mt-1">
-          {renderSection(
-            "Production",
-            Factory,
-            productionOpen,
-            setProductionOpen,
-            isProductionActive,
-            productionItems,
-          )}
-        </div>
-
-        {/* SALES */}
-
-        <NavLink
-          to="/management/sales"
-          className={() =>
-            mainLinkClass({
-              isActive: isSalesActive,
-            })
-          }
-          title={!sidebarOpen ? "Sales & Orders" : undefined}
-        >
-          <ShoppingCart size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>Sales & Orders</span>}
-        </NavLink>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* PROCUREMENT                                                       */}
-        {/* ---------------------------------------------------------------- */}
-
-        {sidebarOpen && (
-          <p className={`${sectionLabelClass} mt-6`}>
-            Procurement
-          </p>
-        )}
-
-        {renderSection(
-          "Procurement",
-          Truck,
-          procurementOpen,
-          setProcurementOpen,
-          isProcurementActive,
-          procurementItems,
-        )}
-
-        {/* ---------------------------------------------------------------- */}
-        {/* PEOPLE                                                            */}
-        {/* ---------------------------------------------------------------- */}
-
-        {sidebarOpen && (
-          <p className={`${sectionLabelClass} mt-6`}>
-            People
-          </p>
-        )}
-
-        {/* CUSTOMERS */}
-
-        <NavLink
-          to="/management/customers"
-          className={() =>
-            mainLinkClass({
-              isActive: isCustomersActive,
-            })
-          }
-          title={!sidebarOpen ? "Customers" : undefined}
-        >
-          <Users size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>Customers</span>}
-        </NavLink>
-
-        {/* STAFF */}
-
-        <NavLink
-          to="/management/staff"
-          className={() =>
-            mainLinkClass({
-              isActive: isStaffActive,
-            })
-          }
-          title={!sidebarOpen ? "Staff Management" : undefined}
-        >
-          <UserCog size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>Staff Management</span>}
-        </NavLink>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* REPORTING                                                         */}
-        {/* ---------------------------------------------------------------- */}
-
-        {sidebarOpen && (
-          <p className={`${sectionLabelClass} mt-6`}>
-            Reporting
-          </p>
-        )}
-
-        <NavLink
-          to="/management/reports"
-          className={() =>
-            mainLinkClass({
-              isActive: isReportsActive,
-            })
-          }
-          title={!sidebarOpen ? "Reports" : undefined}
-        >
-          <BarChart3 size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>Reports</span>}
-        </NavLink>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* ADMINISTRATION                                                    */}
-        {/* ---------------------------------------------------------------- */}
-
-        {sidebarOpen && (
-          <p className={`${sectionLabelClass} mt-6`}>
-            Administration
-          </p>
-        )}
-
-        <NavLink
-          to="/management/settings"
-          className={() =>
-            mainLinkClass({
-              isActive: isSettingsActive,
-            })
-          }
-          title={!sidebarOpen ? "Settings" : undefined}
-        >
-          <Settings size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>Settings</span>}
-        </NavLink>
+        {visibleGroups.map((group) => {
+          const Icon = group.icon;
+          const expanded = open[group.label] ?? false;
+          const active = group.items.some(
+            (item) =>
+              location.pathname === item.to ||
+              location.pathname.startsWith(`${item.to}/`),
+          );
+          return (
+            <div key={group.label} className="mb-2">
+              <button
+                onClick={() =>
+                  sidebarOpen
+                    ? setOpen((current) => ({
+                        ...current,
+                        [group.label]: !expanded,
+                      }))
+                    : navigate(group.items[0].to)
+                }
+                title={!sidebarOpen ? group.label : undefined}
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-sm font-semibold ${active ? "bg-gray-300 text-gray-900" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`}
+              >
+                <span className="flex items-center gap-3">
+                  <Icon size={19} />
+                  {sidebarOpen && group.label}
+                </span>
+                {sidebarOpen && (
+                  <ChevronDown
+                    size={16}
+                    className={`transition ${expanded ? "rotate-180" : ""}`}
+                  />
+                )}
+              </button>
+              {sidebarOpen && expanded && (
+                <div className="ml-5 mt-1 space-y-1 border-l border-gray-200 pl-3">
+                  {group.items.map((item) => {
+                    const ChildIcon = item.icon;
+                    return (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        end={item.end}
+                        className={({ isActive }) =>
+                          `flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm ${isActive ? "bg-red-600/15 font-semibold text-red-700" : "text-gray-500 hover:bg-gray-200 hover:text-gray-700"}`
+                        }
+                      >
+                        <ChildIcon size={16} />
+                        {item.label}
+                      </NavLink>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
-
-      {/* ================================================================== */}
-      {/* USER / LOGOUT                                                       */}
-      {/* ================================================================== */}
-
-      <div className="shrink-0 border-t border-gray-200 bg-white p-3">
-        {sidebarOpen && (
-          <div className="mb-2 flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-100 text-xs font-bold text-red-700">
-              {user?.fullName?.trim().charAt(0).toUpperCase() || "U"}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs font-bold text-gray-900">
-                {user?.fullName || "Management user"}
-              </p>
-              <p className="truncate text-[11px] capitalize text-gray-500">
-                {user?.role || "Account"}
-              </p>
-            </div>
-          </div>
+      <footer
+        className={`border-t border-gray-200 px-3 py-4 ${sidebarOpen ? "" : "text-center"}`}
+      >
+        {sidebarOpen ? (
+          <>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">
+              CANA Operations
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              Inventory · Production · Sales
+            </p>
+          </>
+        ) : (
+          <span className="text-xs font-bold text-gray-400">v1</span>
         )}
-        <button
-          type="button"
-          onClick={handleLogout}
-          title={!sidebarOpen ? "Logout" : undefined}
-          className={[
-            "flex",
-            "w-full",
-            "items-center",
-            "rounded-xl",
-            "py-3",
-            "text-sm",
-            "font-semibold",
-            "text-red-600",
-            "transition-all",
-            "duration-200",
-            "hover:bg-red-50",
-            sidebarOpen ? "gap-3 px-4" : "justify-center px-3",
-          ].join(" ")}
-        >
-          <LogOut size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>Logout</span>}
-        </button>
-      </div>
-    </aside>
+      </footer>
+    </div>
   );
 }
-
-export default ManagementSidebar;

@@ -1,0 +1,11 @@
+import { Router } from "express";
+import * as controller from "./salesOrder.controller";
+import { authorizeRoles, protect } from "../../middleware/auth.middleware";
+const router = Router();
+router.use(protect);
+router.get("/my", authorizeRoles("customer"), controller.listMine);
+router.use(authorizeRoles("admin", "staff"));
+router.get("/", controller.list);
+router.post("/", controller.create);
+router.patch("/:id/status", controller.transition);
+export default router;

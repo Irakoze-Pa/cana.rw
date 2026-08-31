@@ -12,7 +12,7 @@ import heroImage from "@/assets/images/heroscaf1.jpg";
 import scaffoldImage from "@/assets/images/heroscaf2.jpg";
 
 function ScaffoldRental() {
-  const whatsappNumber = "250795572029";
+  const whatsappNumber = "250789408367";
 
   const buyMessage = encodeURIComponent(
     "Hello CANA Services, I am interested in buying scaffolding. I would like to get information about available scaffolding equipment and pricing."

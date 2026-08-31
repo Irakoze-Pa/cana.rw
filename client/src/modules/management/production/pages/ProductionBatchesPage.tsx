@@ -7,6 +7,7 @@ import {
   Factory,
   Loader2,
   Plus,
+  Printer,
   RefreshCw,
   Search,
   Trash2,
@@ -31,6 +32,7 @@ import type {
   ProductionBatchStatus,
   UpdateProductionBatchData,
 } from "../types/productionBatch.types";
+import { printCanaDocument } from "../../utils/printCanaDocument";
 
 // =====================================================
 // DEFAULT STATS
@@ -142,6 +144,28 @@ function canDeleteBatch(
     batch.status === "Planned" ||
     batch.status === "Cancelled"
   );
+}
+
+function printBatchRecord(batch: ProductionBatch) {
+  const order = typeof batch.productionOrder === "string" ? undefined : batch.productionOrder;
+  printCanaDocument({
+    title: "Production batch record",
+    reference: batch.batchNo || batch.batchNumber,
+    status: batch.status,
+    details: [
+      { label: "Production order", value: order?.productionOrderNo },
+      { label: "Product", value: `${batch.productName} · ${batch.productCode}` },
+      { label: "Formula", value: `${batch.formulaName} · ${batch.formulaCode} v${batch.formulaVersion}` },
+      { label: "Batch / lot number", value: `${batch.batchNumber || "—"} / ${batch.lotNumber || "—"}` },
+      { label: "Planned output", value: `${formatNumber(batch.plannedQuantity)} ${batch.unit}` },
+      { label: "Actual output", value: `${formatNumber(batch.actualQuantity)} ${batch.unit}` },
+      { label: "Start date", value: formatDate(batch.startDate) },
+      { label: "Completion date", value: formatDate(batch.endDate) },
+      { label: "Supervisor", value: batch.supervisorName },
+      { label: "Finished goods posted", value: batch.finishedGoodsPostedAt ? formatDate(batch.finishedGoodsPostedAt) : "Not posted" },
+    ],
+    notes: batch.notes,
+  });
 }
 
 // =====================================================
@@ -368,10 +392,19 @@ const ProductionBatchesPage = () => {
     }
 
     try {
-      await updateProductionBatch(
+      const updatedBatch = await updateProductionBatch(
         selectedBatch._id,
         data
       );
+
+      if (
+        updatedBatch.status === "In Progress" ||
+        updatedBatch.status === "Completed"
+      ) {
+        window.dispatchEvent(
+          new Event("cana:stock-updated"),
+        );
+      }
 
       setIsEditModalOpen(false);
 
@@ -988,6 +1021,15 @@ const ProductionBatchesPage = () => {
                               <Eye
                                 size={16}
                               />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => printBatchRecord(batch)}
+                              className="rounded-xl border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900"
+                              title="Print batch record"
+                            >
+                              <Printer size={16} />
                             </button>
 
                             {/* EDIT */}

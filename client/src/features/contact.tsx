@@ -41,10 +41,10 @@ export default function Contact() {
    * =========================================================
    */
 
-  const phoneNumber = "+250795572029";
+  const phoneNumber = "+250789408367";
 
   const whatsappUrl =
-    "https://wa.me/250795572029";
+    "https://wa.me/250789408367";
 
   const emailAddress = "info@cbg.rw";
 

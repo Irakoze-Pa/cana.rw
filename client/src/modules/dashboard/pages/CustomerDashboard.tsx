@@ -12,7 +12,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/context/authContext";
 
 const API_URL =
-  import.meta.env.VITE_API_URL || "/api";
+  import.meta.env.VITE_API_URL || "/api/v1";
 
 interface QuotationProduct {
   _id: string;
@@ -33,7 +33,7 @@ interface Quotation {
   _id: string;
   items: QuotationItem[];
   message?: string;
-  status: "Pending" | "Approved" | "Rejected";
+  status: "Pending" | "Reviewed" | "Approved" | "Rejected";
   createdAt: string;
 }
 
@@ -124,6 +124,9 @@ function CustomerDashboard() {
       case "Approved":
         return "bg-green-100 text-green-700";
 
+      case "Reviewed":
+        return "bg-blue-100 text-blue-700";
+
       case "Rejected":
         return "bg-red-100 text-red-700";
 
@@ -138,6 +141,9 @@ function CustomerDashboard() {
     switch (status) {
       case "Approved":
         return "Approved";
+
+      case "Reviewed":
+        return "Under review";
 
       case "Rejected":
         return "Rejected";
@@ -451,24 +457,18 @@ function CustomerDashboard() {
 
                           {quotation.items
                             .slice(0, 3)
-                            .map((item) => (
+                            .map((item, index) => {
+                              const product = item.product;
+                              return (
                               <div
-                                key={
-                                  item.product._id
-                                }
+                                key={product?._id ?? `unavailable-${index}`}
                                 className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2"
                               >
 
-                                {item.product.image ? (
+                                {product?.image ? (
                                   <img
-                                    src={
-                                      item.product
-                                        .image
-                                    }
-                                    alt={
-                                      item.product
-                                        .name
-                                    }
+                                    src={product.image}
+                                    alt={product.name || "Unavailable product"}
                                     className="h-8 w-8 rounded-md object-cover"
                                   />
                                 ) : (
@@ -483,8 +483,7 @@ function CustomerDashboard() {
                                 <div>
                                   <p className="max-w-32 truncate text-xs font-semibold text-black">
                                     {
-                                      item.product
-                                        .name
+                                      product?.name || "Unavailable product"
                                     }
                                   </p>
 
@@ -497,7 +496,8 @@ function CustomerDashboard() {
                                 </div>
 
                               </div>
-                            ))}
+                              );
+                            })}
 
                           {quotation.items.length >
                             3 && (

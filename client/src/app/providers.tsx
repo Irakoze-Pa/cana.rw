@@ -6,6 +6,7 @@ import type {
 import {
   AuthProvider
 } from "@/context/authContext";
+import { ToastProvider } from "@/context/toastContext";
 
 
 
@@ -23,9 +24,7 @@ children:ReactNode;
 return (
 
 <AuthProvider>
-
-{children}
-
+<ToastProvider>{children}</ToastProvider>
 </AuthProvider>
 
 );

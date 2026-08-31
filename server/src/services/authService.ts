@@ -23,6 +23,9 @@ type LoginInput = {
   password: string;
 };
 
+const normalizePhone = (phone: string) =>
+  phone.trim().replace(/[\s()-]/g, "");
+
 class AuthService {
   async register({
     fullName,
@@ -31,7 +34,8 @@ class AuthService {
     password,
   }: RegisterInput) {
 
-    const existingPhone = await User.findOne({ phone });
+    const normalizedPhone = normalizePhone(phone);
+    const existingPhone = await User.findOne({ phone: normalizedPhone });
 
     if (existingPhone) {
       throw new Error("Phone number already exists.");
@@ -49,7 +53,7 @@ class AuthService {
 
     const user = await User.create({
       fullName,
-      phone,
+      phone: normalizedPhone,
       email: email || undefined,
       password: hashedPassword,
 
@@ -73,12 +77,15 @@ class AuthService {
     password,
   }: LoginInput) {
 
-    const user = await User.findOne({
-      phone,
-    }).select("+password");
+    const normalizedPhone = normalizePhone(phone);
+    const user = await User.findOne({ phone: normalizedPhone }).select("+password");
 
     if (!user) {
       throw new Error("Invalid phone or password.");
+    }
+
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new Error("This account is inactive. Please contact CANA support.");
     }
 
     const isMatch = await comparePassword(

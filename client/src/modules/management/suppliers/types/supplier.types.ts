@@ -26,7 +26,7 @@ export interface Supplier {
 
 export interface CreateSupplierData {
   name: string;
-  code: string;
+  code?: string;
 
   contactPerson?: string;
   phone?: string;

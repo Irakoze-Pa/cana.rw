@@ -1,5 +1,6 @@
-import express from "express";
+import express, { Router } from "express";
 import cors from "cors";
+import { errorHandler, notFound } from "./core/http";
 
 import authRoutes from "./routes/authRoutes";
 
@@ -17,8 +18,18 @@ import materialConsumptionRoutes from "./modules/production/materialConsumption/
 
 import inventoryRoutes from "./modules/inventory/inventory.routes";
 import contactRoutes from "./modules/contact/contact.routes";
+import salesOrderRoutes from "./modules/sales/salesOrder.routes";
+import dashboardRoutes from "./modules/dashboard/dashboard.routes";
+import userRoutes from "./modules/users/user.routes";
+import billingRoutes from "./modules/billing/billing.routes";
+import supplierMaterialRoutes from "./modules/raw-materials/supplierMaterial.routes";
+import staffPaymentRoutes from "./modules/staffFinance/staffPayment.routes";
+import finishedGoodsTransferRoutes from "./modules/finishedGoods/storeTransfer.routes";
+import payrollRoutes from "./modules/payroll/payroll.routes";
+import attendanceRoutes from "./modules/attendance/attendance.routes";
 
 const app = express();
+const api = Router();
 
 // =====================================================
 // CORS
@@ -42,139 +53,107 @@ app.use(express.urlencoded({ extended: true }));
 // TEST API
 // =====================================================
 
-app.get("/api/test", (_req, res) => {
-  res.json({
-    success: true,
-    message: "API is working",
-  });
-});
+export const serviceStatus = (_req: express.Request, res: express.Response) => {
+  res.status(200).json({ data: { status: "ok", service: "cana-api", timestamp: new Date().toISOString() } });
+};
+
+api.get("/", serviceStatus);
+api.get("/health", serviceStatus);
 
 // =====================================================
 // AUTH
 // =====================================================
 
-app.use("/api/auth", authRoutes);
+api.use("/auth", authRoutes);
 
 // =====================================================
 // PRODUCTS
 // =====================================================
 
-app.use("/api/products", productRoutes);
+api.use("/products", productRoutes);
 
 // =====================================================
 // QUOTATIONS
 // =====================================================
 
-app.use("/api/quotations", quotationRoutes);
+api.use("/quotations", quotationRoutes);
 
 // =====================================================
 // CONTACT ENQUIRIES
 // =====================================================
 
-app.use("/api/contact", contactRoutes);
+api.use("/contact", contactRoutes);
+api.use("/sales-orders", salesOrderRoutes);
+api.use("/dashboard", dashboardRoutes);
+api.use("/users", userRoutes);
+api.use("/billing", billingRoutes);
+api.use("/supplier-materials", supplierMaterialRoutes);
+api.use("/staff-payments", staffPaymentRoutes);
+api.use("/finished-goods", finishedGoodsTransferRoutes);
+api.use("/payroll", payrollRoutes);
+api.use("/attendance", attendanceRoutes);
 
 // =====================================================
 // SUPPLIERS
 // =====================================================
 
-app.use("/api/suppliers", supplierRoutes);
+api.use("/suppliers", supplierRoutes);
 
 // =====================================================
 // RAW MATERIALS
 // =====================================================
 
-app.use("/api/raw-materials", rawMaterialRoutes);
+api.use("/raw-materials", rawMaterialRoutes);
 
 // =====================================================
 // PURCHASE ORDERS
 // =====================================================
 
-app.use("/api/purchase-orders", purchaseOrderRoutes);
+api.use("/purchase-orders", purchaseOrderRoutes);
 
 // =====================================================
 // FORMULAS
 // =====================================================
 
-app.use("/api/formulas", formulaRoutes);
+api.use("/formulas", formulaRoutes);
 
 // =====================================================
 // PRODUCTION ORDERS
 // =====================================================
 
-app.use(
-  "/api/production-orders",
-  productionOrderRoutes
-);
+api.use("/production-orders", productionOrderRoutes);
 
 // =====================================================
 // PRODUCTION BATCHES
 // =====================================================
 
-app.use(
-  "/api/production-batches",
-  productionBatchRoutes
-);
+api.use("/production-batches", productionBatchRoutes);
 
 // =====================================================
 // MATERIAL CONSUMPTION
 // =====================================================
 
-app.use(
-  "/api/material-consumptions",
-  materialConsumptionRoutes
-);
+api.use("/material-consumptions", materialConsumptionRoutes);
 
 // =====================================================
 // INVENTORY
 // =====================================================
 
-app.use(
-  "/api/inventory",
-  inventoryRoutes
-);
+api.use("/inventory", inventoryRoutes);
+
+app.use("/api/v1", api);
+app.use("/api", api);
 
 // =====================================================
 // 404 HANDLER
 // =====================================================
 
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "API route not found.",
-    path: req.originalUrl,
-    method: req.method,
-  });
-});
+app.use(notFound);
 
 // =====================================================
 // GLOBAL ERROR HANDLER
 // =====================================================
 
-app.use(
-  (
-    error: unknown,
-    _req: express.Request,
-    res: express.Response,
-    _next: express.NextFunction
-  ) => {
-    console.error("Server Error:", error);
-
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Internal server error.";
-
-    const status =
-      error instanceof SyntaxError ||
-      (error instanceof Error && /image files|file too large/i.test(error.message))
-        ? 400
-        : 500;
-
-    res.status(status).json({
-      success: false,
-      message,
-    });
-  }
-);
+app.use(errorHandler);
 
 export default app;

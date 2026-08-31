@@ -220,11 +220,11 @@ const InventoryPage = () => {
 
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-                Inventory
+                Raw-material inventory
               </h1>
 
               <p className="mt-1 text-sm text-gray-500">
-                Manage raw material stock, availability,
+                Manage raw-material stock, availability,
                 and inventory movements.
               </p>
             </div>

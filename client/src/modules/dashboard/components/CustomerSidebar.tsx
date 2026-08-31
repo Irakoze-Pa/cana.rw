@@ -2,9 +2,8 @@ import { useState } from "react";
 import {
   LayoutDashboard,
   Package,
+  PackagePlus,
   ShoppingCart,
-  User,
-  Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -138,7 +137,7 @@ function CustomerSidebar() {
         {/* Dashboard */}
 
         <NavLink
-          to="/customer"
+          to="/dashboard"
           end
           className={mainLinkClass}
           title={!sidebarOpen ? "Dashboard" : undefined}
@@ -151,7 +150,7 @@ function CustomerSidebar() {
         {/* Products */}
 
         <NavLink
-          to="/customer/products"
+          to="/cana-paints/products"
           className={mainLinkClass}
           title={!sidebarOpen ? "Products" : undefined}
         >
@@ -160,22 +159,19 @@ function CustomerSidebar() {
           {sidebarOpen && <span>Products</span>}
         </NavLink>
 
-        {/* Orders */}
-
         <NavLink
-          to="/customer/orders"
+          to="/dashboard/orders"
           className={mainLinkClass}
-          title={!sidebarOpen ? "My Orders" : undefined}
+          title={!sidebarOpen ? "My orders" : undefined}
         >
           <ShoppingCart size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>My Orders</span>}
+          {sidebarOpen && <span>My orders</span>}
         </NavLink>
 
         {/* Quotations */}
 
         <NavLink
-          to="/customer/quotations"
+          to="/dashboard/quotations"
           className={mainLinkClass}
           title={!sidebarOpen ? "Quotations" : undefined}
         >
@@ -184,28 +180,13 @@ function CustomerSidebar() {
           {sidebarOpen && <span>Quotations</span>}
         </NavLink>
 
-        {/* Profile */}
-
         <NavLink
-          to="/customer/profile"
+          to="/cana-paints/request-quote"
           className={mainLinkClass}
-          title={!sidebarOpen ? "My Profile" : undefined}
+          title={!sidebarOpen ? "Request a quote" : undefined}
         >
-          <User size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>My Profile</span>}
-        </NavLink>
-
-        {/* Settings */}
-
-        <NavLink
-          to="/customer/settings"
-          className={mainLinkClass}
-          title={!sidebarOpen ? "Settings" : undefined}
-        >
-          <Settings size={20} strokeWidth={2} />
-
-          {sidebarOpen && <span>Settings</span>}
+          <PackagePlus size={20} strokeWidth={2} />
+          {sidebarOpen && <span>Request a quote</span>}
         </NavLink>
       </nav>
 

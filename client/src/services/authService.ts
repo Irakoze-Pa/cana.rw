@@ -14,6 +14,7 @@ export interface AuthUser {
   email?: string;
   role: "customer" | "staff" | "admin";
   company: "cana_group" | "cana_paints" | "cana_services";
+  department?: "sales" | "production" | "warehouse" | "finance" | "marketing" | "hr" | "procurement" | "customer_service" | "management" | "transport";
 }
 
 export interface AuthResponse {

@@ -2,10 +2,12 @@ import { Outlet } from "react-router-dom";
 
 import CustomerSidebar from "../components/CustomerSidebar";
 import DashboardTopbar from "../components/DashboardTopbar";
+import FloatingWhatsApp from "@/components/common/FloatingWhatsApp";
 
 function CustomerDashboardLayout() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="cana-operations-surface min-h-screen">
+      <FloatingWhatsApp />
       <div className="flex min-h-screen">
         {/* =================================================
             SIDEBAR

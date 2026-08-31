@@ -18,6 +18,8 @@ type User = {
     | "cana_group"
     | "cana_paints"
     | "cana_services";
+  department?: "sales" | "production" | "warehouse" | "finance" | "marketing" | "hr" | "procurement" | "customer_service" | "management" | "transport";
+  jobTitle?: string;
 };
 
 type AuthContextType = {

@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import {
   issueMaterialConsumption,
 } from "../services/materialConsumption.service";
+import api from "@/services/api";
 
 import type {
   MaterialConsumption,
@@ -31,6 +32,32 @@ interface FormItem extends IssueMaterialItem {
   standardQuantity: number;
 }
 
+interface LotOption {
+  lotNumber: string;
+  availableQuantity: number;
+  unit: string;
+  status: string;
+}
+
+function getRawMaterialId(
+  rawMaterial: unknown,
+): string {
+  if (typeof rawMaterial === "string") {
+    return rawMaterial;
+  }
+
+  if (
+    rawMaterial &&
+    typeof rawMaterial === "object" &&
+    "_id" in rawMaterial &&
+    typeof rawMaterial._id === "string"
+  ) {
+    return rawMaterial._id;
+  }
+
+  return "";
+}
+
 export default function IssueMaterialsModal({
   open,
   consumption,
@@ -41,6 +68,7 @@ export default function IssueMaterialsModal({
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [lotsByMaterial, setLotsByMaterial] = useState<Record<string, LotOption[]>>({});
 
   useEffect(() => {
     if (!open || !consumption) {
@@ -49,7 +77,9 @@ export default function IssueMaterialsModal({
 
     setItems(
       consumption.items.map((item) => ({
-        rawMaterial: item.rawMaterial,
+        rawMaterial: getRawMaterialId(
+          item.rawMaterial,
+        ),
         rawMaterialName: item.rawMaterialName,
         rawMaterialCode: item.rawMaterialCode,
         unit: item.unit,
@@ -62,6 +92,32 @@ export default function IssueMaterialsModal({
 
     setNotes(consumption.notes || "");
     setError("");
+
+    void Promise.all(
+      consumption.items.map(async (item) => {
+        const rawMaterialId = getRawMaterialId(
+          item.rawMaterial,
+        );
+
+        if (!rawMaterialId) {
+          return ["", []] as const;
+        }
+
+        const response = await api.get<{ data: LotOption[] }>(
+          `/raw-materials/${rawMaterialId}/lots`,
+        );
+
+        return [rawMaterialId, response.data.data || []] as const;
+      }),
+    )
+      .then((entries) =>
+        setLotsByMaterial(
+          Object.fromEntries(
+            entries.filter(([id]) => Boolean(id)),
+          ),
+        ),
+      )
+      .catch(() => setLotsByMaterial({}));
   }, [open, consumption]);
 
   if (!open || !consumption) {
@@ -89,6 +145,13 @@ export default function IssueMaterialsModal({
     setError("");
 
     for (const item of items) {
+      if (!item.rawMaterial) {
+        setError(
+          `The material reference for ${item.rawMaterialName} is missing. Refresh the consumption record and try again.`,
+        );
+        return;
+      }
+
       if (
         !Number.isFinite(item.issuedQuantity) ||
         item.issuedQuantity <= 0
@@ -120,6 +183,10 @@ export default function IssueMaterialsModal({
             notes: notes.trim() || undefined,
           },
         );
+
+      window.dispatchEvent(
+        new Event("cana:stock-updated"),
+      );
 
       onSuccess(result);
       onClose();
@@ -257,6 +324,7 @@ export default function IssueMaterialsModal({
                     <td className="px-4 py-4">
                       <input
                         type="text"
+                        list={`lot-options-${item.rawMaterial}`}
                         value={item.lotNumber || ""}
                         onChange={(e) =>
                           updateItem(
@@ -268,6 +336,15 @@ export default function IssueMaterialsModal({
                         placeholder="LOT-001"
                         className="w-36 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
                       />
+                      <datalist id={`lot-options-${item.rawMaterial}`}>
+                        {(lotsByMaterial[item.rawMaterial] || [])
+                          .filter((lot) => lot.status === "available" && lot.availableQuantity > 0)
+                          .map((lot) => (
+                            <option key={lot.lotNumber} value={lot.lotNumber}>
+                              {lot.availableQuantity} {lot.unit} available
+                            </option>
+                          ))}
+                      </datalist>
                     </td>
 
                     <td className="px-4 py-4">

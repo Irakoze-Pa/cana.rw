@@ -5,6 +5,7 @@ import {
   FileText,
   Palette,
   Paintbrush,
+  Calculator,
   Truck,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -136,6 +137,7 @@ function NavLinks() {
               link="/cana-paints/request-quote"
               onClick={() => setOpen(null)}
             />
+            <DropdownItem icon={<Calculator size={18} strokeWidth={1.8} />} title="Estimated Cost Calculator" description="Plan paint quantity and cost" link="/cana-paints/estimate-cost" onClick={() => setOpen(null)} />
           </Dropdown>
         )}
       </div>

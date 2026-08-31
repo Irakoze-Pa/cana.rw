@@ -94,11 +94,6 @@ function SupplierModal({
       return;
     }
 
-    if (!form.code.trim()) {
-      setError("Supplier code is required.");
-      return;
-    }
-
     try {
       setLoading(true);
 
@@ -247,19 +242,19 @@ function SupplierModal({
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Supplier Code *
+                  Supplier Code
                 </label>
 
                 <input
                   type="text"
-                  value={form.code}
+                  value={form.code || ""}
                   onChange={(e) =>
                     handleChange(
                       "code",
                       e.target.value.toUpperCase()
                     )
                   }
-                  placeholder="SUP-001"
+                  placeholder="Leave blank for automatic code (for example SUP-0001)"
                   className="
                     w-full rounded-xl border
                     border-gray-200
@@ -272,6 +267,7 @@ function SupplierModal({
                     focus:ring-red-100
                   "
                 />
+                {!isEditMode && <p className="mt-1 text-xs text-gray-500">Leave blank to generate a unique CANA supplier code automatically. Enter your own code only when you need to preserve an existing supplier reference.</p>}
               </div>
 
               <div>

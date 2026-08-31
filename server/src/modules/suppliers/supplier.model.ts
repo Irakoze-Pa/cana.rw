@@ -34,10 +34,10 @@ const supplierSchema = new Schema<ISupplier>(
     // UNIQUE SUPPLIER CODE
     code: {
       type: String,
-      required: true,
       unique: true,
       uppercase: true,
       trim: true,
+      sparse: true,
     },
 
     // MAIN CONTACT PERSON

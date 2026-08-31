@@ -34,6 +34,9 @@ export interface IInventoryTransaction
 
   unit: string;
 
+  /** Supplier/receipt lot when the movement is lot-traceable. */
+  lotNumber?: string;
+
   unitCost: number;
 
   totalCost: number;
@@ -139,6 +142,12 @@ const inventoryTransactionSchema =
         type: String,
         required: true,
         trim: true,
+      },
+
+      lotNumber: {
+        type: String,
+        trim: true,
+        uppercase: true,
       },
 
       // =====================================================

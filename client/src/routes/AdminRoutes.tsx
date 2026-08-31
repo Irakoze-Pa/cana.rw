@@ -1,51 +1,25 @@
-import {
-  Navigate,
-  Outlet
-} from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { useAuth } from "@/context/authContext";
 
+const access: Record<string, string[]> = {
+  procurement: ["/management", "/management/suppliers", "/management/supplier-materials", "/management/purchase-orders", "/management/raw-materials", "/management/inventory"],
+  warehouse: ["/management", "/management/raw-materials", "/management/inventory"],
+  production: ["/management", "/management/raw-materials", "/management/inventory", "/management/production"],
+  sales: ["/management", "/management/products", "/management/quotations", "/management/sales", "/management/billing", "/management/inventory/finished-goods", "/management/customers"],
+  customer_service: ["/management", "/management/quotations", "/management/sales", "/management/customers"],
+  finance: ["/management", "/management/sales", "/management/billing", "/management/purchase-orders", "/management/reports"],
+  management: ["/management"],
+};
 
-import {
-  useAuth
-} from "@/context/authContext";
-
-
-
-function AdminRoutes(){
-
-
-const {
-  user
-}=useAuth();
-
-
-
-
-if(!user){
-
-return <Navigate to="/" replace />;
-
+export default function AdminRoutes() {
+  const { user } = useAuth();
+  const location = useLocation();
+  if (!user) return <Navigate to="/" replace />;
+  if (user.role === "admin") return <Outlet />;
+  if (user.role !== "staff") return <Navigate to="/dashboard" replace />;
+  const servicePaths = ["/management", "/management/profile", "/management/staff-payments", "/management/quotations", "/management/sales", "/management/customers"];
+  if (user.company === "cana_services" && !servicePaths.some((path) => path === "/management" ? location.pathname === path : location.pathname.startsWith(path))) return <Navigate to="/management" replace />;
+  const allowed = access[user.department || ""] || ["/management"];
+  const permitted = ["/management/profile", "/management/staff-payments"].includes(location.pathname) || allowed.some((path) => path === "/management" ? location.pathname === path : location.pathname.startsWith(path));
+  return permitted ? <Outlet /> : <Navigate to="/management" replace />;
 }
-
-
-
-
-if(
- user.role !== "admin" &&
- user.role !== "staff"
-){
-
-return <Navigate to="/dashboard" replace />;
-
-}
-
-
-
-
-return <Outlet />;
-
-
-}
-
-
-
-export default AdminRoutes;

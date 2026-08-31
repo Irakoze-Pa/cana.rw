@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import authService from "../services/authService";
+import { loginSchema, registerSchema } from "../utils/validations/auth-validation";
 
 
 class AuthController {
@@ -18,8 +19,8 @@ class AuthController {
       );
 
 
-      const result =
-        await authService.register(req.body);
+      const input = registerSchema.parse(req.body);
+      const result = await authService.register(input);
 
 
 
@@ -85,8 +86,8 @@ class AuthController {
     try {
 
 
-      const result =
-        await authService.login(req.body);
+      const input = loginSchema.parse(req.body);
+      const result = await authService.login(input);
 
 
 

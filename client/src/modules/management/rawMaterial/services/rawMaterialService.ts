@@ -10,7 +10,7 @@ import type {
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "http://localhost:5050/api";
+  (import.meta.env.VITE_API_URL || "/api/v1");
 
 // =========================================================
 // RESPONSE TYPE
@@ -262,7 +262,8 @@ export const updateRawMaterial =
 
 export const deleteRawMaterial =
   async (
-    id: string
+    id: string,
+    purgeTestData = false
   ): Promise<void> => {
     if (!id) {
       throw new Error(
@@ -271,7 +272,7 @@ export const deleteRawMaterial =
     }
 
     const response = await fetch(
-      `${API_URL}/raw-materials/${id}`,
+      `${API_URL}/raw-materials/${id}${purgeTestData ? "?purge=true" : ""}`,
       {
         method: "DELETE",
         headers: {

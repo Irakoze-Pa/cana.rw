@@ -329,7 +329,10 @@ export const deleteRawMaterialController =
       }
 
       const material =
-        await deleteRawMaterial(id);
+        await deleteRawMaterial(
+          id,
+          req.query.purge === "true"
+        );
 
       if (!material) {
         return res.status(404).json({

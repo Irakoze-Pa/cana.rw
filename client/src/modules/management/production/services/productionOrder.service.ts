@@ -4,13 +4,13 @@ import type {
   ProductionOrderStats,
   UpdateProductionOrderData,
 } from "../types/productionOrder.types";
+import { apiBaseUrl } from "@/services/api";
 
 // =====================================================
 // API URL
 // =====================================================
 
-const API_URL =
-  "http://localhost:5050/api/production-orders";
+const API_URL = `${apiBaseUrl}/production-orders`;
 
 // =====================================================
 // PARSE RESPONSE

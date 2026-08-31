@@ -1,0 +1,10 @@
+import { Router } from "express";
+import { authorizeRoles, protect } from "../../middleware/auth.middleware";
+import * as controller from "./billing.controller";
+const router = Router();
+router.use(protect, authorizeRoles("admin", "staff"));
+router.get("/invoices", controller.invoices);
+router.post("/invoices", controller.create);
+router.get("/payments", controller.payments);
+router.post("/payments", controller.receive);
+export default router;

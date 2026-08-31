@@ -1,8 +1,15 @@
 import RawMaterial from "./rawMaterial.model";
+import { createInventory } from "../inventory/inventory.service";
+import Inventory from "../inventory/inventory.model";
+import InventoryTransaction from "../inventory/inventoryTransaction.model";
+import RawMaterialLot from "./rawMaterialLot.model";
+import SupplierMaterial from "./supplierMaterial.model";
+import Formula from "../formula/formula.model";
+import RawMaterialConsumption from "../production/materialConsumption/materialConsumption.model";
 
 export interface CreateRawMaterialData {
   name: string;
-  code: string;
+  code?: string;
   category: string;
   unit: string;
 
@@ -14,7 +21,7 @@ export interface CreateRawMaterialData {
 
   costPerUnit: number;
 
-  supplier: string;
+  supplier?: string;
 
   status?: "Active" | "Inactive";
 }
@@ -70,6 +77,19 @@ const calculateAvailableQuantity = (
   );
 };
 
+/** Repairs legacy balances so the material master always obeys: available = current - reserved. */
+const reconcileAvailableQuantities = async () => {
+  await RawMaterial.updateMany({}, [
+    {
+      $set: {
+        availableQuantity: {
+          $max: [0, { $subtract: [{ $ifNull: ["$quantity", 0] }, { $ifNull: ["$reservedQuantity", 0] }] }],
+        },
+      },
+    },
+  ], { updatePipeline: true });
+};
+
 /**
  * =========================================================
  * CREATE RAW MATERIAL
@@ -79,7 +99,8 @@ export const createRawMaterial = async (
   data: CreateRawMaterialData
 ) => {
   const code =
-    data.code.trim().toUpperCase();
+    data.code?.trim().toUpperCase() ||
+    `RM-${new Date().getFullYear()}-${String((await RawMaterial.countDocuments()) + 1).padStart(5, "0")}`;
 
   /**
    * Check duplicate material code
@@ -161,11 +182,21 @@ export const createRawMaterial = async (
       costPerUnit:
         Number(data.costPerUnit),
 
-      supplier: data.supplier,
+      ...(data.supplier ? { supplier: data.supplier } : {}),
 
       status:
         data.status ?? "Active",
     });
+
+  // Every new material receives a ledger record. Its opening quantity is
+  // posted as an auditable opening-balance transaction instead of becoming an
+  // orphaned stock number in master data.
+  await createInventory({
+    rawMaterial: rawMaterial._id.toString(),
+    openingQuantity: quantity,
+    openingCostPerUnit: Number(data.costPerUnit),
+    notes: "Opening balance created with raw material master data.",
+  });
 
   /**
    * Return populated material
@@ -185,6 +216,7 @@ export const createRawMaterial = async (
  */
 export const getRawMaterials =
   async () => {
+    await reconcileAvailableQuantities();
     return await RawMaterial.find()
       .populate(
         "supplier",
@@ -202,6 +234,7 @@ export const getRawMaterials =
  */
 export const getRawMaterialById =
   async (id: string) => {
+    await reconcileAvailableQuantities();
     return await RawMaterial.findById(
       id
     ).populate(
@@ -230,6 +263,13 @@ export const updateRawMaterial =
       throw new Error(
         "Raw material not found"
       );
+    }
+
+    if (data.quantity !== undefined) {
+      const inventory = await Inventory.findOne({ rawMaterial: existingRawMaterial._id });
+      if (inventory) {
+        throw new Error("Stock is controlled by Inventory. Use a stock adjustment or goods receipt instead of editing quantity here.");
+      }
     }
 
     /**
@@ -366,7 +406,7 @@ export const updateRawMaterial =
  * =========================================================
  */
 export const deleteRawMaterial =
-  async (id: string) => {
+  async (id: string, purgeTestData = false) => {
     const rawMaterial =
       await RawMaterial.findById(
         id
@@ -378,29 +418,43 @@ export const deleteRawMaterial =
       );
     }
 
-    /**
-     * Do not allow deleting material
-     * that currently has stock.
-     *
-     * This protects production/inventory
-     * data from accidental deletion.
-     */
-    if (rawMaterial.quantity > 0) {
+    const [formulaUsage, consumptionUsage] =
+      await Promise.all([
+        Formula.exists({ "items.rawMaterial": rawMaterial._id }),
+        RawMaterialConsumption.exists({ "items.rawMaterial": rawMaterial._id }),
+      ]);
+
+    if (formulaUsage || consumptionUsage) {
       throw new Error(
-        "Cannot delete raw material with available stock"
+        "This raw material is used by a formula or production consumption and must be retained for traceability. Archive it instead."
       );
     }
 
-    /**
-     * Do not allow deleting material
-     * that has reserved stock.
-     */
-    if (
-      rawMaterial.reservedQuantity >
-      0
-    ) {
+    if (!purgeTestData) {
+      const [inventory, lotCount, offerCount, transactionCount] = await Promise.all([
+        Inventory.exists({ rawMaterial: rawMaterial._id }),
+        RawMaterialLot.countDocuments({ rawMaterial: rawMaterial._id }),
+        SupplierMaterial.countDocuments({ rawMaterial: rawMaterial._id }),
+        InventoryTransaction.countDocuments({ rawMaterial: rawMaterial._id }),
+      ]);
+
+      if (rawMaterial.quantity > 0 || rawMaterial.reservedQuantity > 0 || inventory || lotCount || offerCount || transactionCount) {
+        throw new Error(
+          "This raw material has stock or linked setup records. Use the explicit test-data purge option only for unused setup records."
+        );
+      }
+    } else {
+      await Promise.all([
+        RawMaterialLot.deleteMany({ rawMaterial: rawMaterial._id }),
+        SupplierMaterial.deleteMany({ rawMaterial: rawMaterial._id }),
+        InventoryTransaction.deleteMany({ rawMaterial: rawMaterial._id }),
+        Inventory.deleteMany({ rawMaterial: rawMaterial._id }),
+      ]);
+    }
+
+    if (rawMaterial.reservedQuantity > 0 && !purgeTestData) {
       throw new Error(
-        "Cannot delete raw material with reserved stock"
+        "Cannot delete a raw material with reserved stock."
       );
     }
 

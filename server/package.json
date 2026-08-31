@@ -4,10 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run build && node test/api-smoke.cjs",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "start": "node dist/server.js",
     "build": "tsc"
+    ,"seed": "ts-node src/scripts/seed.ts"
   },
   "keywords": [],
   "author": "",
@@ -15,13 +16,13 @@
   "type": "commonjs",
   "dependencies": {
     "bcrypt": "^6.0.0",
-    "cloudinary": "^2.10.0",
+    "cloudinary": "^2.10.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mongodb": "^7.5.0",
-    "mongoose": "^9.9.1",
+    "mongodb": "^7.6.0",
+    "mongoose": "^9.9.4",
     "multer": "^2.2.0",
     "zod": "^4.4.3"
   },
@@ -31,10 +32,10 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.2.0",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.3.0",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.9.3"
   }
 }

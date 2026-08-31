@@ -11,15 +11,17 @@ import {
   PackageOpen,
   X,
   Loader2,
+  Printer,
 } from "lucide-react";
 
 import PurchaseOrderModal from "../components/PurchaseOrderModal";
+import { printCanaDocument } from "../../utils/printCanaDocument";
 
 // =====================================================
 // API
 // =====================================================
 
-const API_URL = "http://localhost:5050/api";
+const API_URL = (import.meta.env.VITE_API_URL || "/api/v1");
 
 // =====================================================
 // TYPES
@@ -136,6 +138,8 @@ function PurchaseOrdersPage() {
   const [updatingId, setUpdatingId] =
     useState<string | null>(null);
 
+  const printPurchaseOrder = (order: PurchaseOrder) => printCanaDocument({ title: "Purchase order", reference: order.poNumber, status: getStatusLabel(order.status), details: [{ label: "Supplier", value: getSupplierName(order.supplier) }, { label: "Supplier code", value: typeof order.supplier === "string" ? "—" : order.supplier.code }, { label: "Order date", value: formatDate(order.orderDate) }, { label: "Expected delivery", value: formatDate(order.expectedDeliveryDate) }, { label: "Items", value: order.items.length }, { label: "Total", value: formatCurrency(order.total) }], table: { headers: ["Raw material", "Code", "Quantity", "Unit price", "Amount"], rows: order.items.map((item) => [typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial.name, typeof item.rawMaterial === "string" ? "—" : item.rawMaterial.code, `${item.quantity} ${item.unit}`, formatCurrency(item.unitPrice), formatCurrency(item.total)]) }, notes: order.notes || "Please supply the listed materials according to the agreed delivery date and terms." });
+
   // ===================================================
   // FETCH PURCHASE ORDERS
   // ===================================================
@@ -195,16 +199,7 @@ function PurchaseOrdersPage() {
     data: CreatePurchaseOrderData
   ) => {
     try {
-      /*
-       * Backend requires poNumber.
-       * We generate it here.
-       */
-
-      const poNumber = `PO-${Date.now()}`;
-
       const payload = {
-        poNumber,
-
         supplier: data.supplier,
 
         orderDate: data.orderDate,
@@ -1305,6 +1300,15 @@ function PurchaseOrdersPage() {
 
                             <button
                               type="button"
+                              onClick={() => printPurchaseOrder(order)}
+                              title="Print purchase order"
+                              className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-red-50 hover:text-red-600"
+                            >
+                              <Printer size={17} />
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={() =>
                                 handleDelete(
                                   order._id
@@ -1528,6 +1532,8 @@ function PurchaseOrdersPage() {
                           size={17}
                         />
                       </button>
+
+                      <button type="button" onClick={() => printPurchaseOrder(order)} title="Print purchase order" className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"><Printer size={17} /></button>
 
                       <button
                         type="button"
@@ -1983,7 +1989,9 @@ function PurchaseOrdersPage() {
 
               {/* FOOTER */}
 
-              <div className="flex shrink-0 justify-end border-t border-gray-200 bg-gray-50 px-6 py-4">
+              <div className="flex shrink-0 justify-end gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4">
+
+                <button type="button" onClick={() => printPurchaseOrder(selectedOrder)} className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"><Printer size={16} />Print purchase order</button>
 
                 <button
                   type="button"

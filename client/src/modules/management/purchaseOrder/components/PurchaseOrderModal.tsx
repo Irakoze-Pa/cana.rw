@@ -20,7 +20,7 @@ import {
 // API
 // =====================================================
 
-const API_URL = "http://localhost:5050/api";
+const API_URL = (import.meta.env.VITE_API_URL || "/api/v1");
 
 // =====================================================
 // TYPES
@@ -55,6 +55,7 @@ interface RawMaterial {
     | undefined;
   status?: "Active" | "Inactive";
 }
+interface SupplierMaterialOffer { supplier: string | Supplier; rawMaterial: string | RawMaterial; unitPrice: number; status?: "Active" | "Inactive"; }
 
 interface PurchaseOrderItemForm {
   rawMaterial: string;
@@ -118,6 +119,7 @@ function PurchaseOrderModal({
   const [rawMaterials, setRawMaterials] = useState<
     RawMaterial[]
   >([]);
+  const [offers, setOffers] = useState<SupplierMaterialOffer[]>([]);
 
   const [supplier, setSupplier] = useState("");
 
@@ -219,6 +221,14 @@ function PurchaseOrderModal({
     }
   };
 
+  const fetchOffers = async () => {
+    try {
+      const response = await fetch(`${API_URL}/supplier-materials`);
+      const result = await response.json();
+      setOffers(Array.isArray(result?.data) ? result.data : []);
+    } catch { setOffers([]); }
+  };
+
   // ===================================================
   // LOAD DATA WHEN MODAL OPENS
   // ===================================================
@@ -230,6 +240,7 @@ function PurchaseOrderModal({
 
     fetchSuppliers();
     fetchRawMaterials();
+    fetchOffers();
   }, [isOpen]);
 
   // ===================================================
@@ -259,17 +270,12 @@ function PurchaseOrderModal({
       return [];
     }
 
-    return rawMaterials.filter((material) => {
-      if (material.status === "Inactive") {
-        return false;
-      }
-
-      const materialSupplierId =
-        getRawMaterialSupplierId(material);
-
-      return materialSupplierId === supplier;
-    });
-  }, [rawMaterials, supplier]);
+    return rawMaterials.filter((material) => material.status !== "Inactive" && offers.some((offer) => {
+      const offerSupplier = typeof offer.supplier === "string" ? offer.supplier : offer.supplier._id;
+      const offerMaterial = typeof offer.rawMaterial === "string" ? offer.rawMaterial : offer.rawMaterial._id;
+      return offer.status !== "Inactive" && offerSupplier === supplier && offerMaterial === material._id;
+    }));
+  }, [rawMaterials, supplier, offers]);
 
   // ===================================================
   // SUBTOTAL
@@ -357,9 +363,12 @@ function PurchaseOrderModal({
             ? Number(item.quantity)
             : 1;
 
-        const unitPrice = Number(
-          selectedMaterial.costPerUnit || 0
-        );
+        const approvedOffer = offers.find((offer) => {
+          const offerSupplier = typeof offer.supplier === "string" ? offer.supplier : offer.supplier._id;
+          const offerMaterial = typeof offer.rawMaterial === "string" ? offer.rawMaterial : offer.rawMaterial._id;
+          return offerSupplier === supplier && offerMaterial === selectedMaterial._id && offer.status !== "Inactive";
+        });
+        const unitPrice = Number(approvedOffer?.unitPrice ?? selectedMaterial.costPerUnit ?? 0);
 
         return {
           ...item,
@@ -548,16 +557,16 @@ function PurchaseOrderModal({
           return true;
         }
 
-        return (
-          getRawMaterialSupplierId(
-            material
-          ) !== supplier
-        );
+        return !offers.some((offer) => {
+          const offerSupplier = typeof offer.supplier === "string" ? offer.supplier : offer.supplier._id;
+          const offerMaterial = typeof offer.rawMaterial === "string" ? offer.rawMaterial : offer.rawMaterial._id;
+          return offer.status !== "Inactive" && offerSupplier === supplier && offerMaterial === material._id;
+        });
       });
 
     if (invalidSupplierMaterial) {
       alert(
-        "One or more raw materials do not belong to the selected supplier."
+        "One or more raw materials do not have an active approved offer for the selected supplier. Add the supplier material offer first."
       );
       return;
     }

@@ -11,7 +11,7 @@ import {
 
 import type { Product } from "./product.types";
 
-const API_URL = import.meta.env.VITE_API_URL || "/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -822,6 +822,10 @@ function ProductModal({
                   Undercoat
                 </option>
 
+                <option value="Wall Master">
+                  Wall Master / Putty
+                </option>
+
                 <option value="Other">
                   Other
                 </option>
@@ -839,7 +843,7 @@ function ProductModal({
                   text-gray-700
                 "
               >
-                Unit
+                Sales pack size
               </label>
 
               <select
@@ -887,7 +891,43 @@ function ProductModal({
                 <option value="20L">
                   20 Liters
                 </option>
+
+                <option value="kg">
+                  Per kilogram
+                </option>
+
+                <option value="1kg">
+                  1 Kilogram
+                </option>
+
+                <option value="5kg">
+                  5 Kilograms
+                </option>
+
+                <option value="10kg">
+                  10 Kilograms
+                </option>
+
+                <option value="20kg">
+                  20 Kilograms
+                </option>
+
+                <option value="25kg">
+                  25 Kilograms
+                </option>
+
+                <option value="30kg">
+                  30 Kilograms
+                </option>
+
+                <option value="50kg">
+                  50 Kilograms
+                </option>
               </select>
+
+              <p className="mt-2 text-xs text-gray-500">
+                Choose the pack sold to customers. Paint uses litres; Wall Master uses kilograms.
+              </p>
             </div>
           </div>
 
@@ -913,7 +953,7 @@ function ProductModal({
                   text-gray-700
                 "
               >
-                Selling Price
+                Selling price per pack
               </label>
 
               <div className="relative">
@@ -970,7 +1010,7 @@ function ProductModal({
                   text-gray-700
                 "
               >
-                Opening Stock
+                Finished-goods opening balance
               </label>
 
               <input
@@ -997,6 +1037,9 @@ function ProductModal({
                   focus:ring-gray-100
                 "
               />
+              <p className="mt-2 text-xs leading-5 text-gray-500">
+                Use this only for an initial physical count. Completed production batches increase finished-goods stock, and delivered sales orders reduce it.
+              </p>
             </div>
           </div>
 

@@ -12,7 +12,12 @@ import {
   AlertTriangle,
   PackageCheck,
   Archive,
+  Search,
+  Layers,
+  Truck,
+  Printer,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import RawMaterialModal from "../components/RawMaterialModal";
 import RawMaterialTable from "../components/RawMaterialTable";
@@ -25,6 +30,7 @@ import {
 import type {
   RawMaterial,
 } from "../types/rawMaterial.types";
+import { printCanaDocument } from "../../utils/printCanaDocument";
 
 function RawMaterialsPage() {
   const [materials, setMaterials] =
@@ -43,6 +49,9 @@ function RawMaterialsPage() {
 
   const [error, setError] =
     useState("");
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
 
   // =====================================================
   // LOAD RAW MATERIALS
@@ -84,6 +93,32 @@ function RawMaterialsPage() {
 
   useEffect(() => {
     void loadMaterials();
+  }, [loadMaterials]);
+
+  useEffect(() => {
+    const refreshStockRows = () => {
+      void loadMaterials();
+    };
+
+    window.addEventListener(
+      "cana:stock-updated",
+      refreshStockRows,
+    );
+    window.addEventListener(
+      "focus",
+      refreshStockRows,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "cana:stock-updated",
+        refreshStockRows,
+      );
+      window.removeEventListener(
+        "focus",
+        refreshStockRows,
+      );
+    };
   }, [loadMaterials]);
 
   // =====================================================
@@ -168,6 +203,15 @@ function RawMaterialsPage() {
     };
   }, [materials]);
 
+  const visibleMaterials = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return materials.filter((material) => {
+      const matchesSearch = !query || [material.name, material.code, material.category, material.supplier?.name].filter(Boolean).join(" ").toLowerCase().includes(query);
+      const matchesStatus = statusFilter === "All" || material.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [materials, search, statusFilter]);
+
   // =====================================================
   // ADD
   // =====================================================
@@ -199,7 +243,7 @@ function RawMaterialsPage() {
   ) => {
     const confirmed =
       window.confirm(
-        "Are you sure you want to delete this raw material?"
+        "Delete this unused test material and permanently remove its lots, supplier offers, stock, and inventory ledger? This cannot be undone. Materials used by formulas or production cannot be deleted."
       );
 
     if (!confirmed) {
@@ -209,7 +253,7 @@ function RawMaterialsPage() {
     try {
       setError("");
 
-      await deleteRawMaterial(id);
+      await deleteRawMaterial(id, true);
 
       await loadMaterials();
     } catch (error) {
@@ -246,6 +290,7 @@ function RawMaterialsPage() {
     setModalOpen(false);
     setSelectedMaterial(null);
   };
+  const printRegister = () => printCanaDocument({ title: "Raw material register", reference: `RM-LIST-${new Date().toISOString().slice(0, 10)}`, details: [{ label: "Materials listed", value: visibleMaterials.length }, { label: "Current stock", value: formatQuantity(summary.totalStock) }, { label: "Reserved for production", value: formatQuantity(summary.totalReserved) }, { label: "Available stock", value: formatQuantity(summary.totalAvailable) }, { label: "Low-stock materials", value: summary.lowStockMaterials }], table: { headers: ["Material", "Code", "Current", "Reserved", "Available", "Minimum", "Unit cost"], rows: visibleMaterials.map((material) => [material.name, material.code, `${material.quantity} ${material.unit}`, `${material.reservedQuantity || 0} ${material.unit}`, `${material.availableQuantity ?? Math.max(0, material.quantity - (material.reservedQuantity || 0))} ${material.unit}`, `${material.minimumStock} ${material.unit}`, `${Number(material.costPerUnit || 0).toLocaleString()} RWF`]) }, notes: "Current stock is physical stock. Available stock excludes quantities reserved for production." });
 
   return (
     <div className="space-y-6">
@@ -273,7 +318,23 @@ function RawMaterialsPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={printRegister} disabled={loading || visibleMaterials.length === 0} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"><Printer size={17} />Print list</button>
+            <Link
+              to="/management/supplier-materials"
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+            >
+              <Truck size={17} />
+              Supplier offers
+            </Link>
+
+            <Link
+              to="/management/raw-materials/lots"
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+            >
+              <Layers size={17} />
+              Material lots
+            </Link>
           {/* REFRESH */}
 
           <button
@@ -492,13 +553,30 @@ function RawMaterialsPage() {
         </div>
       </div>
 
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-lg">
+            <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search material name, code, category, or default supplier…" className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm outline-none transition focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100" />
+          </div>
+          <div className="flex items-center gap-3">
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700">
+              <option value="All">All statuses</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+            <span className="text-sm text-gray-500"><strong className="text-gray-900">{visibleMaterials.length}</strong> materials</span>
+          </div>
+        </div>
+      </div>
+
       {/* =================================================
           TABLE
       ================================================== */}
 
       <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
         <RawMaterialTable
-          materials={materials}
+          materials={visibleMaterials}
           loading={loading}
           onEdit={handleEdit}
           onDelete={handleDelete}

@@ -2,6 +2,14 @@ import mongoose from "mongoose";
 
 import ProductionBatch from "./productionBatch.model";
 import ProductionOrder from "../productionOrder/productionOrder.model";
+import Product from "../../product/product.model";
+import FinishedGoodsStoreBalance from "../../finishedGoods/storeBalance.model";
+import RawMaterialConsumption from "../materialConsumption/materialConsumption.model";
+import {
+  completeMaterialConsumption,
+  createMaterialConsumption,
+  updateMaterialConsumption,
+} from "../materialConsumption/materialConsumption.service";
 
 // =====================================================
 // TYPES
@@ -166,6 +174,36 @@ function roundNumber(
   );
 }
 
+/**
+ * Active batches reserve their planned quantity. Completed batches count only
+ * their actual output, which permits a short-yield batch to be followed by a
+ * make-up batch while retaining the original plan for audit purposes.
+ */
+function getOrderCommittedQuantity(
+  batches: Array<{
+    status?: string;
+    plannedQuantity?: number;
+    actualQuantity?: number;
+  }>
+) {
+  return roundNumber(
+    batches.reduce(
+      (total, batch) => {
+        if (batch.status === "Cancelled") {
+          return total;
+        }
+
+        return total + Number(
+          batch.status === "Completed"
+            ? batch.actualQuantity || 0
+            : batch.plannedQuantity || 0
+        );
+      },
+      0
+    )
+  );
+}
+
 // =====================================================
 // DATE
 // =====================================================
@@ -304,13 +342,29 @@ export async function createProductionBatch(
 
   if (
     productionOrder.status !==
+      "Draft" &&
+    productionOrder.status !==
+      "Planned" &&
+    productionOrder.status !==
       "Released" &&
     productionOrder.status !==
       "In Production"
   ) {
     throw new ProductionBatchServiceError(
-      `A production batch can only be created for a Released or In Production production order. Current status: ${productionOrder.status}.`,
+      `A production batch can only be created for a Draft, Planned, Released or In Production production order. Current status: ${productionOrder.status}.`,
       409
+    );
+  }
+
+  if (
+    (productionOrder.status === "Draft" ||
+      productionOrder.status === "Planned") &&
+    (!Array.isArray(productionOrder.items) ||
+      productionOrder.items.length === 0)
+  ) {
+    throw new ProductionBatchServiceError(
+      "A production order must have raw-material requirements before its first batch can be created.",
+      400
     );
   }
 
@@ -375,18 +429,7 @@ export async function createProductionBatch(
       .lean();
 
   const plannedAlready =
-    existingBatches.reduce(
-      (
-        total,
-        batch
-      ) =>
-        total +
-        Number(
-          batch.plannedQuantity ||
-            0
-        ),
-      0
-    );
+    getOrderCommittedQuantity(existingBatches);
 
   const remainingQuantity =
     roundNumber(
@@ -500,15 +543,18 @@ export async function createProductionBatch(
       });
 
     // -------------------------------------------------
-    // RELEASED → IN PRODUCTION
+    // DRAFT / PLANNED → RELEASED
+    //
+    // Creating a batch commits a prepared order to production. The order
+    // becomes In Production only when one of its batches actually starts.
     // -------------------------------------------------
 
     if (
-      productionOrder.status ===
-      "Released"
+      productionOrder.status === "Draft" ||
+      productionOrder.status === "Planned"
     ) {
       productionOrder.status =
-        "In Production";
+        "Released";
 
       await productionOrder.save();
     }
@@ -651,6 +697,8 @@ export async function updateProductionBatch(
     );
   }
 
+  const wasCompleted = batch.status === "Completed";
+
   const currentStatus =
     batch.status as ProductionBatchStatus;
 
@@ -682,6 +730,33 @@ export async function updateProductionBatch(
     currentStatus,
     nextStatus
   );
+
+  const isCompletingBatch =
+    nextStatus === "Completed";
+
+  let consumptionToFinalize: any = null;
+
+  if (isCompletingBatch) {
+    consumptionToFinalize =
+      await RawMaterialConsumption.findOne({
+        productionBatch: batch._id,
+        status: { $ne: "Cancelled" },
+      });
+
+    if (!consumptionToFinalize) {
+      throw new ProductionBatchServiceError(
+        "Raw materials have not been issued for this batch. Start the batch first, then issue materials before recording finished output.",
+        409
+      );
+    }
+
+    if (consumptionToFinalize.status === "Draft") {
+      throw new ProductionBatchServiceError(
+        "Issue the raw materials for this batch before completing it.",
+        409
+      );
+    }
+  }
 
   // ---------------------------------------------------
   // LOAD ORDER
@@ -769,23 +844,12 @@ export async function updateProductionBatch(
         },
       })
         .select(
-          "plannedQuantity"
+          "plannedQuantity actualQuantity status"
         )
         .lean();
 
     const otherPlanned =
-      otherBatches.reduce(
-        (
-          total,
-          item
-        ) =>
-          total +
-          Number(
-            item.plannedQuantity ||
-              0
-          ),
-        0
-      );
+      getOrderCommittedQuantity(otherBatches);
 
     const remainingForThisBatch =
       roundNumber(
@@ -931,11 +995,6 @@ export async function updateProductionBatch(
             batch.actualQuantity
           );
 
-    const finalPlanned =
-      Number(
-        batch.plannedQuantity
-      );
-
     if (
       !Number.isFinite(
         finalActual
@@ -945,16 +1004,6 @@ export async function updateProductionBatch(
       throw new ProductionBatchServiceError(
         "A completed batch must have actual produced quantity greater than 0.",
         400
-      );
-    }
-
-    if (
-      finalActual !==
-      finalPlanned
-    ) {
-      throw new ProductionBatchServiceError(
-        `A batch can only be completed when actual quantity equals planned quantity (${finalPlanned}).`,
-        409
       );
     }
 
@@ -968,6 +1017,22 @@ export async function updateProductionBatch(
 
   batch.status =
     nextStatus;
+
+  if (
+    nextStatus === "In Progress" &&
+    productionOrder.status === "Released"
+  ) {
+    productionOrder.status =
+      "In Production";
+  }
+
+  if (
+    nextStatus === "In Progress" &&
+    currentStatus !== "In Progress" &&
+    !batch.startDate
+  ) {
+    batch.startDate = new Date();
+  }
 
   // ---------------------------------------------------
   // START DATE
@@ -1136,6 +1201,73 @@ export async function updateProductionBatch(
 
   await batch.save();
 
+  await productionOrder.save();
+
+  // Create the formula-based material issue list when actual production starts.
+  // This is intentionally done once per batch and remains Draft until the
+  // storekeeper selects receipt lots and issues the materials.
+  if (
+    nextStatus === "In Progress" &&
+    currentStatus !== "In Progress"
+  ) {
+    const existingConsumption =
+      await RawMaterialConsumption.exists({
+        productionBatch: batch._id,
+        status: { $ne: "Cancelled" },
+      });
+
+    if (!existingConsumption) {
+      await createMaterialConsumption({
+        productionOrder: String(batch.productionOrder),
+        productionBatch: String(batch._id),
+        notes: `Created automatically when batch ${batch.batchNo} started.`,
+      });
+    }
+  }
+
+  // At batch completion, quantities already issued to production are treated
+  // as used unless the operator recorded a specific waste or return amount.
+  // The resulting consumption record is locked as an audit trail.
+  if (isCompletingBatch && consumptionToFinalize) {
+    const consumptionItems =
+      Array.isArray(consumptionToFinalize.items)
+        ? consumptionToFinalize.items
+        : [];
+
+    await updateMaterialConsumption(
+      String(consumptionToFinalize._id),
+      {
+        items: consumptionItems.map((item: any) => ({
+          actualQuantity: Math.max(
+            0,
+            Number(item.issuedQuantity || 0) -
+              Number(item.wasteQuantity || 0) -
+              Number(item.returnQuantity || 0),
+          ),
+        })),
+      },
+    );
+
+    await completeMaterialConsumption(
+      String(consumptionToFinalize._id),
+      {
+        notes: `Closed automatically when production batch ${batch.batchNo} was completed.`,
+      },
+    );
+  }
+
+  if (batch.status === "Completed" && !wasCompleted && !batch.finishedGoodsPostedAt) {
+    const product = await Product.findById(batch.product);
+    if (!product) {
+      throw new ProductionBatchServiceError("Finished product not found.", 404);
+    }
+    product.stock = Number((product.stock + batch.actualQuantity).toFixed(4));
+    await product.save();
+    await FinishedGoodsStoreBalance.findOneAndUpdate({ product: product._id, store: "production" }, { $inc: { quantity: Number(batch.actualQuantity) } }, { upsert: true, new: true, setDefaultsOnInsert: true });
+    batch.finishedGoodsPostedAt = new Date();
+    await batch.save();
+  }
+
   // ---------------------------------------------------
   // SYNC ORDER
   // ---------------------------------------------------
@@ -1189,15 +1321,10 @@ export async function syncProductionOrderFromBatches(
 
   const actualProducedQuantity =
     batches.reduce(
-      (
-        total,
-        batch
-      ) =>
-        total +
-        Number(
-          batch.actualQuantity ||
-            0
-        ),
+      (total, batch) =>
+        batch.status === "Completed"
+          ? total + Number(batch.actualQuantity || 0)
+          : total,
       0
     );
 

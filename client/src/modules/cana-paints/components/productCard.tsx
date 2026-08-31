@@ -4,6 +4,7 @@ import {
   Package,
   ShoppingBag,
 } from "lucide-react";
+import { useState } from "react";
 
 export interface Product {
   _id: string;
@@ -58,11 +59,14 @@ const ProductCard = ({
   product,
   onRequestQuote,
 }: ProductCardProps) => {
+  const [descriptionExpanded, setDescriptionExpanded] =
+    useState(false);
   const stock = Number(product.stock) || 0;
-
   const isOutOfStock = stock <= 0;
-
   const stockStatus = getStockStatus(stock);
+  const description = product.description?.trim() ||
+    "Professional CANA solution engineered for reliable, durable and beautiful finishes.";
+  const hasLongDescription = description.length > 120;
 
   return (
     <article
@@ -91,13 +95,12 @@ const ProductCard = ({
       <div
         className="
           relative
-          h-[390px]
+          h-56
           w-full
           shrink-0
           overflow-hidden
           bg-neutral-50
-          sm:h-[430px]
-          lg:h-[470px]
+          sm:h-64
         "
       >
         {/* Background */}
@@ -326,19 +329,25 @@ const ProductCard = ({
 
         {/* Description */}
 
-        <div className="min-h-[60px]">
+        <div className="mt-3 min-h-[76px]">
           <p
-            className="
-              mt-3
-              line-clamp-2
-              text-xs
-              leading-6
-              text-neutral-500
-            "
+            className={`text-xs leading-6 text-neutral-500 ${
+              descriptionExpanded ? "" : "line-clamp-2"
+            }`}
           >
-            {product.description ||
-              "Professional CANA Paints solution engineered for reliable, durable and beautiful finishes."}
+            {description}
           </p>
+
+          {hasLongDescription && (
+            <button
+              type="button"
+              onClick={() => setDescriptionExpanded((expanded) => !expanded)}
+              className="mt-1.5 text-xs font-bold text-red-600 transition hover:text-red-700"
+              aria-expanded={descriptionExpanded}
+            >
+              {descriptionExpanded ? "View less" : "View more"}
+            </button>
+          )}
         </div>
 
         {/* Price */}
@@ -362,7 +371,7 @@ const ProductCard = ({
                   text-neutral-400
                 "
               >
-                Starting Price
+                Price per {product.unit || "pack"}
               </p>
 
               <div className="mt-1 flex items-baseline gap-1.5">

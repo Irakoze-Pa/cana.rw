@@ -53,6 +53,8 @@ export interface AddStockData {
 
   materialConsumption?: string;
 
+  lotNumber?: string;
+
   purchaseOrder?: string;
 
   reason?: string;
@@ -80,6 +82,8 @@ export interface RemoveStockData {
   productionOrder?: string;
 
   materialConsumption?: string;
+
+  lotNumber?: string;
 
   reason?: string;
 
@@ -211,6 +215,21 @@ const calculateTotalCost = (
   return Number(
     (quantity * unitCost).toFixed(2)
   );
+};
+
+// RawMaterial keeps the purchasing/master-data snapshot used by formulas and
+// purchase orders. Inventory is the transaction ledger. Keep the snapshot in
+// sync after every ledger mutation so teams never see conflicting stock.
+const syncRawMaterialStock = async (
+  rawMaterialId: Types.ObjectId,
+  inventory: IInventory
+) => {
+  await RawMaterial.findByIdAndUpdate(rawMaterialId, {
+    quantity: inventory.quantity,
+    reservedQuantity: inventory.reservedQuantity,
+    availableQuantity: inventory.availableQuantity,
+    costPerUnit: inventory.averageCostPerUnit,
+  });
 };
 
 // =========================================================
@@ -738,6 +757,7 @@ export const addStock =
       new Date();
 
     await inventory.save();
+    await syncRawMaterialStock(rawMaterial._id, inventory);
 
     // =====================================================
     // TRANSACTION
@@ -768,6 +788,10 @@ export const addStock =
 
       unit:
         rawMaterial.unit,
+
+      lotNumber:
+        data.lotNumber?.trim() ||
+        undefined,
 
       unitCost,
 
@@ -991,6 +1015,10 @@ export const removeStock =
       unit:
         inventory.unit,
 
+      lotNumber:
+        data.lotNumber?.trim() ||
+        undefined,
+
       unitCost,
 
       totalCost:
@@ -1056,6 +1084,7 @@ export const removeStock =
         new Date(),
     });
 
+    await syncRawMaterialStock(rawMaterial._id, updatedInventory);
     return updatedInventory;
   };
 
@@ -1223,6 +1252,7 @@ export const adjustStock =
         new Date(),
     });
 
+    await syncRawMaterialStock(rawMaterial._id, inventory);
     return inventory;
   };
 
@@ -1503,6 +1533,7 @@ export const reserveStock =
       );
     }
 
+    await syncRawMaterialStock(rawMaterial._id, updatedInventory);
     return updatedInventory;
   };
 
@@ -1577,6 +1608,7 @@ export const releaseReservedStock =
       );
     }
 
+    await syncRawMaterialStock(rawMaterial._id, updatedInventory);
     return updatedInventory;
   };
 

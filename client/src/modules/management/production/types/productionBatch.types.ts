@@ -107,6 +107,9 @@ export interface ProductionBatch {
 
   notes: string;
 
+  /** Timestamp at which this batch's finished output was posted to product stock. */
+  finishedGoodsPostedAt?: string;
+
   createdAt: string;
   updatedAt: string;
 }

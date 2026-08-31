@@ -2,6 +2,10 @@
 
 Full-stack platform for CANA Group's public website, customer quotations, and internal operations management.
 
+## Platform logic
+
+The rebuild is organized around one operational flow: customer demand becomes an approved quotation, procurement replenishes materials, production consumes approved formulas, and inventory records every movement. The role model, state transitions, and engineering boundaries are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Technology
 
 - Client: React, TypeScript, Vite, Tailwind CSS

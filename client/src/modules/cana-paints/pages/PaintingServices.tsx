@@ -14,7 +14,7 @@ import heroImage from "@/assets/images/hero2.jpg";
 import serviceImage from "@/assets/images/hero3.jpg";
 
 function PaintingServices() {
-  const whatsappNumber = "250795572029";
+  const whatsappNumber = "250789408367";
 
   const whatsappMessage = encodeURIComponent(
     "Hello CANA Paints, I am interested in your painting services. I would like to discuss my project and request a quotation."

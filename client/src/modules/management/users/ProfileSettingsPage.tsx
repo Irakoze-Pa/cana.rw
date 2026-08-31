@@ -1,0 +1,16 @@
+import { useState } from "react";
+import { Save, UserRound } from "lucide-react";
+import api from "@/services/api";
+import { useAuth } from "@/context/authContext";
+import { useToast } from "@/context/toastContext";
+
+export default function ProfileSettingsPage() {
+  const { user, token, login } = useAuth();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ fullName: user?.fullName || "", phone: user?.phone || "", email: user?.email || "", jobTitle: user?.jobTitle || "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const save = async (event: React.FormEvent) => { event.preventDefault(); if (!user || !token) return; setSaving(true); setError(""); try { const response = await api.patch<{ data: typeof user }>(`/users/${user._id}`, form); login(response.data.data, token); toast("Your profile was updated.", "success"); } catch (error) { setError(error instanceof Error ? error.message : "Unable to update your profile."); } finally { setSaving(false); } };
+  return <div className="mx-auto max-w-3xl space-y-6"><div className="rounded-3xl bg-slate-950 p-6 text-white sm:p-8"><div className="flex items-center gap-3"><span className="rounded-2xl bg-white/10 p-3 text-red-300"><UserRound size={24} /></span><div><p className="text-xs font-bold uppercase tracking-[.16em] text-red-300">My workspace</p><h1 className="mt-1 text-2xl font-extrabold">Profile & settings</h1><p className="mt-1 text-sm text-slate-300">Keep your contact information current. Access is set by your administrator.</p></div></div></div>{error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}<form onSubmit={save} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7"><h2 className="font-bold text-gray-900">Personal profile</h2><div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Full name" value={form.fullName} onChange={(value) => setForm({ ...form, fullName: value })} /><Field label="Phone number" value={form.phone} onChange={(value) => setForm({ ...form, phone: value })} /><Field label="Email address" value={form.email} onChange={(value) => setForm({ ...form, email: value })} /><Field label="Job title" value={form.jobTitle} onChange={(value) => setForm({ ...form, jobTitle: value })} /></div><div className="mt-7 rounded-2xl bg-gray-50 p-4 text-sm"><p className="font-bold text-gray-900">Access settings</p><p className="mt-1 text-gray-500">Business unit: <strong className="text-gray-700">{user?.company?.replace("_", " ")}</strong> · Department: <strong className="text-gray-700">{user?.department?.replace("_", " ") || "Not assigned"}</strong> · Role: <strong className="text-gray-700">{user?.role}</strong></p></div><button disabled={saving} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50"><Save size={17} />{saving ? "Saving…" : "Save profile"}</button></form></div>;
+}
+function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="text-xs font-bold text-gray-600">{label}<input value={value} onChange={(event) => onChange(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-gray-200 px-3 text-sm" /></label>; }

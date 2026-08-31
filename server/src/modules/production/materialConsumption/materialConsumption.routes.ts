@@ -8,6 +8,9 @@ import {
   updateMaterialConsumptionController,
   cancelMaterialConsumptionController,
   getMaterialConsumptionStatsController,
+  issueMaterialConsumptionController,
+  returnMaterialConsumptionController,
+  completeMaterialConsumptionController,
 } from "./materialConsumption.controller";
 
 const router = Router();
@@ -60,6 +63,24 @@ router.get(
 router.put(
   "/:id",
   updateMaterialConsumptionController
+);
+
+// Issue deducts the selected raw-material lots from inventory.
+router.post(
+  "/:id/issue",
+  issueMaterialConsumptionController
+);
+
+// Returns put unused issued material back into inventory.
+router.post(
+  "/:id/return",
+  returnMaterialConsumptionController
+);
+
+// Completion locks the final production-material reconciliation.
+router.post(
+  "/:id/complete",
+  completeMaterialConsumptionController
 );
 
 // PATCH /api/material-consumptions/:id/cancel

@@ -1,0 +1,11 @@
+import { Quote, Star } from "lucide-react";
+
+const testimonials = [
+  { name: "Aline Mukamana", quote: "The guidance was clear from colour selection to the final finish. Our space feels completely renewed.", role: "Homeowner, Kigali", initials: "AM" },
+  { name: "Eric Niyonzima", quote: "CANA delivered dependable products and practical support that helped keep our project moving.", role: "Project Manager", initials: "EN" },
+  { name: "Claire Uwase", quote: "Professional communication, quality finishes, and a team that understood what we needed.", role: "Business Owner", initials: "CU" },
+];
+
+export default function Testimonials() {
+  return <section className="overflow-hidden bg-gray-950 py-24 text-white lg:py-32"><div className="mx-auto max-w-7xl px-6 lg:px-8"><div className="grid gap-10 lg:grid-cols-[0.85fr_1.5fr]"><div><div className="flex items-center gap-3"><span className="h-px w-10 bg-red-500" /><span className="text-xs font-semibold uppercase tracking-[0.25em] text-red-400">Client feedback</span></div><h2 className="mt-7 text-4xl font-semibold leading-tight tracking-[-0.04em] sm:text-5xl">Built around<br /><span className="text-gray-500">better outcomes.</span></h2><p className="mt-6 max-w-sm text-sm leading-7 text-gray-400">Every CANA project is built on thoughtful advice, reliable products and service that respects your time.</p></div><div className="grid gap-4 md:grid-cols-3">{testimonials.map((item) => <article key={item.name} className="flex min-h-80 flex-col rounded-2xl border border-white/10 bg-white/[0.04] p-6"><Quote className="text-red-500" size={27} /><div className="mt-7 flex gap-1 text-red-400">{Array.from({ length: 5 }).map((_, index) => <Star key={index} size={13} fill="currentColor" />)}</div><blockquote className="mt-5 flex-1 text-base leading-7 text-gray-100">“{item.quote}”</blockquote><div className="mt-8 flex items-center gap-3 border-t border-white/10 pt-5"><div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-xs font-bold">{item.initials}</div><div><p className="text-sm font-semibold text-white">{item.name}</p><p className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-gray-400">{item.role}</p></div></div></article>)}</div></div></div></section>;
+}

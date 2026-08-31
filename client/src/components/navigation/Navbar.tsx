@@ -68,6 +68,11 @@ function Navbar() {
     ).toUpperCase();
   }, [user?.fullName]);
 
+  const dashboardPath =
+    user?.role === "admin" || user?.role === "staff"
+      ? "/management"
+      : "/dashboard";
+
   /*
    * ============================================================
    * SCROLL EFFECT
@@ -533,7 +538,7 @@ function Navbar() {
                       {/* DASHBOARD */}
 
                       <Link
-                        to="/dashboard"
+                        to={dashboardPath}
                         onClick={() =>
                           setAccountOpen(false)
                         }
@@ -575,7 +580,9 @@ function Navbar() {
                           </p>
 
                           <p className="mt-0.5 text-[9px] text-neutral-400">
-                            Manage your account
+                            {user.role === "customer"
+                              ? "Manage your account"
+                              : "Manage operations"}
                           </p>
                         </div>
                       </Link>

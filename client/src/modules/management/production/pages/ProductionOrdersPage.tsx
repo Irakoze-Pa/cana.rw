@@ -15,6 +15,7 @@ import {
   PackagePlus,
   Pencil,
   Plus,
+  Printer,
   RefreshCw,
   Search,
   Trash2,
@@ -53,6 +54,7 @@ import type {
   UpdateProductionOrderData,
   ProductionOrderStats,
 } from "../types/productionOrder.types";
+import { printCanaDocument } from "../../utils/printCanaDocument";
 
 /* ========================================================================== */
 /* HELPERS                                                                    */
@@ -293,6 +295,25 @@ function normalizeStats(
         0
     ),
   };
+}
+
+function printProductionOrder(order: ProductionOrder) {
+  printCanaDocument({
+    title: "Production order",
+    reference: order.productionOrderNo,
+    status: order.status,
+    details: [
+      { label: "Product", value: `${getProductName(order.product, order.productName)} · ${getProductCode(order.product, order.productCode)}` },
+      { label: "Formula", value: `${getFormulaName(order.formula, order.formulaName)} · ${getFormulaCode(order.formula, order.formulaCode)}${order.formulaVersion ? ` v${order.formulaVersion}` : ""}` },
+      { label: "Required quantity", value: `${Number(order.quantity || 0).toLocaleString()} ${order.unit}` },
+      { label: "Priority", value: order.priority },
+      { label: "Planned date", value: formatDate(order.plannedDate) },
+      { label: "Expected completion", value: formatDate(order.expectedCompletionDate) },
+      { label: "Created", value: formatDate(order.createdAt) },
+      { label: "Last updated", value: formatDate(order.updatedAt) },
+    ],
+    notes: order.notes,
+  });
 }
 
 /* ========================================================================== */
@@ -1490,6 +1511,15 @@ export default function ProductionOrdersPage() {
                                   <Eye
                                     size={17}
                                   />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  title="Print production order"
+                                  onClick={() => printProductionOrder(order)}
+                                  className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                                >
+                                  <Printer size={17} />
                                 </button>
 
                                 <button

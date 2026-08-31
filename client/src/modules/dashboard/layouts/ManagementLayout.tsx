@@ -14,8 +14,7 @@ function ManagementLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-
+    <div className="cana-operations-surface min-h-screen">
       {mobileMenuOpen && (
         <button
           type="button"
@@ -68,6 +67,8 @@ function ManagementLayout() {
       <main
         className={`
           min-h-screen
+          min-w-0
+          overflow-x-hidden
           transition-all
           duration-300
           ease-in-out
@@ -79,7 +80,7 @@ function ManagementLayout() {
         <ManagementTopbar />
 
         {/* PAGE CONTENT */}
-        <div className="p-4 sm:p-6">
+        <div className="mx-auto w-full max-w-[1920px] p-3 pt-4 sm:p-5 lg:p-6">
           <Outlet />
         </div>
 
