@@ -8,6 +8,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import InventoryTable from "../components/InventoryTable";
 import StockTransactionModal from "../components/InventoryTransactionModal";
@@ -220,12 +221,11 @@ const InventoryPage = () => {
 
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-                Raw-material inventory
+                Raw-material store
               </h1>
 
               <p className="mt-1 text-sm text-gray-500">
-                Manage raw-material stock, availability,
-                and inventory movements.
+                Inputs only: materials received from suppliers and issued to production. This is not finished-product stock.
               </p>
             </div>
           </div>
@@ -247,6 +247,18 @@ const InventoryPage = () => {
           Refresh
         </button>
       </div>
+
+      <section className="grid gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 p-4 md:grid-cols-[1fr_auto] md:items-center">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Raw-material store workflow</p>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Purchase order → goods receipt → raw-material stock → production issue. Completed production moves output to the separate Finished Goods Stores.
+          </p>
+        </div>
+        <Link to="/management/inventory/finished-goods" className="inline-flex items-center justify-center rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-sky-800 transition hover:bg-sky-100">
+          View finished goods stores
+        </Link>
+      </section>
 
       {/* Summary */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

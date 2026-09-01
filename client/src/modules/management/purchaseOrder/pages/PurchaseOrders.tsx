@@ -50,6 +50,12 @@ type PurchaseOrderStatus =
   | "received"
   | "cancelled";
 
+const formatQuantity = (quantity: number, unit: string) => {
+  const value = Number(quantity || 0);
+  if (unit.trim().toLowerCase() !== "kg") return `${value} ${unit}`;
+  return `${value.toLocaleString("en-RW", { maximumFractionDigits: 2 })} kg (${(value / 1000).toLocaleString("en-RW", { maximumFractionDigits: 3 })} t)`;
+};
+
 interface PurchaseOrder {
   _id: string;
   poNumber: string;
@@ -138,7 +144,7 @@ function PurchaseOrdersPage() {
   const [updatingId, setUpdatingId] =
     useState<string | null>(null);
 
-  const printPurchaseOrder = (order: PurchaseOrder) => printCanaDocument({ title: "Purchase order", reference: order.poNumber, status: getStatusLabel(order.status), details: [{ label: "Supplier", value: getSupplierName(order.supplier) }, { label: "Supplier code", value: typeof order.supplier === "string" ? "—" : order.supplier.code }, { label: "Order date", value: formatDate(order.orderDate) }, { label: "Expected delivery", value: formatDate(order.expectedDeliveryDate) }, { label: "Items", value: order.items.length }, { label: "Total", value: formatCurrency(order.total) }], table: { headers: ["Raw material", "Code", "Quantity", "Unit price", "Amount"], rows: order.items.map((item) => [typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial.name, typeof item.rawMaterial === "string" ? "—" : item.rawMaterial.code, `${item.quantity} ${item.unit}`, formatCurrency(item.unitPrice), formatCurrency(item.total)]) }, notes: order.notes || "Please supply the listed materials according to the agreed delivery date and terms." });
+  const printPurchaseOrder = (order: PurchaseOrder) => printCanaDocument({ title: "Purchase order", reference: order.poNumber, status: getStatusLabel(order.status), details: [{ label: "Supplier", value: getSupplierName(order.supplier) }, { label: "Supplier code", value: typeof order.supplier === "string" ? "—" : order.supplier.code }, { label: "Order date", value: formatDate(order.orderDate) }, { label: "Expected delivery", value: formatDate(order.expectedDeliveryDate) }, { label: "Materials requested", value: order.items.length }], table: { headers: ["Raw material", "Code", "Quantity (kg / t)"], rows: order.items.map((item) => [typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial.name, typeof item.rawMaterial === "string" ? "—" : item.rawMaterial.code, formatQuantity(item.quantity, item.unit)]) }, notes: order.notes || "Please supply the listed raw materials according to the agreed delivery date and terms.", approval: { status: order.status === "approved" || order.status === "received" ? "Official purchase order" : "Draft — pending approval", signatoryTitle: "Managing Director", signatoryName: "KABANDA Fred" } });
 
   // ===================================================
   // FETCH PURCHASE ORDERS
@@ -405,6 +411,12 @@ function PurchaseOrdersPage() {
 
       const updatedStatus =
         result?.data?.status || status;
+
+      if (updatedStatus === "received") {
+        window.dispatchEvent(
+          new Event("cana:stock-updated"),
+        );
+      }
 
       // =================================================
       // UPDATE LIST
@@ -1087,10 +1099,6 @@ function PurchaseOrdersPage() {
                       Items
                     </th>
 
-                    <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Total
-                    </th>
-
                     <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                       Status
                     </th>
@@ -1187,18 +1195,6 @@ function PurchaseOrdersPage() {
                               : ""}
 
                           </span>
-
-                        </td>
-
-                        {/* TOTAL */}
-
-                        <td className="px-5 py-4 text-right">
-
-                          <p className="text-sm font-bold text-gray-900">
-                            {formatCurrency(
-                              order.total
-                            )}
-                          </p>
 
                         </td>
 
@@ -1437,20 +1433,6 @@ function PurchaseOrdersPage() {
                           {order.items
                             ?.length ||
                             0}
-                        </p>
-
-                      </div>
-
-                      <div>
-
-                        <p className="text-xs text-gray-400">
-                          Total
-                        </p>
-
-                        <p className="mt-1 text-sm font-bold text-gray-900">
-                          {formatCurrency(
-                            order.total
-                          )}
                         </p>
 
                       </div>
@@ -1774,7 +1756,7 @@ function PurchaseOrdersPage() {
 
                   <div className="mt-3 overflow-hidden rounded-xl border border-gray-200">
 
-                    <div className="hidden grid-cols-[2fr_1fr_1fr_1.2fr_1.2fr] gap-3 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid">
+                    <div className="hidden grid-cols-[2fr_1fr_1fr] gap-3 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid">
 
                       <span>
                         Material
@@ -1786,14 +1768,6 @@ function PurchaseOrdersPage() {
 
                       <span>
                         Unit
-                      </span>
-
-                      <span>
-                        Unit Price
-                      </span>
-
-                      <span>
-                        Total
                       </span>
 
                     </div>
@@ -1820,7 +1794,7 @@ function PurchaseOrdersPage() {
                               key={
                                 `${selectedOrder._id}-${index}`
                               }
-                              className="grid grid-cols-1 gap-2 px-4 py-4 md:grid-cols-[2fr_1fr_1fr_1.2fr_1.2fr] md:items-center"
+                              className="grid grid-cols-1 gap-2 px-4 py-4 md:grid-cols-[2fr_1fr_1fr] md:items-center"
                             >
 
                               <div>
@@ -1851,9 +1825,10 @@ function PurchaseOrdersPage() {
                                 </span>
 
                                 <span className="text-sm text-gray-700">
-                                  {
-                                    item.quantity
-                                  }
+                                  {formatQuantity(
+                                    item.quantity,
+                                    item.unit,
+                                  )}
                                 </span>
 
                               </div>
@@ -1872,7 +1847,7 @@ function PurchaseOrdersPage() {
 
                               </div>
 
-                              <div>
+                              <div className="hidden">
 
                                 <span className="text-xs text-gray-400 md:hidden">
                                   Unit Price:{" "}
@@ -1886,7 +1861,7 @@ function PurchaseOrdersPage() {
 
                               </div>
 
-                              <div>
+                              <div className="hidden">
 
                                 <span className="text-xs text-gray-400 md:hidden">
                                   Total:{" "}
@@ -1913,7 +1888,7 @@ function PurchaseOrdersPage() {
 
                 {/* TOTALS */}
 
-                <div className="mt-6 flex justify-end">
+                <div className="hidden">
 
                   <div className="w-full max-w-sm rounded-xl bg-gray-50 p-5">
 

@@ -5,7 +5,14 @@ import {
   Phone,
 } from "lucide-react";
 
-import { FaWhatsapp } from "react-icons/fa";
+import {
+  FaFacebookF,
+  FaInstagram,
+  FaLinkedinIn,
+  FaWhatsapp,
+  FaXTwitter,
+  FaYoutube,
+} from "react-icons/fa6";
 
 import { Link } from "react-router-dom";
 
@@ -22,6 +29,57 @@ function Footer() {
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
     whatsappMessage,
   )}`;
+
+  // Replace these values with CANA's verified profile URLs when available.
+  // Environment variables keep the deployed links configurable without a code change.
+  const socialLinks = [
+    {
+      label: "Facebook",
+      href:
+        import.meta.env.VITE_CANA_FACEBOOK_URL ||
+        "https://www.facebook.com/Cana-paints",
+      icon: FaFacebookF,
+      hoverClass: "hover:border-[#1877F2]/60 hover:bg-[#1877F2]/15 hover:text-[#4d9cff]",
+    },
+    {
+      label: "Instagram",
+      href:
+        import.meta.env.VITE_CANA_INSTAGRAM_URL ||
+        "https://www.instagram.com/Cana_paints/",
+      icon: FaInstagram,
+      hoverClass: "hover:border-[#E4405F]/60 hover:bg-[#E4405F]/15 hover:text-[#ff6d87]",
+    },
+    {
+      label: "X",
+      href:
+        import.meta.env.VITE_CANA_X_URL ||
+        "https://x.com/Cana_paints",
+      icon: FaXTwitter,
+      hoverClass: "hover:border-white/60 hover:bg-white/10 hover:text-white",
+    },
+    {
+      label: "LinkedIn",
+      href:
+        import.meta.env.VITE_CANA_LINKEDIN_URL ||
+        "https://www.linkedin.com/company/cana-paints/",
+      icon: FaLinkedinIn,
+      hoverClass: "hover:border-[#0A66C2]/60 hover:bg-[#0A66C2]/15 hover:text-[#58a6ef]",
+    },
+    {
+      label: "YouTube",
+      href:
+        import.meta.env.VITE_CANA_YOUTUBE_URL ||
+        "https://www.youtube.com/@Cana_paints",
+      icon: FaYoutube,
+      hoverClass: "hover:border-[#FF0000]/60 hover:bg-[#FF0000]/15 hover:text-[#ff6b6b]",
+    },
+    {
+      label: "WhatsApp",
+      href: whatsappUrl,
+      icon: FaWhatsapp,
+      hoverClass: "hover:border-[#25D366]/60 hover:bg-[#25D366]/15 hover:text-[#25D366]",
+    },
+  ];
 
   return (
     <footer className="border-t border-neutral-900 bg-neutral-950 text-white">
@@ -104,6 +162,10 @@ function Footer() {
 
             <FooterLink to="/about">
               About Us
+            </FooterLink>
+
+            <FooterLink to="/team">
+              Meet Our Team
             </FooterLink>
 
             <FooterLink to="/projects">
@@ -193,40 +255,45 @@ function Footer() {
                 </span>
 
                 <span className="text-sm leading-6 text-neutral-400 transition-colors group-hover:text-white">
-                  info@cbg.rw
+                  info@cana.rw
                 </span>
               </a>
 
             </div>
 
             {/* =================================================
-                WHATSAPP
-            ================================================== */}
-
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group mt-7 inline-flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white transition-all duration-300 hover:border-white/20 hover:bg-white/[0.08]"
-            >
-              <FaWhatsapp
-                size={18}
-                className="text-neutral-300 transition-colors group-hover:text-[#25D366]"
-              />
-
-              <span>
-                Chat on WhatsApp
-              </span>
-
-              <ArrowUpRight
-                size={15}
-                className="text-neutral-500 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-white"
-              />
-            </a>
-
-            {/* =================================================
                 SOCIAL
             ================================================== */}
+
+            <div className="mt-7 border-t border-white/10 pt-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-500">
+                Follow CANA
+              </p>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2.5">
+                {socialLinks.map((social) => {
+                  const Icon = social.icon;
+
+                  return (
+                    <a
+                      key={social.label}
+                      href={social.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Visit CANA on ${social.label}`}
+                      title={social.label}
+                      className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-neutral-300 transition duration-200 ${social.hoverClass}`}
+                    >
+                      <Icon size={17} />
+                    </a>
+                  );
+                })}
+              </div>
+
+              <p className="mt-3 text-xs leading-5 text-neutral-500">
+                Follow product launches, project updates, and company news.
+              </p>
+            </div>
 
           </div>
 

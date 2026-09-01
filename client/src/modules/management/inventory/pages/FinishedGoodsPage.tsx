@@ -21,6 +21,7 @@ type Product = {
   name: string;
   code: string;
   unit: string;
+  baseUnit?: string;
   category?: string;
   status?: string;
 };
@@ -166,8 +167,7 @@ export default function FinishedGoodsPage() {
               Finished goods stores
             </h1>
             <p className="mt-1 text-sm text-gray-500">
-              Production Store holds finished output. Transfer goods to Sales
-              Store before delivery.
+              Finished products only. Production Store holds completed output in kg; transfer to Sales Store before delivery.
             </p>
           </div>
         </div>
@@ -184,6 +184,12 @@ export default function FinishedGoodsPage() {
           {error}
         </p>
       )}
+      <section className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+        <p className="text-sm font-semibold text-slate-900">Finished-goods store workflow</p>
+        <p className="mt-1 text-sm leading-6 text-slate-600">
+          Completed production batches add finished stock to Production Store. Transfers replenish Sales Store, and confirmed sales reduce only Sales Store. Raw materials are managed separately in Raw-material Store.
+        </p>
+      </section>
       <section className="grid gap-4 md:grid-cols-3">
         <Metric
           icon={<Factory size={19} />}
@@ -300,7 +306,7 @@ export default function FinishedGoodsPage() {
                   setForm({ ...form, quantity: event.target.value })
                 }
                 placeholder={
-                  selected ? `Quantity in ${selected.unit}` : "Quantity"
+                  selected ? `Quantity in ${selected.baseUnit || "kg"}` : "Quantity in kg"
                 }
                 className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 px-3 text-sm"
               />
@@ -310,7 +316,7 @@ export default function FinishedGoodsPage() {
                 Available in {storeName(form.fromStore)}:{" "}
                 <strong>
                   {number(balanceFor(selected._id, form.fromStore))}{" "}
-                  {selected.unit}
+                  {selected.baseUnit || "kg"}
                 </strong>
               </p>
             )}
@@ -366,7 +372,7 @@ export default function FinishedGoodsPage() {
                           {product.name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {product.code} · {product.unit}
+                          {product.code} · stock unit: {product.baseUnit || "kg"}
                         </p>
                       </td>
                       <td className="px-5 py-4 text-right font-semibold">
@@ -378,7 +384,7 @@ export default function FinishedGoodsPage() {
                       <td className="px-5 py-4 text-right font-bold text-slate-900">
                         {number(production + sales)}{" "}
                         <span className="text-xs font-normal text-gray-500">
-                          {product.unit}
+                          {product.baseUnit || "kg"}
                         </span>
                       </td>
                     </tr>
@@ -434,7 +440,7 @@ export default function FinishedGoodsPage() {
                     {storeName(transfer.toStore)}
                   </td>
                   <td className="px-5 py-4 text-right font-bold">
-                    {number(transfer.quantity)} {transfer.unit}
+                    {number(transfer.quantity)} {transfer.product?.baseUnit || transfer.unit || "kg"}
                   </td>
                   <td className="px-5 py-4 text-gray-600">
                     {transfer.performedBy?.fullName || "—"}

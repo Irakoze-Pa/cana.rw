@@ -374,6 +374,14 @@ function MobileMenu({
             About
           </NavLink>
 
+          <NavLink
+            to="/team"
+            onClick={closeMenu}
+            className={normalLinkClass}
+          >
+            Our Team
+          </NavLink>
+
           {/* ==================================================
               PROJECTS
           =================================================== */}

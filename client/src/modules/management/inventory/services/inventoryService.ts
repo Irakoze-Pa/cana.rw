@@ -5,9 +5,7 @@ import type {
   InventorySummary,
   RemoveStockData,
 } from "../types/inventory.types";
-
-const API_URL =
-  import.meta.env.VITE_API_URL || "/api/v1";
+import api from "@/services/api";
 
 const getErrorMessage = (
   result: unknown,
@@ -48,45 +46,19 @@ const unwrapData = <T>(
 
 const inventoryService = {
   async getInventory(): Promise<Inventory[]> {
-    const response = await fetch(
-      `${API_URL}/inventory`
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        getErrorMessage(
-          result,
-          "Failed to fetch inventory"
-        )
-      );
-    }
+    const response = await api.get("/inventory");
 
     return unwrapData<Inventory[]>(
-      result,
+      response.data,
       []
     );
   },
 
   async getInventorySummary(): Promise<InventorySummary> {
-    const response = await fetch(
-      `${API_URL}/inventory/summary`
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        getErrorMessage(
-          result,
-          "Failed to fetch inventory summary"
-        )
-      );
-    }
+    const response = await api.get("/inventory/summary");
 
     return unwrapData<InventorySummary>(
-      result,
+      response.data,
       {}
     );
   },
@@ -94,93 +66,33 @@ const inventoryService = {
   async addStock(
     data: AddStockData
   ): Promise<Inventory> {
-    const response = await fetch(
-      `${API_URL}/inventory/stock/add`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      }
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        getErrorMessage(
-          result,
-          "Failed to add stock"
-        )
-      );
-    }
+    const response = await api.post("/inventory/stock/add", data);
 
     return unwrapData<Inventory>(
-      result,
-      result as Inventory
+      response.data,
+      response.data as Inventory
     );
   },
 
   async removeStock(
     data: RemoveStockData
   ): Promise<Inventory> {
-    const response = await fetch(
-      `${API_URL}/inventory/stock/remove`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      }
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        getErrorMessage(
-          result,
-          "Failed to remove stock"
-        )
-      );
-    }
+    const response = await api.post("/inventory/stock/remove", data);
 
     return unwrapData<Inventory>(
-      result,
-      result as Inventory
+      response.data,
+      response.data as Inventory
     );
   },
 
   async adjustStock(
     data: AdjustStockData
   ): Promise<Inventory> {
-    const response = await fetch(
-      `${API_URL}/inventory/stock/adjust`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      }
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        getErrorMessage(
-          result,
-          "Failed to adjust stock"
-        )
-      );
-    }
+    const response = await api.post("/inventory/stock/adjust", data);
 
     return unwrapData<Inventory>(
-      result,
-      result as Inventory
+      response.data,
+      response.data as Inventory
     );
   },
 };

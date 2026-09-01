@@ -8,6 +8,10 @@ export interface Product {
 
   price: number;
   stock: number;
+  baseUnit?: "kg";
+  packSizeKg?: number;
+  densityKgPerL?: number;
+  pricePerKg?: number | null;
 
   unit: string;
 
@@ -29,6 +33,8 @@ export interface CreateProductData {
 
   price: number;
   stock: number;
+  packSizeKg: number;
+  densityKgPerL?: number;
 
   unit: string;
 
@@ -47,6 +53,8 @@ export interface UpdateProductData {
 
   price?: number;
   stock?: number;
+  packSizeKg?: number;
+  densityKgPerL?: number;
 
   unit?: string;
 

@@ -822,24 +822,14 @@ export async function createProductionOrder(
 
         quantity,
 
-        unit:
-          String(
-            data.unit ||
-              product.unit ||
-              formula.batchUnit ||
-              "kg"
-          ),
+        // Production output is measured in kilograms. Product.unit is the
+        // customer pack label and must never drive formula scaling.
+        unit: "kg",
 
         formulaBatchSize:
           Number(formula.batchSize),
 
-        formulaBatchUnit:
-          String(
-            formula.batchUnit ||
-              data.unit ||
-              product.unit ||
-              "kg"
-          ),
+        formulaBatchUnit: "kg",
 
         scalingFactor,
 
@@ -1100,24 +1090,19 @@ export async function updateProductionOrder(
   }
 
   // ---------------------------------------------------
-  // LOCK AFTER RELEASE
+  // LOCK AFTER BATCH CREATION
   // ---------------------------------------------------
 
+  // A released order can be amended until its first batch is created. Once a
+  // batch exists, material requirements and stock movements must remain tied
+  // to the original plan for traceability.
   const isLocked =
-    currentStatus === "Released" ||
     currentStatus === "In Production" ||
     hasBatches;
 
   if (
     data.quantity !== undefined
   ) {
-    if (isLocked) {
-      throw new ProductionOrderServiceError(
-        "Production quantity cannot be changed after the order has been released or a production batch exists.",
-        409
-      );
-    }
-
     const newQuantity =
       Number(data.quantity);
 
@@ -1130,6 +1115,21 @@ export async function updateProductionOrder(
         400
       );
     }
+
+    const quantityChanged =
+      newQuantity !== Number(productionOrder.quantity);
+
+    if (isLocked && quantityChanged) {
+      throw new ProductionOrderServiceError(
+        "Production quantity is locked because this order already has a production batch or is in production. Create a new order for any additional quantity.",
+        409
+      );
+    }
+
+    if (!quantityChanged) {
+      // Keep accepting an unchanged value so partial updates from older
+      // clients do not fail merely because they include the current quantity.
+    } else {
 
     // -------------------------------------------------
     // RECALCULATE MATERIALS
@@ -1191,8 +1191,9 @@ export async function updateProductionOrder(
     productionOrder.otherCost =
       costs.otherCost;
 
-    productionOrder.estimatedTotalCost =
-      costs.estimatedTotalCost;
+      productionOrder.estimatedTotalCost =
+        costs.estimatedTotalCost;
+    }
   }
 
   // ---------------------------------------------------
@@ -1202,13 +1203,6 @@ export async function updateProductionOrder(
   if (
     data.unit !== undefined
   ) {
-    if (isLocked) {
-      throw new ProductionOrderServiceError(
-        "Production unit cannot be changed after release or batch creation.",
-        409
-      );
-    }
-
     const unit =
       data.unit.trim();
 
@@ -1219,7 +1213,19 @@ export async function updateProductionOrder(
       );
     }
 
-    productionOrder.unit = unit;
+    const unitChanged =
+      unit !== productionOrder.unit;
+
+    if (isLocked && unitChanged) {
+      throw new ProductionOrderServiceError(
+        "Production unit cannot be changed after a production batch has been created or production has started.",
+        409
+      );
+    }
+
+    if (unitChanged) {
+      productionOrder.unit = unit;
+    }
   }
 
   // ---------------------------------------------------

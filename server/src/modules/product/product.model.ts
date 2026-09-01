@@ -10,6 +10,12 @@ export interface IProduct extends Document {
 
   price: number;
   stock: number;
+  /** Finished-goods stock and production quantities are always kilograms. */
+  baseUnit: "kg";
+  /** Net product weight contained in one customer sales pack. */
+  packSizeKg?: number;
+  /** Paint density used to convert a 4L or 20L pack to kilograms. */
+  densityKgPerL?: number;
   unit: string;
 
   description?: string;
@@ -62,6 +68,26 @@ const productSchema = new Schema<IProduct>(
       min: 0,
     },
 
+    // Production, finished-goods inventory and formula scaling use kg.
+    baseUnit: {
+      type: String,
+      enum: ["kg"],
+      default: "kg",
+      immutable: true,
+    },
+
+    // A pack may be labelled in litres, kilograms, or another sales format,
+    // but its net weight lets the system compare retail prices consistently.
+    packSizeKg: {
+      type: Number,
+      min: 0.001,
+    },
+
+    densityKgPerL: {
+      type: Number,
+      min: 0.001,
+    },
+
     // UNIT
     unit: {
       type: String,
@@ -97,8 +123,21 @@ const productSchema = new Schema<IProduct>(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
+
+productSchema.virtual("pricePerKg").get(function () {
+  const packSizeKg = Number(this.packSizeKg);
+  const price = Number(this.price);
+
+  if (!Number.isFinite(packSizeKg) || packSizeKg <= 0) {
+    return null;
+  }
+
+  return Math.round((price / packSizeKg) * 100) / 100;
+});
 
 export default mongoose.model<IProduct>(
   "Product",

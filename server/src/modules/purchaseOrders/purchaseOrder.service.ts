@@ -3,6 +3,7 @@ import PurchaseOrder from "./purchaseOrder.model";
 import RawMaterial from "../raw-materials/rawMaterial.model";
 import Inventory from "../inventory/inventory.model";
 import InventoryTransaction from "../inventory/inventoryTransaction.model";
+import SupplierMaterial from "../raw-materials/supplierMaterial.model";
 
 // =====================================================
 // CREATE PURCHASE ORDER
@@ -11,13 +12,61 @@ import InventoryTransaction from "../inventory/inventoryTransaction.model";
 export const createPurchaseOrder = async (
   data: any
 ) => {
+  if (!data?.supplier || !Array.isArray(data.items) || data.items.length === 0) {
+    throw new Error("Select a supplier and at least one raw material.");
+  }
+
+  const preparedItems = await Promise.all(
+    data.items.map(async (item: any) => {
+      const quantity = Number(item.quantity);
+      if (!item?.rawMaterial || !Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error("Each purchase-order item needs a raw material and a positive quantity.");
+      }
+
+      const material = await RawMaterial.findById(item.rawMaterial).lean();
+      if (!material || material.status === "Inactive") {
+        throw new Error("Each purchase-order item must reference an active raw material.");
+      }
+
+      const offer = await SupplierMaterial.findOne({
+        supplier: data.supplier,
+        rawMaterial: material._id,
+        status: "Active",
+      }).lean();
+
+      // Prices are procurement reference data, not a required PO entry. Use
+      // the supplier offer first, then the material's last known cost.
+      const unitPrice = Number(
+        offer?.unitPrice ?? material.costPerUnit ?? 0,
+      );
+
+      return {
+        rawMaterial: material._id,
+        quantity,
+        unit: material.unit,
+        unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
+        total: Number((quantity * (Number.isFinite(unitPrice) ? unitPrice : 0)).toFixed(2)),
+      };
+    }),
+  );
+
+  const subtotal = Number(
+    preparedItems.reduce((sum, item) => sum + item.total, 0).toFixed(2),
+  );
   let poNumber = String(data.poNumber || "").trim().toUpperCase();
   if (!poNumber) {
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const count = await PurchaseOrder.countDocuments({ poNumber: new RegExp(`^PO-${today}-`) });
     poNumber = `PO-${today}-${String(count + 1).padStart(3, "0")}`;
   }
-  const purchaseOrder = await PurchaseOrder.create({ ...data, poNumber });
+  const purchaseOrder = await PurchaseOrder.create({
+    ...data,
+    poNumber,
+    items: preparedItems,
+    subtotal,
+    tax: 0,
+    total: subtotal,
+  });
 
   return purchaseOrder;
 };
@@ -247,8 +296,13 @@ export const updatePurchaseOrderStatus = async (
         // UPDATE LATEST COST
         // ----------------------------------------------
 
+        const receiptUnitPrice =
+          Number(item.unitPrice) > 0
+            ? Number(item.unitPrice)
+            : Number(rawMaterial.costPerUnit || 0);
+
         rawMaterial.costPerUnit =
-          Number(item.unitPrice);
+          receiptUnitPrice;
 
         // ----------------------------------------------
         // SAVE RAW MATERIAL
@@ -266,7 +320,7 @@ export const updatePurchaseOrderStatus = async (
         const after = Number((before + Number(item.quantity)).toFixed(6));
         const previousValue = before * (currentInventory?.averageCostPerUnit ?? 0);
         const averageCost = after > 0
-          ? Number(((previousValue + Number(item.quantity) * Number(item.unitPrice)) / after).toFixed(6))
+          ? Number(((previousValue + Number(item.quantity) * receiptUnitPrice) / after).toFixed(6))
           : 0;
         const minimumStock = rawMaterial.minimumStock ?? 0;
         const status = after <= 0 ? "Out of Stock" : after <= minimumStock ? "Low Stock" : "Available";
@@ -300,8 +354,8 @@ export const updatePurchaseOrderStatus = async (
           type: "Purchase",
           quantity: Number(item.quantity),
           unit: rawMaterial.unit,
-          unitCost: Number(item.unitPrice),
-          totalCost: Number((Number(item.quantity) * Number(item.unitPrice)).toFixed(2)),
+          unitCost: receiptUnitPrice,
+          totalCost: Number((Number(item.quantity) * receiptUnitPrice).toFixed(2)),
           quantityBefore: before,
           quantityAfter: after,
           referenceType: "PurchaseOrder",

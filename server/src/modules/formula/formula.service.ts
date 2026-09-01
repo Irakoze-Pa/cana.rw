@@ -330,9 +330,9 @@ export async function createFormula(
     );
   }
 
-  if (!batchUnit?.trim()) {
+  if (batchUnit?.trim().toLowerCase() !== "kg") {
     throw new Error(
-      "Batch unit is required."
+      "Formula batch unit must be kg. CANA production calculations are weight-based."
     );
   }
 
@@ -477,7 +477,7 @@ export async function createFormula(
 
       batchSize: Number(batchSize),
 
-      batchUnit: batchUnit.trim(),
+      batchUnit: "kg",
 
       items: preparedItems,
 
@@ -715,9 +715,9 @@ export async function createNewFormulaVersion(
     );
   }
 
-  if (!batchUnit) {
+  if (batchUnit.toLowerCase() !== "kg") {
     throw new Error(
-      "Batch unit is required."
+      "Formula batch unit must be kg. CANA production calculations are weight-based."
     );
   }
 
@@ -753,7 +753,7 @@ export async function createNewFormulaVersion(
 
       batchSize,
 
-      batchUnit,
+      batchUnit: "kg",
 
       items: preparedItems,
 

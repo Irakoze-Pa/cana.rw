@@ -272,9 +272,7 @@ export default function FormulaModal({
       )
     );
 
-    setBatchUnit(
-      editingFormula.batchUnit || "kg"
-    );
+    setBatchUnit("kg");
 
     const formulaItems =
       Array.isArray(editingFormula.items)
@@ -936,27 +934,14 @@ export default function FormulaModal({
                       Batch Unit
                     </label>
 
-                    <select
-                      value={batchUnit}
-                      onChange={(event) =>
-                        setBatchUnit(
-                          event.target.value
-                        )
-                      }
-                      className="mt-1.5 h-11 w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                    >
-                      <option value="kg">
-                        kg
-                      </option>
-
-                      <option value="L">
-                        L
-                      </option>
-
-                      <option value="unit">
-                        unit
-                      </option>
-                    </select>
+                    <input
+                      value="kg"
+                      readOnly
+                      className="mt-1.5 h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Formula scaling and production output use kilograms.
+                    </p>
                   </div>
 
                   {/* STATUS */}

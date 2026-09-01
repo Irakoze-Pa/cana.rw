@@ -43,7 +43,7 @@ interface Project {
 const projects: Project[] = [
   {
     id: 1,
-    title: "Residential Scaffolding",
+    title: "Scaffolding",
     category: "Scaffolding",
     location: "Kigali, Rwanda",
     description:

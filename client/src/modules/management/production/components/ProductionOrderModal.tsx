@@ -261,11 +261,8 @@ export default function ProductionOrderModal({
       return;
     }
 
-    /*
-     * IMPORTANT:
-     * Production Order unit comes from Product.
-     */
-    setUnit(selectedProduct.unit || "");
+    // Product.unit is the customer-facing pack label. Production is in kg.
+    setUnit("kg");
   }, [isEdit, selectedProduct]);
 
   useEffect(() => {
@@ -360,15 +357,25 @@ export default function ProductionOrderModal({
       const numericQuantity = Number(quantity);
 
       if (isEdit) {
-        await onUpdate({
-          quantity: numericQuantity,
-          unit: unit.trim(),
+        const updateData: UpdateProductionOrderData = {
           priority,
           status,
           plannedDate: plannedDate || undefined,
           expectedCompletionDate: expectedCompletionDate || undefined,
           notes: notes.trim() || undefined,
-        });
+        };
+
+        // Avoid re-submitting protected fields when a supervisor only changes
+        // dates, notes, priority, or status on an active production order.
+        if (numericQuantity !== Number(editingOrder?.quantity)) {
+          updateData.quantity = numericQuantity;
+        }
+
+        if (unit.trim() !== (editingOrder?.unit || "")) {
+          updateData.unit = unit.trim();
+        }
+
+        await onUpdate(updateData);
       } else {
         await onCreate({
           product: productId,
@@ -543,6 +550,18 @@ export default function ProductionOrderModal({
                   className="h-12 w-full rounded-xl border border-gray-200 px-4 text-sm outline-none focus:border-red-500"
                   placeholder="Enter quantity"
                 />
+
+                {isEdit && editingOrder?.status === "Released" && (
+                  <p className="mt-1.5 text-xs leading-5 text-amber-700">
+                    Quantity can be amended until the first production batch is created.
+                  </p>
+                )}
+
+                {isEdit && editingOrder?.status === "In Production" && (
+                  <p className="mt-1.5 text-xs leading-5 text-amber-700">
+                    Quantity is protected while production is in progress. Create a new order for additional output.
+                  </p>
+                )}
               </div>
 
               {/* UNIT */}

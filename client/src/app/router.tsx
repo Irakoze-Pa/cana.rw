@@ -18,6 +18,7 @@ import AdminRoutes from "@/routes/AdminRoutes";
 // =====================================================
 
 import About from "@/features/about";
+import Team from "@/features/team";
 import Projects from "@/features/projects";
 import Contact from "@/features/contact";
 
@@ -148,6 +149,11 @@ const router = createBrowserRouter([
       {
         path: "about",
         element: <About />,
+      },
+
+      {
+        path: "team",
+        element: <Team />,
       },
 
       {

@@ -26,6 +26,8 @@ interface ProductFormData {
   category: string;
   price: string;
   stock: string;
+  packSizeKg: string;
+  densityKgPerL: string;
   unit: string;
   description: string;
   status: "Active" | "Inactive";
@@ -37,6 +39,8 @@ const emptyForm: ProductFormData = {
   category: "",
   price: "",
   stock: "0",
+  packSizeKg: "",
+  densityKgPerL: "",
   unit: "",
   description: "",
   status: "Active",
@@ -82,6 +86,8 @@ function ProductModal({
         category: product.category || "",
         price: String(product.price ?? ""),
         stock: String(product.stock ?? "0"),
+        packSizeKg: String(product.packSizeKg ?? ""),
+        densityKgPerL: String(product.densityKgPerL ?? ""),
         unit: product.unit || "",
         description: product.description || "",
         status:
@@ -135,10 +141,20 @@ function ProductModal({
     const { name, value } =
       e.target;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => {
+      if (name === "category") {
+        const isWallMaster = value === "Wall Master";
+        return {
+          ...prev,
+          category: value,
+          unit: isWallMaster ? "30kg" : prev.unit === "30kg" ? "4L" : prev.unit,
+          packSizeKg: isWallMaster ? "30" : prev.packSizeKg,
+          densityKgPerL: isWallMaster ? "" : prev.densityKgPerL,
+        };
+      }
+
+      return { ...prev, [name]: value };
+    });
 
     setError("");
   };
@@ -238,6 +254,13 @@ function ProductModal({
       return "Please enter a valid stock quantity.";
     }
 
+    if (
+      formData.category !== "Wall Master" &&
+      (!formData.densityKgPerL || Number(formData.densityKgPerL) <= 0)
+    ) {
+      return "Enter the paint density in kg/L to calculate pack weight.";
+    }
+
     if (!formData.unit) {
       return "Please select a unit.";
     }
@@ -294,6 +317,18 @@ function ProductModal({
         "stock",
         formData.stock
       );
+
+      data.append(
+        "packSizeKg",
+        formData.packSizeKg,
+      );
+
+      if (formData.densityKgPerL) {
+        data.append(
+          "densityKgPerL",
+          formData.densityKgPerL,
+        );
+      }
 
       data.append(
         "unit",
@@ -872,61 +907,48 @@ function ProductModal({
                   Select unit
                 </option>
 
-                <option value="1L">
-                  1 Liter
-                </option>
-
-                <option value="4L">
-                  4 Liters
-                </option>
-
-                <option value="5L">
-                  5 Liters
-                </option>
-
-                <option value="10L">
-                  10 Liters
-                </option>
-
-                <option value="20L">
-                  20 Liters
-                </option>
-
-                <option value="kg">
-                  Per kilogram
-                </option>
-
-                <option value="1kg">
-                  1 Kilogram
-                </option>
-
-                <option value="5kg">
-                  5 Kilograms
-                </option>
-
-                <option value="10kg">
-                  10 Kilograms
-                </option>
-
-                <option value="20kg">
-                  20 Kilograms
-                </option>
-
-                <option value="25kg">
-                  25 Kilograms
-                </option>
-
-                <option value="30kg">
-                  30 Kilograms
-                </option>
-
-                <option value="50kg">
-                  50 Kilograms
-                </option>
+                {formData.category === "Wall Master" ? (
+                  <option value="30kg">30 kg bag</option>
+                ) : (
+                  <>
+                    <option value="4L">4 L bucket</option>
+                    <option value="20L">20 L bucket</option>
+                  </>
+                )}
               </select>
 
               <p className="mt-2 text-xs text-gray-500">
-                Choose the pack sold to customers. Paint uses litres; Wall Master uses kilograms.
+                Customer-facing pack label only. Production and stock are always measured in kilograms.
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="densityKgPerL"
+                className="mb-2 block text-sm font-semibold text-gray-700"
+              >
+                {formData.category === "Wall Master"
+                  ? "Net weight per bag"
+                  : "Paint density (kg/L)"}
+              </label>
+
+              <input
+                id={formData.category === "Wall Master" ? "packSizeKg" : "densityKgPerL"}
+                name={formData.category === "Wall Master" ? "packSizeKg" : "densityKgPerL"}
+                type="number"
+                min="0.001"
+                step="0.001"
+                value={formData.category === "Wall Master" ? "30" : formData.densityKgPerL}
+                onChange={handleChange}
+                disabled={loading || formData.category === "Wall Master"}
+                placeholder="Example: 1.35"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-100"
+              />
+
+              <p className="mt-2 text-xs text-gray-500">
+                {formData.category === "Wall Master"
+                  ? "Wall Master is fixed at 30 kg per bag."
+                  : "The system multiplies this by the selected 4 L or 20 L pack to obtain net kg and price per kg."}
               </p>
             </div>
           </div>
@@ -997,6 +1019,13 @@ function ProductModal({
                   RWF
                 </span>
               </div>
+
+              {(formData.category === "Wall Master" || Number(formData.densityKgPerL) > 0) &&
+                Number(formData.price) >= 0 && (
+                  <p className="mt-2 text-xs font-semibold text-emerald-700">
+                    Calculated price: {Math.round((Number(formData.price) / (formData.category === "Wall Master" ? 30 : Number(formData.unit.replace("L", "")) * Number(formData.densityKgPerL))) * 100) / 100} RWF per kg
+                  </p>
+                )}
             </div>
 
             <div>

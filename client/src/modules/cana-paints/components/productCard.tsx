@@ -15,6 +15,8 @@ export interface Product {
   price: number;
   stock: number;
   unit: string;
+  packSizeKg?: number;
+  pricePerKg?: number | null;
   status?: "Active" | "Inactive";
 }
 
@@ -396,6 +398,13 @@ const ProductCard = ({
                   RWF
                 </span>
               </div>
+
+              {product.pricePerKg !== null &&
+                product.pricePerKg !== undefined && (
+                  <p className="mt-1 text-[10px] font-bold text-emerald-700">
+                    {formatPrice(product.pricePerKg)} RWF / kg
+                  </p>
+                )}
             </div>
 
             {stock > 0 && (

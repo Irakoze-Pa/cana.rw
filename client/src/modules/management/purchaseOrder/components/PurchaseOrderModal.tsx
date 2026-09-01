@@ -99,6 +99,12 @@ const createEmptyItem = (): PurchaseOrderItemForm => ({
   total: 0,
 });
 
+const formatWeight = (quantity: number, unit: string) => {
+  const value = Number(quantity || 0);
+  if (unit.trim().toLowerCase() !== "kg") return `${value} ${unit || ""}`.trim();
+  return `${value.toLocaleString("en-RW", { maximumFractionDigits: 2 })} kg · ${(value / 1000).toLocaleString("en-RW", { maximumFractionDigits: 3 })} t`;
+};
+
 // =====================================================
 // COMPONENT
 // =====================================================
@@ -270,11 +276,10 @@ function PurchaseOrderModal({
       return [];
     }
 
-    return rawMaterials.filter((material) => material.status !== "Inactive" && offers.some((offer) => {
-      const offerSupplier = typeof offer.supplier === "string" ? offer.supplier : offer.supplier._id;
-      const offerMaterial = typeof offer.rawMaterial === "string" ? offer.rawMaterial : offer.rawMaterial._id;
-      return offer.status !== "Inactive" && offerSupplier === supplier && offerMaterial === material._id;
-    }));
+    // Raw materials are independent master data. A supplier offer improves
+    // price reference data but must not prevent procurement from ordering a
+    // material from a new or alternative supplier.
+    return rawMaterials.filter((material) => material.status !== "Inactive");
   }, [rawMaterials, supplier, offers]);
 
   // ===================================================
@@ -510,13 +515,12 @@ function PurchaseOrderModal({
     const invalidItem = items.some(
       (item) =>
         !item.rawMaterial ||
-        Number(item.quantity) <= 0 ||
-        Number(item.unitPrice) < 0
+        Number(item.quantity) <= 0
     );
 
     if (invalidItem) {
       alert(
-        "Please select a raw material and enter a valid quantity and price."
+        "Please select a raw material and enter a valid quantity."
       );
       return;
     }
@@ -536,37 +540,6 @@ function PurchaseOrderModal({
     if (hasDuplicates) {
       alert(
         "You cannot add the same raw material more than once."
-      );
-      return;
-    }
-
-    // -------------------------------------------------
-    // CHECK MATERIALS BELONG TO SELECTED SUPPLIER
-    // -------------------------------------------------
-
-    const invalidSupplierMaterial =
-      items.some((item) => {
-        const material =
-          rawMaterials.find(
-            (material) =>
-              material._id ===
-              item.rawMaterial
-          );
-
-        if (!material) {
-          return true;
-        }
-
-        return !offers.some((offer) => {
-          const offerSupplier = typeof offer.supplier === "string" ? offer.supplier : offer.supplier._id;
-          const offerMaterial = typeof offer.rawMaterial === "string" ? offer.rawMaterial : offer.rawMaterial._id;
-          return offer.status !== "Inactive" && offerSupplier === supplier && offerMaterial === material._id;
-        });
-      });
-
-    if (invalidSupplierMaterial) {
-      alert(
-        "One or more raw materials do not have an active approved offer for the selected supplier. Add the supplier material offer first."
       );
       return;
     }
@@ -1040,7 +1013,7 @@ function PurchaseOrderModal({
                 </h3>
 
                 <p className="mt-0.5 text-xs text-gray-500">
-                  Select materials from the database
+                  Select materials and quantities. Supplier prices are applied automatically when available.
                 </p>
               </div>
 
@@ -1171,8 +1144,7 @@ function PurchaseOrderModal({
                   </p>
 
                   <p className="mt-1 text-xs text-gray-500">
-                    This supplier does not have active raw
-                    materials assigned to it.
+                    Add active raw materials first, then return to create this order.
                   </p>
                 </div>
               )}
@@ -1198,7 +1170,7 @@ function PurchaseOrderModal({
                   <div
                     className="
                       hidden
-                      grid-cols-[2fr_1fr_1fr_1.2fr_1.2fr_44px]
+                      grid-cols-[2fr_1fr_1fr_44px]
                       gap-3
                       bg-gray-50
                       px-4
@@ -1214,8 +1186,6 @@ function PurchaseOrderModal({
                     <span>Raw Material</span>
                     <span>Quantity</span>
                     <span>Unit</span>
-                    <span>Unit Price</span>
-                    <span>Total</span>
                     <span />
                   </div>
 
@@ -1232,7 +1202,7 @@ function PurchaseOrderModal({
                             gap-3
                             px-4
                             py-4
-                            md:grid-cols-[2fr_1fr_1fr_1.2fr_1.2fr_44px]
+                            md:grid-cols-[2fr_1fr_1fr_44px]
                             md:items-center
                           "
                         >
@@ -1370,6 +1340,12 @@ function PurchaseOrderModal({
                                 focus:ring-red-100
                               "
                             />
+
+                            {item.unit.trim().toLowerCase() === "kg" && Number(item.quantity) > 0 && (
+                              <p className="mt-1.5 text-xs font-medium text-slate-500">
+                                Equivalent: {formatWeight(item.quantity, item.unit)}
+                              </p>
+                            )}
                           </div>
 
                           {/* UNIT */}
@@ -1401,13 +1377,13 @@ function PurchaseOrderModal({
                                 text-gray-700
                               "
                             >
-                              {item.unit || "-"}
+                              {item.unit === "kg" ? "kg (1 t = 1,000 kg)" : item.unit || "-"}
                             </div>
                           </div>
 
                           {/* UNIT PRICE */}
 
-                          <div>
+                          <div className="hidden">
                             <label
                               className="
                                 mb-1.5
@@ -1418,46 +1394,17 @@ function PurchaseOrderModal({
                                 md:hidden
                               "
                             >
-                              Unit Price
+                              Reference Price
                             </label>
 
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={
-                                item.unitPrice
-                              }
-                              onChange={(event) =>
-                                handleUnitPriceChange(
-                                  index,
-                                  Number(
-                                    event.target.value
-                                  )
-                                )
-                              }
-                              disabled={
-                                isSubmitting
-                              }
-                              className="
-                                h-10
-                                w-full
-                                rounded-lg
-                                border
-                                border-gray-200
-                                px-3
-                                text-sm
-                                outline-none
-                                focus:border-red-500
-                                focus:ring-2
-                                focus:ring-red-100
-                              "
-                            />
+                            <div className="flex h-10 items-center rounded-lg bg-gray-50 px-3 text-sm font-medium text-gray-700">
+                              {item.rawMaterial ? formatCurrency(item.unitPrice) : "Automatic"}
+                            </div>
                           </div>
 
                           {/* TOTAL */}
 
-                          <div>
+                          <div className="hidden">
                             <label
                               className="
                                 mb-1.5
@@ -1600,7 +1547,7 @@ function PurchaseOrderModal({
 
               {/* TOTAL */}
 
-              <div className="flex items-end justify-end">
+              <div className="hidden">
                 <div
                   className="
                     w-full
@@ -1646,42 +1593,12 @@ function PurchaseOrderModal({
 
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-600">
-                      Tax
+                      Pricing & tax
                     </span>
 
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={tax}
-                      onChange={(event) =>
-                        setTax(
-                          Math.max(
-                            0,
-                            Number(
-                              event.target.value ||
-                                0
-                            )
-                          )
-                        )
-                      }
-                      disabled={isSubmitting}
-                      className="
-                        h-9
-                        w-32
-                        rounded-lg
-                        border
-                        border-gray-200
-                        bg-white
-                        px-3
-                        text-right
-                        text-sm
-                        outline-none
-                        focus:border-red-500
-                        focus:ring-2
-                        focus:ring-red-100
-                      "
-                    />
+                    <span className="text-right text-xs font-medium text-gray-500">
+                      Reference prices only · tax excluded
+                    </span>
                   </div>
 
                   {/* GRAND TOTAL */}

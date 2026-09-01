@@ -7,6 +7,8 @@ export interface CreateProductData {
   category: string;
   price: number;
   stock?: number;
+  packSizeKg?: number;
+  densityKgPerL?: number;
   unit: string;
   description?: string;
   image?: string;
@@ -20,11 +22,44 @@ export interface UpdateProductData {
   category?: string;
   price?: number;
   stock?: number;
+  packSizeKg?: number;
+  densityKgPerL?: number;
   unit?: string;
   description?: string;
   image?: string;
   status?: "Active" | "Inactive";
   trackBatch?: boolean;
+}
+
+function getPackagingData(data: {
+  category?: string;
+  unit?: string;
+  densityKgPerL?: number;
+}) {
+  const category = String(data.category || "").trim();
+  const normalizedUnit = String(data.unit || "").trim().toLowerCase();
+
+  if (category === "Wall Master") {
+    if (normalizedUnit !== "30kg") {
+      throw new Error("Wall Master must be packed as 30kg.");
+    }
+    return { packSizeKg: 30, densityKgPerL: undefined };
+  }
+
+  const litres = normalizedUnit === "4l" ? 4 : normalizedUnit === "20l" ? 20 : 0;
+  if (!litres) {
+    throw new Error("CANA Paints products must be packed as 4L or 20L.");
+  }
+
+  const densityKgPerL = Number(data.densityKgPerL);
+  if (!Number.isFinite(densityKgPerL) || densityKgPerL <= 0) {
+    throw new Error("Paint density in kg/L must be greater than zero.");
+  }
+
+  return {
+    packSizeKg: Number((litres * densityKgPerL).toFixed(4)),
+    densityKgPerL,
+  };
 }
 
 /* =========================================================
@@ -83,6 +118,8 @@ export const createProduct = async (
 
   let imageUrl = "";
 
+  const packaging = getPackagingData(data);
+
   if (file) {
     imageUrl = await uploadImageToCloudinary(file);
   }
@@ -94,6 +131,9 @@ export const createProduct = async (
 
     price: Number(data.price),
     stock: Number(data.stock ?? 0),
+    baseUnit: "kg",
+    packSizeKg: packaging.packSizeKg,
+    densityKgPerL: packaging.densityKgPerL,
 
     image: imageUrl,
   });
@@ -166,6 +206,27 @@ export const updateProduct = async (
 
   if (data.stock !== undefined) {
     updateData.stock = Number(data.stock);
+  }
+
+  if (
+    data.category !== undefined ||
+    data.unit !== undefined ||
+    data.packSizeKg !== undefined ||
+    data.densityKgPerL !== undefined
+  ) {
+    const existing = await Product.findById(id).lean();
+    if (!existing) {
+      throw new Error("Product not found");
+    }
+
+    const packaging = getPackagingData({
+      category: data.category ?? existing.category,
+      unit: data.unit ?? existing.unit,
+      densityKgPerL: data.densityKgPerL ?? existing.densityKgPerL,
+    });
+
+    updateData.packSizeKg = packaging.packSizeKg;
+    updateData.densityKgPerL = packaging.densityKgPerL;
   }
 
   /* -----------------------------------------

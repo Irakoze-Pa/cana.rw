@@ -57,7 +57,7 @@ function NavLinks() {
 
   return (
     <nav
-      className="flex items-center gap-8 xl:gap-10"
+      className="flex items-center gap-5 xl:gap-8"
       aria-label="Main navigation"
     >
 
@@ -212,6 +212,10 @@ function NavLinks() {
       ====================================================== */}
       <NavItem to="/about">
         About
+      </NavItem>
+
+      <NavItem to="/team">
+        Our Team
       </NavItem>
 
       {/* =====================================================

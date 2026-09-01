@@ -3,13 +3,12 @@ import { Calculator, CheckCircle2, Loader2, Paintbrush, Plus, Trash2 } from "luc
 import { Link } from "react-router-dom";
 import api from "@/services/api";
 
-type Product = { _id: string; name: string; category: string; unit: string; price: number; status: string };
+type Product = { _id: string; name: string; category: string; unit: string; price: number; packSizeKg?: number; pricePerKg?: number | null; status: string };
 type Line = { id: number; finish: "Interior" | "Exterior"; product: string; area: string; coats: string; coverage: string; waste: string };
 const emptyLine = (id: number): Line => ({ id, finish: "Interior", product: "", area: "", coats: "2", coverage: "10", waste: "10" });
 const money = (value: number) => `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 })} RWF`;
-const measure = (unit?: string) => {
-  const value = unit?.toLowerCase() || "";
-  return { label: value.includes("kg") ? "kg" : "L", packSize: Number(value.match(/(\d+(?:\.\d+)?)/)?.[1] || 1) };
+const measure = (product?: Product) => {
+  return { label: "kg", packSize: Math.max(0.001, Number(product?.packSizeKg || 1)) };
 };
 
 function Input({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
@@ -26,7 +25,7 @@ export default function EstimatedCostCalculator() {
   const update = (id: number, change: Partial<Line>) => setLines((current) => current.map((line) => line.id === id ? { ...line, ...change } : line));
   const results = useMemo(() => lines.map((line) => {
     const product = products.find((item) => item._id === line.product);
-    const unit = measure(product?.unit);
+    const unit = measure(product);
     const quantity = Number(line.area || 0) * Number(line.coats || 0) * (1 + Number(line.waste || 0) / 100) / Math.max(0.1, Number(line.coverage || 10));
     const packs = Math.ceil(quantity / unit.packSize);
     return { ...line, product, unit, quantity, packs, cost: packs * Number(product?.price || 0) };
@@ -36,7 +35,7 @@ export default function EstimatedCostCalculator() {
   const quoteUrl = selectedIds.length ? `/cana-paints/request-quote?products=${selectedIds.join(",")}` : "/cana-paints/request-quote";
 
   return <main className="min-h-screen bg-gray-50 pb-24 lg:pb-0">
-    <section className="bg-slate-950 px-4 py-8 text-white sm:px-6 sm:py-16"><div className="mx-auto max-w-6xl"><p className="text-xs font-bold uppercase tracking-[.2em] text-red-300">CANA Paints tool</p><h1 className="mt-2 text-3xl font-extrabold sm:mt-3 sm:text-5xl">Estimate products, packs, and cost.</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300 sm:mt-4">Paint is estimated in litres. Wall Master and other weight-based products are estimated in kilograms, using each product’s own pack size and selling price.</p></div></section>
+    <section className="bg-slate-950 px-4 py-8 text-white sm:px-6 sm:py-16"><div className="mx-auto max-w-6xl"><p className="text-xs font-bold uppercase tracking-[.2em] text-red-300">CANA Paints tool</p><h1 className="mt-2 text-3xl font-extrabold sm:mt-3 sm:text-5xl">Estimate products, packs, and cost.</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300 sm:mt-4">All material and finished-product calculations use kilograms. Each sales pack uses its registered net weight and price.</p></div></section>
     <section className="mx-auto grid max-w-6xl gap-4 px-3 py-5 sm:gap-6 sm:px-6 sm:py-8 lg:grid-cols-[1.25fr_.75fr]">
       <div className="rounded-2xl bg-white p-3 shadow-sm sm:rounded-3xl sm:p-7"><div className="flex items-start justify-between gap-2 sm:items-center sm:gap-3"><div className="flex min-w-0 items-center gap-2.5 sm:gap-3"><span className="rounded-xl bg-red-50 p-2.5 text-red-600 sm:p-3"><Calculator size={20} /></span><div className="min-w-0"><h2 className="font-bold text-gray-900">Product plan</h2><p className="truncate text-xs text-gray-500 sm:text-sm">Choose catalogue products for each surface.</p></div></div><button type="button" onClick={() => setLines((current) => [...current, emptyLine(Date.now())])} className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-gray-900 px-3 py-2.5 text-xs font-bold text-white"><Plus size={15} />Add</button></div>
         {loading ? <div className="flex justify-center p-12"><Loader2 className="animate-spin text-red-600" /></div> : <div className="mt-6 space-y-4">{lines.map((line, index) => {

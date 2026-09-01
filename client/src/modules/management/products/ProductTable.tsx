@@ -223,7 +223,7 @@ function ProductTable({
               </th>
 
               <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Price
+                Pack / kg price
               </th>
 
               <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -269,7 +269,7 @@ function ProductTable({
                       </p>
 
                       <p className="mt-0.5 text-xs text-gray-500">
-                        {product.unit}
+                        {product.unit} · {Number(product.packSizeKg || 0).toLocaleString()} kg net
                       </p>
                     </div>
                   </div>
@@ -285,12 +285,18 @@ function ProductTable({
                   {Number(
                     product.price
                   ).toLocaleString()}{" "}
-                  RWF
+                  RWF / pack
+
+                  <p className="mt-1 text-xs font-medium text-emerald-700">
+                    {product.pricePerKg !== null && product.pricePerKg !== undefined
+                      ? `${Number(product.pricePerKg).toLocaleString()} RWF / kg`
+                      : "Set pack weight"}
+                  </p>
                 </td>
 
                 {/* STOCK */}
                 <td className="px-6 py-4 text-sm text-gray-600">
-                  {product.stock}
+                  {Number(product.stock || 0).toLocaleString()} kg
                 </td>
 
                 {/* STATUS */}
