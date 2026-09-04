@@ -1,6 +1,7 @@
 import { Schema, model, Document } from "mongoose";
 
 export enum UserRole {
+  SUPERADMIN = "superadmin",
   CUSTOMER = "customer",
   STAFF = "staff",
   ADMIN = "admin",

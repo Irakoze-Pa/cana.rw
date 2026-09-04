@@ -7,7 +7,7 @@ import { hashPassword } from "../../utils/password";
 const router = Router();
 const ACCESS_AREAS = ["sales", "production", "inventory", "procurement", "finance", "staff", "reports"] as const;
 const defaultPermissions = (role: UserRole, department?: Department) => {
-  if (role === UserRole.ADMIN) return [...ACCESS_AREAS];
+  if (role === UserRole.SUPERADMIN || role === UserRole.ADMIN) return [...ACCESS_AREAS];
   if (role === UserRole.CUSTOMER) return [];
   const departmentAccess: Partial<Record<Department, string[]>> = { sales: ["sales"], production: ["production"], warehouse: ["inventory"], procurement: ["procurement"], finance: ["finance"], hr: ["staff"], management: ["reports", "sales", "production", "inventory", "procurement", "finance"] };
   return departmentAccess[department as Department] || [];
@@ -38,7 +38,8 @@ router.post("/customers", authorizeRoles(UserRole.ADMIN, UserRole.STAFF), async 
   }
 });
 
-router.use(authorizeRoles(UserRole.ADMIN));
+// Administrators retain all operational modules; only SuperAdmin manages accounts.
+router.use(authorizeRoles(UserRole.SUPERADMIN));
 
 router.post("/", async (req, res, next) => {
   try {
@@ -81,9 +82,9 @@ router.patch("/:id", async (req: AuthRequest, res, next) => {
     if (Array.isArray(permissions)) { if (!permissions.every((item) => typeof item === "string" && ACCESS_AREAS.includes(item as typeof ACCESS_AREAS[number]))) return res.status(400).json({ error: { code: "INVALID_PERMISSIONS", message: "One or more access areas are invalid." } }); update.permissions = [...new Set(permissions)]; }
     const current = await User.findById(req.params.id).select("role status").lean();
     if (!current) return res.status(404).json({ error: { code: "USER_NOT_FOUND", message: "User not found." } });
-    const removesAdmin = current.role === UserRole.ADMIN && current.status === UserStatus.ACTIVE && (update.role !== UserRole.ADMIN || update.status === UserStatus.INACTIVE);
-    if (String(req.user?.id) === String(req.params.id) && removesAdmin) return res.status(400).json({ error: { code: "SELF_ADMIN_CHANGE", message: "You cannot remove your own administrator access." } });
-    if (removesAdmin && await User.countDocuments({ role: UserRole.ADMIN, status: UserStatus.ACTIVE }) <= 1) return res.status(400).json({ error: { code: "LAST_ADMIN", message: "Keep at least one active administrator account." } });
+    const removesSuperAdmin = current.role === UserRole.SUPERADMIN && current.status === UserStatus.ACTIVE && (update.role !== UserRole.SUPERADMIN || update.status === UserStatus.INACTIVE);
+    if (String(req.user?.id) === String(req.params.id) && removesSuperAdmin) return res.status(400).json({ error: { code: "SELF_SUPERADMIN_CHANGE", message: "You cannot remove your own SuperAdmin access." } });
+    if (removesSuperAdmin && await User.countDocuments({ role: UserRole.SUPERADMIN, status: UserStatus.ACTIVE }) <= 1) return res.status(400).json({ error: { code: "LAST_SUPERADMIN", message: "Keep at least one active SuperAdmin account." } });
     const user = await User.findByIdAndUpdate(req.params.id, { $set: update }, { new: true, runValidators: true }).select("-password");
     if (!user) return res.status(404).json({ error: { code: "USER_NOT_FOUND", message: "User not found." } });
     res.json({ data: user });

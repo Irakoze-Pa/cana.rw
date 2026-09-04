@@ -75,6 +75,7 @@ import ProductionOrdersPage from "@/modules/management/production/pages/Producti
 import ProductionBatchesPage from "@/modules/management/production/pages/ProductionBatchesPage";
 import ProductionWorkspacePage from "@/modules/management/production/pages/ProductionWorkspacePage";
 import SalesOrdersPage from "@/modules/management/sales/SalesOrdersPage";
+import SalesWorkspacePage from "@/modules/management/sales/SalesWorkspacePage";
 import QuotationsPage from "@/modules/management/sales/QuotationsPage";
 import ProformaBuilderPage from "@/modules/management/sales/ProformaBuilderPage";
 import BillingPage from "@/modules/management/billing/BillingPage";
@@ -84,6 +85,7 @@ import StaffPaymentsPage from "@/modules/management/users/StaffPaymentsPage";
 import CustomersPage from "@/modules/management/users/CustomersPage";
 import PayrollPage from "@/modules/management/users/PayrollPage";
 import FactoryCompliancePage from "@/modules/management/compliance/FactoryCompliancePage";
+import OperationalReportsPage from "@/modules/management/reports/OperationalReportsPage";
 
 // =====================================================
 // RAW MATERIAL CONSUMPTION MODULE
@@ -430,7 +432,17 @@ const router = createBrowserRouter([
 
       {
         path: "sales",
-        element: <SalesOrdersPage />,
+        element: <SalesWorkspacePage />,
+      },
+
+      {
+        path: "sales/orders",
+        element: <SalesOrdersPage view="orders" />,
+      },
+
+      {
+        path: "sales/fulfilment",
+        element: <SalesOrdersPage view="fulfilment" />,
       },
 
       {
@@ -482,7 +494,7 @@ const router = createBrowserRouter([
 
       {
         path: "reports",
-        element: <ManagementPlaceholderPage title="Reports" description="Access operational summaries for procurement, inventory, production, and sales." />,
+        element: <OperationalReportsPage />,
       },
 
       // =================================================

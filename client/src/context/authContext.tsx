@@ -13,7 +13,7 @@ type User = {
   phone: string;
   email?: string;
 
-  role: "customer" | "staff" | "admin";
+  role: "customer" | "staff" | "admin" | "superadmin";
 
   company:
     | "cana_group"

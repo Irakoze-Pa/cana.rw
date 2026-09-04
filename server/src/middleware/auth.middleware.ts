@@ -72,7 +72,7 @@ export const authorizeRoles = (...roles: string[]) => (
   res: Response,
   next: NextFunction
 ) => {
-  if (!req.user?.role || !roles.includes(req.user.role)) {
+  if (!req.user?.role || (req.user.role !== "superadmin" && !roles.includes(req.user.role))) {
     return res.status(403).json({
       success: false,
       message: "You do not have permission to perform this action.",

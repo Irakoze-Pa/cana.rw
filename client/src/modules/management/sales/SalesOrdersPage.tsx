@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { Plus, Printer, RefreshCw, ShoppingCart, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { ArrowRight, PackageCheck, Plus, Printer, RefreshCw, ShoppingCart, X } from "lucide-react";
 import CustomerForm from "../users/CustomerForm";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
@@ -91,12 +92,14 @@ function printSalesOrder(order: Order) {
   });
 }
 
-export default function SalesOrdersPage() {
+export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" | "fulfilment" }) {
   const { toast } = useToast();
   const [addingCustomer, setAddingCustomer] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -112,6 +115,13 @@ export default function SalesOrdersPage() {
   const [orderLines, setOrderLines] = useState([
     { product: "", quantity: "1", unitPrice: "" },
   ]);
+  const fulfilmentView = view === "fulfilment";
+  const pageTitle = fulfilmentView ? "Order fulfilment" : "Sales orders";
+  const pageDescription = fulfilmentView ? "Track confirmed orders from production through dispatch and delivery." : "Create, price and confirm client orders before fulfilment.";
+  const visibleOrders = useMemo(() => orders.filter((order) => {
+    const orderDate = order.createdAt ? new Date(order.createdAt).toISOString().slice(0, 10) : "";
+    return (!statusFilter || order.status === statusFilter) && (!fulfilmentView || ["confirmed", "in_production", "ready_for_delivery"].includes(order.status)) && (!dateFrom || orderDate >= dateFrom) && (!dateTo || orderDate <= dateTo) && `${order.orderNumber} ${order.customer?.fullName || ""}`.toLowerCase().includes(search.toLowerCase());
+  }), [orders, statusFilter, fulfilmentView, dateFrom, dateTo, search]);
   const load = async () => {
     setLoading(true);
     setError("");
@@ -225,21 +235,22 @@ export default function SalesOrdersPage() {
             <ShoppingCart size={21} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Sales & orders</h1>
+            <p className="text-xs font-bold uppercase tracking-[.14em] text-red-600">Sales workspace</p>
+            <h1 className="mt-1 text-2xl font-bold text-gray-900">{pageTitle}</h1>
             <p className="mt-1 text-sm text-gray-500">
-              Create client orders, then move them through production and
-              delivery.
+              {pageDescription}
             </p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button
+          {!fulfilmentView && <button
             onClick={() => setCreating(true)}
             className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white"
           >
             <Plus size={16} />
             New sales order
-          </button>
+          </button>}
+          {fulfilmentView && <Link to="/management/sales/orders" className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white"><Plus size={16}/>New sales order</Link>}
           <button
             onClick={() => void load()}
             className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"
@@ -252,7 +263,7 @@ export default function SalesOrdersPage() {
       {error && (
         <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
       )}
-      {addingCustomer && (
+      {!fulfilmentView && addingCustomer && (
         <CustomerForm
           onCancel={() => setAddingCustomer(false)}
           onCreated={(customer) => {
@@ -262,7 +273,7 @@ export default function SalesOrdersPage() {
           }}
         />
       )}
-      {creating && (
+      {!fulfilmentView && creating && (
         <form
           onSubmit={create}
           className="grid gap-3 rounded-2xl border border-red-100 bg-red-50/40 p-5 md:grid-cols-2"
@@ -448,19 +459,12 @@ export default function SalesOrdersPage() {
           </button>
         </form>
       )}
-      <div className="flex flex-wrap gap-3">
-        <input
-          aria-label="Search orders"
-          placeholder="Search order or customer"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
-        />
-        <select
-          aria-label="Filter order status"
+      {fulfilmentView && <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950"><span className="rounded-xl bg-white p-2 text-blue-700"><PackageCheck size={18}/></span><span><strong>Fulfilment queue:</strong> confirmed, in-production and ready-for-delivery orders only. Update each stage here so sales, production and dispatch remain aligned.</span><Link to="/management/sales/orders" className="ml-auto inline-flex items-center gap-1 font-bold text-blue-800">All orders <ArrowRight size={15}/></Link></section>}
+      <section className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><label className="min-w-52 flex-1 text-xs font-bold uppercase tracking-wide text-slate-500">Search<input aria-label="Search orders" placeholder="Order number or customer" value={search} onChange={(event) => setSearch(event.target.value)} className="mt-1.5 block w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Order date from<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1.5 block rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Order date to<input type="date" min={dateFrom || undefined} value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1.5 block rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label>
+        <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Status<select aria-label="Filter order status"
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
+          className="mt-1.5 block rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"
         >
           <option value="">All statuses</option>
           {[...Object.keys(next), "delivered", "cancelled"].map((status) => (
@@ -468,8 +472,7 @@ export default function SalesOrdersPage() {
               {status.replaceAll("_", " ")}
             </option>
           ))}
-        </select>
-      </div>
+        </select></label><div className="ml-auto pb-1 text-sm text-slate-500"><strong className="text-slate-900">{visibleOrders.length}</strong> transaction{visibleOrders.length === 1 ? "" : "s"} shown</div>{(dateFrom || dateTo || search || statusFilter) && <button type="button" onClick={() => { setSearch(""); setStatusFilter(""); setDateFrom(""); setDateTo(""); }} className="pb-1 text-sm font-bold text-red-700">Clear filters</button>}</section>
       <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -490,15 +493,7 @@ export default function SalesOrdersPage() {
                 </td>
               </tr>
             ) : (
-              orders
-                .filter(
-                  (order) =>
-                    (!statusFilter || order.status === statusFilter) &&
-                    `${order.orderNumber} ${order.customer?.fullName || ""}`
-                      .toLowerCase()
-                      .includes(search.toLowerCase()),
-                )
-                .map((order) => (
+              visibleOrders.map((order) => (
                   <tr key={order._id}>
                     <td className="px-5 py-4 font-semibold">
                       {order.orderNumber}

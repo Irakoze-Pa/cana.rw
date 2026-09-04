@@ -66,7 +66,8 @@ export default function FinishedGoodsPage() {
     product: "",
     fromStore: "production",
     toStore: "sales",
-    quantity: "",
+    quantityInput: "",
+    quantityMode: "packs" as "packs" | "kg",
     notes: "",
   });
   const [busy, setBusy] = useState(false);
@@ -132,23 +133,27 @@ export default function FinishedGoodsPage() {
       )?.quantity || 0,
     );
   const selected = products.find((product) => product._id === form.product);
+  const transferQuantityKg = Number(form.quantityInput) * (form.quantityMode === "packs" ? Number(selected?.packSizeKg || 0) : 1);
   const sendTransfer = async (event: React.FormEvent) => {
     event.preventDefault();
     if (form.fromStore === form.toStore)
       return setError("Select two different stores.");
+    if (!selected) return setError("Select a finished product to transfer.");
+    if (!Number.isFinite(transferQuantityKg) || transferQuantityKg <= 0) return setError(form.quantityMode === "packs" ? "Enter a valid number of packs. This product must have a pack size before packs can be transferred." : "Enter a valid quantity in kg.");
     try {
       setBusy(true);
       setError("");
       await api.post("/finished-goods/transfers", {
         ...form,
-        quantity: Number(form.quantity),
+        quantity: transferQuantityKg,
       });
       toast("Store transfer recorded.", "success");
       setForm({
         product: "",
         fromStore: "production",
         toStore: "sales",
-        quantity: "",
+        quantityInput: "",
+        quantityMode: "packs",
         notes: "",
       });
       await load();
@@ -302,23 +307,7 @@ export default function FinishedGoodsPage() {
                 </select>
               </label>
             </div>
-            <label className="block text-sm font-semibold text-gray-700">
-              Quantity
-              <input
-                required
-                min="0.0001"
-                step="any"
-                type="number"
-                value={form.quantity}
-                onChange={(event) =>
-                  setForm({ ...form, quantity: event.target.value })
-                }
-                placeholder={
-                  selected ? `Quantity in ${selected.baseUnit || "kg"}` : "Quantity in kg"
-                }
-                className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 px-3 text-sm"
-              />
-            </label>
+            <div className="rounded-2xl border border-red-100 bg-red-50/40 p-3.5"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-bold text-slate-900">Transfer quantity</p><p className="mt-0.5 text-xs text-slate-600">Use packs for normal dispatch; kilograms remain available for partial stock movements.</p></div><select value={form.quantityMode} onChange={(event) => setForm({ ...form, quantityMode: event.target.value as "packs" | "kg", quantityInput: "" })} className="h-10 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-slate-800"><option value="packs">By pack</option><option value="kg">By kg</option></select></div><label className="mt-3 block text-sm font-semibold text-gray-700">{form.quantityMode === "packs" ? `Number of packs${selected?.packSizeKg ? ` (${selected.packSizeKg} kg each)` : ""}` : "Quantity in kg"}<input required min="0.0001" step="any" type="number" disabled={form.quantityMode === "packs" && !selected?.packSizeKg} value={form.quantityInput} onChange={(event) => setForm({ ...form, quantityInput: event.target.value })} placeholder={form.quantityMode === "packs" ? "Example: 12 packs" : "Example: 240 kg"} className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm disabled:bg-slate-100"/></label>{selected && <p className="mt-2 text-xs text-slate-600">{form.quantityInput ? <><strong>{number(transferQuantityKg)} kg</strong> will be transferred{form.quantityMode === "kg" && selected.packSizeKg ? ` · equivalent to ${number(transferQuantityKg / selected.packSizeKg)} packs` : ""}.</> : <>Pack size: <strong>{selected.packSizeKg ? `${number(selected.packSizeKg)} kg per pack` : "not configured"}</strong>.</>}</p>}</div>
             {selected && (
               <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                 Available in {storeName(form.fromStore)}:{" "}
@@ -447,7 +436,7 @@ export default function FinishedGoodsPage() {
                     {storeName(transfer.toStore)}
                   </td>
                   <td className="px-5 py-4 text-right font-bold">
-                    {number(transfer.quantity)} {transfer.product?.baseUnit || transfer.unit || "kg"}
+                    {stockWithPacks(transfer.quantity, transfer.product)}
                   </td>
                   <td className="px-5 py-4 text-gray-600">
                     {transfer.performedBy?.fullName || "—"}

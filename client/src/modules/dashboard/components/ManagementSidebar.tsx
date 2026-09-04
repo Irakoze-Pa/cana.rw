@@ -207,10 +207,28 @@ const groups: Group[] = [
         departments: ["sales", "customer_service", "management"],
       },
       {
-        label: "Sales orders",
+        label: "Sales workspace",
         to: "/management/sales",
         icon: ShoppingCart,
         departments: ["sales", "customer_service", "finance", "management"],
+      },
+      {
+        label: "Sales orders",
+        to: "/management/sales/orders",
+        icon: ClipboardList,
+        departments: ["sales", "customer_service", "finance", "management"],
+      },
+      {
+        label: "Fulfilment & delivery",
+        to: "/management/sales/fulfilment",
+        icon: Truck,
+        departments: ["sales", "customer_service", "production", "warehouse", "management"],
+      },
+      {
+        label: "Sales & production report",
+        to: "/management/reports",
+        icon: FileBarChart,
+        departments: ["sales", "finance", "production", "management"],
       },
       {
         label: "Proforma builder",
@@ -231,16 +249,16 @@ const groups: Group[] = [
     icon: Banknote,
     items: [
       {
-        label: "Staff directory & roles",
+        label: "Users & access",
         to: "/management/staff",
         icon: UserCog,
-        departments: ["management"],
+        roles: ["superadmin"],
       },
       {
         label: "Payroll workspace",
         to: "/management/payroll",
         icon: Banknote,
-        roles: ["admin"],
+        roles: ["admin", "superadmin"],
       },
     ],
   },
@@ -268,7 +286,7 @@ export default function ManagementSidebar({
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
   const visibleGroups = useMemo(
     () =>
       groups
@@ -282,12 +300,11 @@ export default function ManagementSidebar({
           ...group,
           items: group.items.filter(
             (item) =>
-              isAdmin ||
-              ((!item.roles || item.roles.includes(user?.role || "")) &&
-                (!item.companies ||
-                  item.companies.includes(user?.company || "")) &&
-                (!item.departments ||
-                  item.departments.includes(user?.department || ""))),
+              item.roles
+                ? item.roles.includes(user?.role || "")
+                : isAdmin ||
+                  ((!item.companies || item.companies.includes(user?.company || "")) &&
+                    (!item.departments || item.departments.includes(user?.department || ""))),
           ),
         }))
         .filter((group) => group.items.length > 0),

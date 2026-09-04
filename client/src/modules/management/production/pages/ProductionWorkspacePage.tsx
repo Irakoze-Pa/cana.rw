@@ -7,6 +7,7 @@ import {
   RefreshCw,
   TimerReset,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import api from "@/services/api";
 
 type View = "overview" | "quality" | "history" | "waste";
@@ -50,10 +51,10 @@ const qty = (value: number) =>
   Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 });
 const statusStyle: Record<Batch["status"], string> = {
   Planned: "bg-slate-100 text-slate-700",
-  Ready: "bg-blue-100 text-blue-700",
-  "In Progress": "bg-violet-100 text-violet-700",
+  Ready: "bg-slate-100 text-slate-700",
+  "In Progress": "bg-slate-200 text-slate-800",
   Paused: "bg-amber-100 text-amber-700",
-  Completed: "bg-emerald-100 text-emerald-700",
+  Completed: "bg-slate-100 text-slate-700",
   Cancelled: "bg-red-100 text-red-700",
 };
 
@@ -116,18 +117,19 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
             <Icon size={21} />
           </span>
           <div>
+            <p className="text-xs font-bold uppercase tracking-[.16em] text-slate-500">Operations workspace</p>
             <h1 className="text-2xl font-bold text-gray-900">{meta.title}</h1>
             <p className="mt-1 text-sm text-gray-500">{meta.description}</p>
           </div>
         </div>
-        <button
+        <div className="flex gap-2"><Link to="/management/reports" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">Period report</Link><button
           onClick={() => void load()}
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 disabled:opacity-60"
         >
           <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           Refresh
-        </button>
+        </button></div>
       </header>
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">

@@ -15,7 +15,7 @@ export default function AdminRoutes() {
   const { user } = useAuth();
   const location = useLocation();
   if (!user) return <Navigate to="/" replace />;
-  if (user.role === "admin") return <Outlet />;
+  if (user.role === "admin" || user.role === "superadmin") return <Outlet />;
   if (user.role !== "staff") return <Navigate to="/dashboard" replace />;
   const servicePaths = ["/management", "/management/profile", "/management/staff-payments", "/management/quotations", "/management/sales", "/management/customers"];
   if (user.company === "cana_services" && !servicePaths.some((path) => path === "/management" ? location.pathname === path : location.pathname.startsWith(path))) return <Navigate to="/management" replace />;

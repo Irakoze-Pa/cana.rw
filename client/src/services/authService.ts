@@ -12,7 +12,7 @@ export interface AuthUser {
   fullName: string;
   phone: string;
   email?: string;
-  role: "customer" | "staff" | "admin";
+  role: "customer" | "staff" | "admin" | "superadmin";
   company: "cana_group" | "cana_paints" | "cana_services";
   department?: "sales" | "production" | "warehouse" | "finance" | "marketing" | "hr" | "procurement" | "customer_service" | "management" | "transport";
 }

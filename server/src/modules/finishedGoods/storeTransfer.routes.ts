@@ -22,7 +22,7 @@ router.get("/balances", async (_req, res, next) => {
 });
 
 router.get("/transfers", async (_req, res, next) => {
-  try { res.json({ data: await Transfer.find().populate("product", "name code unit baseUnit").populate("performedBy", "fullName").sort({ createdAt: -1 }).limit(100) }); }
+  try { res.json({ data: await Transfer.find().populate("product", "name code unit baseUnit packSizeKg").populate("performedBy", "fullName").sort({ createdAt: -1 }).limit(100) }); }
   catch (error) { next(error); }
 });
 

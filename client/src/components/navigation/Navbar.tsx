@@ -69,7 +69,7 @@ function Navbar() {
   }, [user?.fullName]);
 
   const dashboardPath =
-    user?.role === "admin" || user?.role === "staff"
+    user?.role === "admin" || user?.role === "superadmin" || user?.role === "staff"
       ? "/management"
       : "/dashboard";
 
