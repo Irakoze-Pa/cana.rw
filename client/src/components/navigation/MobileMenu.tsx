@@ -8,12 +8,16 @@ import {
   Paintbrush,
   Truck,
   UserRound,
+  LayoutDashboard,
+  LogOut,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 type MobileMenuProps = {
   onLogin: () => void;
   onClose?: () => void;
+  dashboardPath?: string;
+  onLogout?: () => void;
 };
 
 type MenuType = "paints" | "services" | null;
@@ -21,6 +25,8 @@ type MenuType = "paints" | "services" | null;
 function MobileMenu({
   onLogin,
   onClose,
+  dashboardPath,
+  onLogout,
 }: MobileMenuProps) {
   const [open, setOpen] = useState<MenuType>(null);
 
@@ -414,7 +420,22 @@ function MobileMenu({
 
         <div className="mt-6 border-t border-neutral-100 pt-5">
 
+          {dashboardPath ? <><NavLink
+            to={dashboardPath}
+            onClick={closeMenu}
+            className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-neutral-950 py-3.5 text-sm font-bold text-white transition-all duration-300 hover:bg-red-600 active:scale-[0.98]"
+          >
+            <LayoutDashboard size={17} strokeWidth={2} />
+            <span>Go to Dashboard</span>
+          </NavLink>
           <button
+            type="button"
+            onClick={() => { closeMenu(); onLogout?.(); }}
+            className="mt-2 flex w-full items-center justify-center gap-2.5 rounded-xl border border-neutral-200 py-3 text-sm font-bold text-neutral-700 transition hover:bg-neutral-50"
+          >
+            <LogOut size={17} strokeWidth={2} />
+            <span>Sign out</span>
+          </button></> : <button
             type="button"
             onClick={() => {
               closeMenu();
@@ -444,7 +465,7 @@ function MobileMenu({
             />
 
             <span>Login</span>
-          </button>
+          </button>}
 
         </div>
 

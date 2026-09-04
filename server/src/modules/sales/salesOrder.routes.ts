@@ -4,6 +4,7 @@ import { authorizeRoles, protect } from "../../middleware/auth.middleware";
 const router = Router();
 router.use(protect);
 router.get("/my", authorizeRoles("customer"), controller.listMine);
+router.post("/my", authorizeRoles("customer"), controller.createMine);
 router.use(authorizeRoles("admin", "staff"));
 router.get("/", controller.list);
 router.post("/", controller.create);

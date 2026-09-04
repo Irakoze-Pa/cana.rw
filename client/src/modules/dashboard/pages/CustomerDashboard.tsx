@@ -43,10 +43,15 @@ interface QuotationsResponse {
   message?: string;
 }
 
+interface CustomerOrder {
+  _id: string;
+}
+
 function CustomerDashboard() {
   const { user, token } = useAuth();
 
   const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -100,6 +105,14 @@ function CustomerDashboard() {
   useEffect(() => {
     void fetchQuotations();
   }, [fetchQuotations]);
+
+  useEffect(() => {
+    if (!token) return;
+    void fetch(`${API_URL}/sales-orders/my`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (response) => response.ok ? response.json() : Promise.reject(new Error("Unable to load orders.")))
+      .then((result: { data?: CustomerOrder[] }) => setOrders(result.data || []))
+      .catch(() => setOrders([]));
+  }, [token]);
 
   const totalQuotationValue = (quotation: Quotation) => {
     return quotation.items.reduce(
@@ -180,10 +193,10 @@ function CustomerDashboard() {
             </div>
 
             <Link
-              to="/cana-paints/products"
+              to="/dashboard/orders/new"
               className="inline-flex w-fit items-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-white hover:text-black"
             >
-              Browse Products
+              Place an order
               <ArrowRight size={17} />
             </Link>
 
@@ -231,11 +244,11 @@ function CustomerDashboard() {
                 </p>
 
                 <p className="mt-2 text-3xl font-extrabold text-black">
-                  0
+                  {orders.length}
                 </p>
 
                 <p className="mt-1 text-xs text-gray-400">
-                  Your orders
+                  <Link to="/dashboard/orders" className="font-semibold text-red-600 hover:text-red-700">View my orders</Link>
                 </p>
               </div>
 
@@ -548,11 +561,11 @@ function CustomerDashboard() {
               <div className="mt-4 space-y-3">
 
                 <Link
-                  to="/cana-paints/products"
+                  to="/dashboard/orders/new"
                   className="flex items-center gap-3 rounded-xl bg-gray-50 p-3 text-sm font-semibold text-black transition hover:bg-red-600 hover:text-white"
                 >
                   <Package size={18} />
-                  Browse Products
+                  Place an order
                 </Link>
 
                 <Link
@@ -561,6 +574,14 @@ function CustomerDashboard() {
                 >
                   <FileText size={18} />
                   Request Quote
+                </Link>
+
+                <Link
+                  to="/dashboard/orders/new"
+                  className="flex items-center gap-3 rounded-xl bg-gray-50 p-3 text-sm font-semibold text-black transition hover:bg-red-600 hover:text-white"
+                >
+                  <ShoppingCart size={18} />
+                  Place an Order
                 </Link>
 
               </div>

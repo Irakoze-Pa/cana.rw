@@ -4,6 +4,7 @@ import { UserRole } from "../../models/users";
 import Balance from "./storeBalance.model";
 import Transfer from "./storeTransfer.model";
 import Product from "../product/product.model";
+import FinishedGoodsAdjustment from "./finishedGoodsAdjustment.model";
 
 const router = Router();
 router.use(protect, authorizeRoles(UserRole.ADMIN, UserRole.STAFF));
@@ -24,6 +25,31 @@ router.get("/balances", async (_req, res, next) => {
 router.get("/transfers", async (_req, res, next) => {
   try { res.json({ data: await Transfer.find().populate("product", "name code unit baseUnit packSizeKg").populate("performedBy", "fullName").sort({ createdAt: -1 }).limit(100) }); }
   catch (error) { next(error); }
+});
+
+router.get("/adjustments", authorizeRoles(UserRole.SUPERADMIN), async (_req, res, next) => {
+  try { res.json({ data: await FinishedGoodsAdjustment.find().populate("product", "name code unit baseUnit packSizeKg").populate("performedBy", "fullName").sort({ createdAt: -1 }).limit(100) }); }
+  catch (error) { next(error); }
+});
+
+router.post("/adjustments", authorizeRoles(UserRole.SUPERADMIN), async (req: AuthRequest, res, next) => {
+  try {
+    const { product, store, quantityChange, reason } = req.body;
+    const change = Number(quantityChange);
+    if (typeof product !== "string" || !["production", "sales"].includes(store) || !Number.isFinite(change) || change === 0 || typeof reason !== "string" || reason.trim().length < 3) return res.status(400).json({ error: { message: "Select a product and store, enter a non-zero adjustment, and provide a reason." } });
+    await ensureProductionBalances();
+    const balance = await Balance.findOne({ product, store });
+    if (!balance) return res.status(404).json({ error: { message: "Finished-goods store balance was not found." } });
+    const before = Number(balance.quantity || 0); const after = Number((before + change).toFixed(4));
+    if (after < 0) return res.status(400).json({ error: { message: "This adjustment would make the store quantity negative." } });
+    const finishedProduct = await Product.findById(product).select("baseUnit stock status");
+    if (!finishedProduct || finishedProduct.status !== "Active") return res.status(404).json({ error: { message: "Select an active finished product." } });
+    balance.quantity = after; await balance.save();
+    finishedProduct.stock = Number((Number(finishedProduct.stock || 0) + change).toFixed(4)); await finishedProduct.save();
+    const reference = `FGA-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+    const data = await FinishedGoodsAdjustment.create({ product, store, quantityChange: change, quantityBefore: before, quantityAfter: after, unit: finishedProduct.baseUnit || "kg", reference, reason: reason.trim(), performedBy: req.user!.id });
+    res.status(201).json({ data: await data.populate(["product", "performedBy"]) });
+  } catch (error) { next(error); }
 });
 
 

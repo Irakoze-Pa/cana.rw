@@ -767,6 +767,8 @@ function Navbar() {
             <MobileMenu
               onLogin={handleMobileLogin}
               onClose={closeMobileMenu}
+              dashboardPath={user ? dashboardPath : undefined}
+              onLogout={user ? handleLogout : undefined}
             />
           </div>
         </div>

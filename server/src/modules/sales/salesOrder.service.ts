@@ -6,11 +6,11 @@ import FinishedGoodsStoreBalance from "../finishedGoods/storeBalance.model";
 import SalesOrder, { salesOrderStatuses, SalesOrderStatus } from "./salesOrder.model";
 
 const transitions: Record<SalesOrderStatus, SalesOrderStatus[]> = {
-  draft: ["confirmed", "cancelled"], confirmed: ["in_production", "ready_for_delivery", "cancelled"],
+  draft: ["confirmed", "cancelled"], submitted: ["confirmed", "cancelled"], confirmed: ["in_production", "ready_for_delivery", "cancelled"],
   in_production: ["ready_for_delivery", "cancelled"], ready_for_delivery: ["delivered", "cancelled"], delivered: [], cancelled: [],
 };
 
-export async function createSalesOrder(input: { customer: string; quotation?: string; items: { product: string; quantity: number; unit?: string; unitPrice?: number }[]; tax?: number; deliveryAddress?: string; requestedDeliveryDate?: string; notes?: string; allowInactiveProducts?: boolean }) {
+export async function createSalesOrder(input: { customer: string; quotation?: string; items: { product: string; quantity: number; unit?: string; unitPrice?: number }[]; tax?: number; deliveryAddress?: string; requestedDeliveryDate?: string; notes?: string; allowInactiveProducts?: boolean; initialStatus?: SalesOrderStatus }) {
   if (!mongoose.Types.ObjectId.isValid(input.customer)) throw new Error("A valid customer is required.");
   if (!Array.isArray(input.items) || input.items.length === 0) throw new Error("At least one sales item is required.");
   if (!await User.exists({ _id: input.customer, role: UserRole.CUSTOMER, status: UserStatus.ACTIVE })) throw new Error("Select an active customer.");
@@ -33,8 +33,8 @@ export async function createSalesOrder(input: { customer: string; quotation?: st
   const tax = input.tax ?? 0;
   if (!Number.isFinite(tax) || tax < 0) throw new Error("Tax cannot be negative.");
   const orderNumber = `SO-${new Date().getFullYear()}-${String((await SalesOrder.countDocuments()) + 1).padStart(5, "0")}`;
-  const { allowInactiveProducts: _allowInactiveProducts, ...orderInput } = input;
-  const order = await SalesOrder.create({ ...orderInput, orderNumber, items, subtotal, tax, total: Number((subtotal + tax).toFixed(2)), statusHistory: [{ status: "draft" }] });
+  const { allowInactiveProducts: _allowInactiveProducts, initialStatus = "draft", ...orderInput } = input;
+  const order = await SalesOrder.create({ ...orderInput, orderNumber, items, subtotal, tax, total: Number((subtotal + tax).toFixed(2)), status: initialStatus, statusHistory: [{ status: initialStatus }] });
   return order.populate("customer", "fullName phone email");
 }
 
@@ -45,6 +45,10 @@ export const listCustomerSalesOrders = (customerId: string) =>
     .sort({ createdAt: -1 })
     .populate("customer", "fullName phone email")
     .lean();
+
+export async function createCustomerSalesOrder(customer: string, input: { items: { product: string; quantity: number; unit?: string }[]; deliveryAddress?: string; requestedDeliveryDate?: string; notes?: string }) {
+  return createSalesOrder({ customer, items: input.items.map((item) => ({ product: item.product, quantity: item.quantity, unit: item.unit })), deliveryAddress: input.deliveryAddress, requestedDeliveryDate: input.requestedDeliveryDate, notes: input.notes, initialStatus: "submitted" });
+}
 
 export async function transitionSalesOrder(id: string, status: SalesOrderStatus, performedBy?: string) {
   if (!mongoose.Types.ObjectId.isValid(id)) throw new Error("Invalid sales order ID.");

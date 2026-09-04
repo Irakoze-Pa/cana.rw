@@ -1,6 +1,6 @@
 import mongoose, { Schema, Types } from "mongoose";
 
-export const salesOrderStatuses = ["draft", "confirmed", "in_production", "ready_for_delivery", "delivered", "cancelled"] as const;
+export const salesOrderStatuses = ["draft", "submitted", "confirmed", "in_production", "ready_for_delivery", "delivered", "cancelled"] as const;
 export type SalesOrderStatus = (typeof salesOrderStatuses)[number];
 
 const itemSchema = new Schema({

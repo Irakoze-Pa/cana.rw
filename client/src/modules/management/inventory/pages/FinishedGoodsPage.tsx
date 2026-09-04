@@ -11,12 +11,15 @@ import {
   PackageCheck,
   RefreshCw,
   Send,
+  SlidersHorizontal,
   Store,
   Truck,
+  X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
+import { useAuth } from "@/context/authContext";
 
 type Product = {
   _id: string;
@@ -46,6 +49,7 @@ type Transfer = {
   performedBy?: { fullName: string };
   createdAt: string;
 };
+type Adjustment = { _id: string; reference: string; product: Product | null; store: "production" | "sales"; quantityChange: number; quantityBefore: number; quantityAfter: number; unit: string; reason: string; performedBy?: { fullName: string }; createdAt: string };
 const number = (value: number) => Number(value || 0).toLocaleString("en-RW");
 const storeName = (store: string) =>
   store === "production" ? "Production Store" : "Sales Store";
@@ -59,9 +63,13 @@ const stockWithPacks = (quantity: number, product?: Product | null) =>
   `${number(quantity)} ${product?.baseUnit || "kg"}${packs(quantity, product) ? ` · ${packs(quantity, product)}` : ""}`;
 
 export default function FinishedGoodsPage() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [balances, setBalances] = useState<Balance[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
+  const [showAdjustment, setShowAdjustment] = useState(false);
+  const [adjustment, setAdjustment] = useState({ product: "", store: "production", quantityChange: "", reason: "" });
   const [form, setForm] = useState({
     product: "",
     fromStore: "production",
@@ -72,15 +80,18 @@ export default function FinishedGoodsPage() {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const isSuperAdmin = user?.role === "superadmin";
   const load = useCallback(async () => {
     try {
       setError("");
-      const [balanceResponse, transferResponse] = await Promise.all([
+      const [balanceResponse, transferResponse, adjustmentResponse] = await Promise.all([
         api.get<{ data: Balance[] }>("/finished-goods/balances"),
         api.get<{ data: Transfer[] }>("/finished-goods/transfers"),
+        isSuperAdmin ? api.get<{ data: Adjustment[] }>("/finished-goods/adjustments") : Promise.resolve({ data: { data: [] as Adjustment[] } }),
       ]);
       setBalances(balanceResponse.data.data || []);
       setTransfers(transferResponse.data.data || []);
+      setAdjustments(adjustmentResponse.data.data || []);
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -88,7 +99,7 @@ export default function FinishedGoodsPage() {
           : "Unable to load finished goods stores.",
       );
     }
-  }, []);
+  }, [isSuperAdmin]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -133,6 +144,7 @@ export default function FinishedGoodsPage() {
       )?.quantity || 0,
     );
   const selected = products.find((product) => product._id === form.product);
+  const selectedAdjustmentProduct = products.find((product) => product._id === adjustment.product);
   const transferQuantityKg = Number(form.quantityInput) * (form.quantityMode === "packs" ? Number(selected?.packSizeKg || 0) : 1);
   const sendTransfer = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -165,6 +177,7 @@ export default function FinishedGoodsPage() {
       setBusy(false);
     }
   };
+  const submitAdjustment = async (event: React.FormEvent) => { event.preventDefault(); const change = Number(adjustment.quantityChange); if (!Number.isFinite(change) || change === 0) return setError("Enter a non-zero adjustment in kg. Use a positive value to add stock or a negative value to remove stock."); try { setBusy(true); setError(""); await api.post("/finished-goods/adjustments", { ...adjustment, quantityChange: change }); toast("Finished-goods adjustment recorded with an audit reference.", "success"); setAdjustment({ product: "", store: "production", quantityChange: "", reason: "" }); setShowAdjustment(false); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to record finished-goods adjustment."); } finally { setBusy(false); } };
   const totalProduction = balances
     .filter((balance) => balance.store === "production")
     .reduce((sum, balance) => sum + balance.quantity, 0);
@@ -188,10 +201,12 @@ export default function FinishedGoodsPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {isSuperAdmin && <button onClick={() => setShowAdjustment(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"><SlidersHorizontal size={16} />Adjust stock</button>}
           <Link to="/management/products" className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white"><PencilLine size={16} />Product catalogue</Link>
           <button onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16} />Refresh</button>
         </div>
       </header>
+      {showAdjustment && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"><form onSubmit={submitAdjustment} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-red-600">SuperAdmin control</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Adjust finished-goods stock</h2><p className="mt-2 text-sm leading-6 text-slate-500">Use only for a verified physical count or correction. This creates an immutable adjustment record.</p></div><button type="button" onClick={() => setShowAdjustment(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></div><div className="mt-6 space-y-4"><label className="block text-sm font-bold text-slate-700">Finished product<select required value={adjustment.product} onChange={(event) => setAdjustment({ ...adjustment, product: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Select product</option>{products.map((product) => <option key={product._id} value={product._id}>{product.name} · {product.code}</option>)}</select></label><label className="block text-sm font-bold text-slate-700">Store<select value={adjustment.store} onChange={(event) => setAdjustment({ ...adjustment, store: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="production">Production Store</option><option value="sales">Sales Store</option></select></label>{selectedAdjustmentProduct && <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">Current balance: <strong>{stockWithPacks(balanceFor(selectedAdjustmentProduct._id, adjustment.store), selectedAdjustmentProduct)}</strong></p>}<label className="block text-sm font-bold text-slate-700">Adjustment in kg<input required step="any" type="number" value={adjustment.quantityChange} onChange={(event) => setAdjustment({ ...adjustment, quantityChange: event.target.value })} placeholder="Example: 80 or -20" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/></label><label className="block text-sm font-bold text-slate-700">Reason for correction<textarea required minLength={3} value={adjustment.reason} onChange={(event) => setAdjustment({ ...adjustment, reason: event.target.value })} rows={3} placeholder="Example: Physical stock count correction" className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm"/></label></div><button disabled={busy} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:bg-slate-300"><SlidersHorizontal size={16}/>{busy ? "Recording…" : "Record adjustment"}</button></form></div>}
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}

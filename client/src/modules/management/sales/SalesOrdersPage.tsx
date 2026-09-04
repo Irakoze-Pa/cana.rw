@@ -37,6 +37,7 @@ type Product = {
 };
 const next: Record<string, string[]> = {
   draft: ["confirmed", "cancelled"],
+  submitted: ["confirmed", "cancelled"],
   confirmed: ["in_production", "ready_for_delivery", "cancelled"],
   in_production: ["ready_for_delivery", "cancelled"],
   ready_for_delivery: ["delivered", "cancelled"],

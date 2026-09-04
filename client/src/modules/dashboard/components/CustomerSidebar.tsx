@@ -52,7 +52,7 @@ function CustomerSidebar() {
     <aside
       className={[
         "relative",
-        "flex",
+        "hidden md:flex",
         "h-screen",
         "shrink-0",
         "flex-col",

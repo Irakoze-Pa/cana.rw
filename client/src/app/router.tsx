@@ -36,6 +36,7 @@ import ManagementLayout from "@/modules/dashboard/layouts/ManagementLayout";
 import CustomerDashboard from "@/modules/dashboard/pages/CustomerDashboard";
 import CustomerQuotationsPage from "@/modules/dashboard/pages/CustomerQuotationsPage";
 import CustomerOrdersPage from "@/modules/dashboard/pages/CustomerOrdersPage";
+import CustomerOrderRequestPage from "@/modules/dashboard/pages/CustomerOrderRequestPage";
 import AdminDashboard from "@/modules/dashboard/pages/AdminDashboard";
 
 // =====================================================
@@ -245,6 +246,10 @@ const router = createBrowserRouter([
           {
             path: "orders",
             element: <CustomerOrdersPage />,
+          },
+          {
+            path: "orders/new",
+            element: <CustomerOrderRequestPage />,
           },
         ],
       },
