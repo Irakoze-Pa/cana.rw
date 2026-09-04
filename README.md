@@ -40,3 +40,7 @@ npm run build --prefix server
 ```
 
 Never commit `server/.env`; it contains private credentials.
+
+### Billing storage requirement
+
+Payment recording uses a MongoDB transaction so a receipt and its invoice balance are committed together. Run MongoDB as a replica set (including a single-node replica set for local development) or use MongoDB Atlas. Standalone MongoDB instances do not support this operation.

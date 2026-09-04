@@ -83,6 +83,7 @@ import ProfileSettingsPage from "@/modules/management/users/ProfileSettingsPage"
 import StaffPaymentsPage from "@/modules/management/users/StaffPaymentsPage";
 import CustomersPage from "@/modules/management/users/CustomersPage";
 import PayrollPage from "@/modules/management/users/PayrollPage";
+import FactoryCompliancePage from "@/modules/management/compliance/FactoryCompliancePage";
 
 // =====================================================
 // RAW MATERIAL CONSUMPTION MODULE
@@ -465,6 +466,15 @@ const router = createBrowserRouter([
       },
       { path: "staff-payments", element: <StaffPaymentsPage /> },
       { path: "payroll", element: <PayrollPage /> },
+
+      // =================================================
+      // FACTORY COMPLIANCE, SAFETY & SETTINGS
+      // =================================================
+      { path: "compliance", element: <FactoryCompliancePage view="overview" /> },
+      { path: "compliance/cleaning", element: <FactoryCompliancePage view="cleaning" /> },
+      { path: "compliance/maintenance", element: <FactoryCompliancePage view="maintenance" /> },
+      { path: "compliance/safety", element: <FactoryCompliancePage view="safety" /> },
+      { path: "compliance/equipment", element: <FactoryCompliancePage view="equipment" /> },
 
       // =================================================
       // REPORTS

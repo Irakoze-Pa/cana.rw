@@ -27,6 +27,7 @@ import staffPaymentRoutes from "./modules/staffFinance/staffPayment.routes";
 import finishedGoodsTransferRoutes from "./modules/finishedGoods/storeTransfer.routes";
 import payrollRoutes from "./modules/payroll/payroll.routes";
 import attendanceRoutes from "./modules/attendance/attendance.routes";
+import complianceRoutes from "./modules/compliance/compliance.routes";
 
 const app = express();
 const api = Router();
@@ -92,6 +93,7 @@ api.use("/staff-payments", staffPaymentRoutes);
 api.use("/finished-goods", finishedGoodsTransferRoutes);
 api.use("/payroll", payrollRoutes);
 api.use("/attendance", attendanceRoutes);
+api.use("/compliance", complianceRoutes);
 
 // =====================================================
 // SUPPLIERS

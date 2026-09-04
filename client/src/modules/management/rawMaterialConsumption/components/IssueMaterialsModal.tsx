@@ -161,6 +161,14 @@ export default function IssueMaterialsModal({
         );
         return;
       }
+
+      const availableLots = (lotsByMaterial[item.rawMaterial] || []).filter(
+        (lot) => lot.status === "available" && lot.availableQuantity > 0,
+      );
+      if (availableLots.length > 0 && !item.lotNumber?.trim()) {
+        setError(`Select the receipt lot for ${item.rawMaterialName} before issuing stock.`);
+        return;
+      }
     }
 
     try {

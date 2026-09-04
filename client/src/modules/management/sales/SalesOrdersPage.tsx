@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Printer, RefreshCw, ShoppingCart, X } from "lucide-react";
+import CustomerForm from "../users/CustomerForm";
 import api from "@/services/api";
+import { useToast } from "@/context/toastContext";
 import { printCanaDocument } from "../utils/printCanaDocument";
 
 type Order = {
@@ -11,6 +13,8 @@ type Order = {
   tax?: number;
   total: number;
   status: string;
+  deliveryAddress?: string;
+  requestedDeliveryDate?: string;
   notes?: string;
   items: {
     productName: string;
@@ -37,19 +41,29 @@ const next: Record<string, string[]> = {
   ready_for_delivery: ["delivered", "cancelled"],
 };
 const money = (amount: number) =>
-  Number(amount || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 });
+  Number(amount || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 });
 function printSalesOrder(order: Order) {
   printCanaDocument({
-    title: order.status === "delivered" ? "Delivery note" : "Sales order",
+    title: "Sales order",
+    issueDate: order.createdAt,
     reference: order.orderNumber,
     status: order.status.replaceAll("_", " "),
+    recipient: {
+      label: "Customer",
+      name: order.customer?.fullName || "Customer",
+      lines: [
+        order.customer?.phone,
+        order.customer?.email,
+        order.deliveryAddress,
+      ],
+    },
     details: [
       { label: "Customer", value: order.customer?.fullName || "Customer" },
       { label: "Phone", value: order.customer?.phone },
       { label: "Email", value: order.customer?.email },
       {
         label: "Order total",
-        value: `${money(order.total)} RWF (tax inclusive)`,
+        value: `${money(order.total)} RWF`,
       },
       {
         label: "Order date",
@@ -62,8 +76,8 @@ function printSalesOrder(order: Order) {
         "Product",
         "Code",
         "Quantity",
-        "Unit price (tax incl.)",
-        "Amount (tax incl.)",
+        "Unit price (RWF)",
+        "Amount (RWF)",
       ],
       rows: order.items.map((item) => [
         item.productName,
@@ -73,11 +87,16 @@ function printSalesOrder(order: Order) {
         `${money(item.total ?? Number(item.unitPrice || 0) * item.quantity)} RWF`,
       ]),
     },
-    notes: order.notes || "All sales prices are tax-inclusive.",
+    notes: order.notes,
   });
 }
 
 export default function SalesOrdersPage() {
+  const { toast } = useToast();
+  const [addingCustomer, setAddingCustomer] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -86,6 +105,8 @@ export default function SalesOrdersPage() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
     customer: "",
+    deliveryAddress: "",
+    requestedDeliveryDate: "",
     notes: "",
   });
   const [orderLines, setOrderLines] = useState([
@@ -117,6 +138,9 @@ export default function SalesOrdersPage() {
     void load();
   }, []);
   const transition = async (id: string, status: string) => {
+    if (saving) return;
+    setSaving(true);
+    setError("");
     try {
       const response = await api.patch<{ data: Order }>(
         `/sales-orders/${id}/status`,
@@ -125,14 +149,18 @@ export default function SalesOrdersPage() {
       setOrders((current) =>
         current.map((order) => (order._id === id ? response.data.data : order)),
       );
+      toast("Sales order status updated.", "success");
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Unable to update sales order.",
       );
+    } finally {
+      setSaving(false);
     }
   };
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (saving) return;
     const items = orderLines.map((line) => {
       const product = products.find((item) => item._id === line.product);
       return product
@@ -157,20 +185,36 @@ export default function SalesOrdersPage() {
       return setError(
         "Select a product, quantity, and valid unit price for every order line.",
       );
+    if (
+      new Set(orderLines.map((line) => line.product)).size !== orderLines.length
+    )
+      return setError("Combine repeated products into one line.");
+    setSaving(true);
+    setError("");
     try {
       const response = await api.post<{ data: Order }>("/sales-orders", {
-        customer: form.customer,
+        ...form,
         items,
+        deliveryAddress: form.deliveryAddress,
+        requestedDeliveryDate: form.requestedDeliveryDate || undefined,
         notes: form.notes,
       });
       setOrders((current) => [response.data.data, ...current]);
       setCreating(false);
-      setForm({ customer: "", notes: "" });
+      setForm({
+        customer: "",
+        deliveryAddress: "",
+        requestedDeliveryDate: "",
+        notes: "",
+      });
       setOrderLines([{ product: "", quantity: "1", unitPrice: "" }]);
+      toast("Draft sales order created.", "success");
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Unable to create sales order.",
       );
+    } finally {
+      setSaving(false);
     }
   };
   return (
@@ -208,6 +252,16 @@ export default function SalesOrdersPage() {
       {error && (
         <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
       )}
+      {addingCustomer && (
+        <CustomerForm
+          onCancel={() => setAddingCustomer(false)}
+          onCreated={(customer) => {
+            setCustomers((current) => [...current, customer]);
+            setForm((current) => ({ ...current, customer: customer._id }));
+            setAddingCustomer(false);
+          }}
+        />
+      )}
       {creating && (
         <form
           onSubmit={create}
@@ -219,7 +273,15 @@ export default function SalesOrdersPage() {
               <X size={18} />
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => setAddingCustomer(true)}
+            className="text-left text-sm font-semibold text-red-600"
+          >
+            + Add a new customer
+          </button>
           <select
+            aria-label="Customer"
             required
             value={form.customer}
             onChange={(event) =>
@@ -253,7 +315,7 @@ export default function SalesOrdersPage() {
             {orderLines.map((line, index) => (
               <div
                 key={index}
-                className="grid grid-cols-[1fr_100px_140px_auto] gap-2"
+                className="grid grid-cols-2 sm:grid-cols-[1fr_100px_140px_auto] gap-2"
               >
                 <select
                   required
@@ -300,6 +362,7 @@ export default function SalesOrdersPage() {
                       ),
                     )
                   }
+                  aria-label="Quantity"
                   placeholder="Qty"
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
                 />
@@ -318,6 +381,7 @@ export default function SalesOrdersPage() {
                       ),
                     )
                   }
+                  aria-label="Unit price in RWF"
                   placeholder="Price (RWF)"
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
                 />
@@ -344,11 +408,68 @@ export default function SalesOrdersPage() {
             placeholder="Order notes (optional)"
             className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
           />
-          <button className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white md:col-span-2">
+          <label className="text-sm">
+            Delivery address
+            <input
+              value={form.deliveryAddress}
+              onChange={(event) =>
+                setForm({ ...form, deliveryAddress: event.target.value })
+              }
+              className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5"
+            />
+          </label>
+          <label className="text-sm">
+            Requested delivery date
+            <input
+              type="date"
+              value={form.requestedDeliveryDate}
+              onChange={(event) =>
+                setForm({ ...form, requestedDeliveryDate: event.target.value })
+              }
+              className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5"
+            />
+          </label>
+          <p className="text-right font-bold md:col-span-2">
+            Order total:{" "}
+            {money(
+              orderLines.reduce(
+                (sum, line) =>
+                  sum + Number(line.quantity) * Number(line.unitPrice),
+                0,
+              ),
+            )}{" "}
+            RWF
+          </p>
+          <button
+            disabled={saving}
+            className="disabled:opacity-50 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white md:col-span-2"
+          >
             Create draft order
           </button>
         </form>
       )}
+      <div className="flex flex-wrap gap-3">
+        <input
+          aria-label="Search orders"
+          placeholder="Search order or customer"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
+        />
+        <select
+          aria-label="Filter order status"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
+        >
+          <option value="">All statuses</option>
+          {[...Object.keys(next), "delivered", "cancelled"].map((status) => (
+            <option key={status} value={status}>
+              {status.replaceAll("_", " ")}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -369,49 +490,58 @@ export default function SalesOrdersPage() {
                 </td>
               </tr>
             ) : (
-              orders.map((order) => (
-                <tr key={order._id}>
-                  <td className="px-5 py-4 font-semibold">
-                    {order.orderNumber}
-                  </td>
-                  <td className="px-5 py-4">
-                    {order.customer?.fullName || "Customer"}
-                  </td>
-                  <td className="px-5 py-4">
-                    {order.items
-                      .map(
-                        (item) =>
-                          `${item.productName} (${item.quantity} ${item.unit})`,
-                      )
-                      .join(", ")}
-                  </td>
-                  <td className="px-5 py-4">{order.total.toLocaleString()}</td>
-                  <td className="px-5 py-4">
-                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium">
-                      {order.status.replaceAll("_", " ")}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <button
-                      type="button"
-                      onClick={() => printSalesOrder(order)}
-                      className="mr-2 inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-gray-400 hover:text-gray-950"
-                    >
-                      <Printer size={13} />
-                      Print order
-                    </button>
-                    {next[order.status]?.map((status) => (
+              orders
+                .filter(
+                  (order) =>
+                    (!statusFilter || order.status === statusFilter) &&
+                    `${order.orderNumber} ${order.customer?.fullName || ""}`
+                      .toLowerCase()
+                      .includes(search.toLowerCase()),
+                )
+                .map((order) => (
+                  <tr key={order._id}>
+                    <td className="px-5 py-4 font-semibold">
+                      {order.orderNumber}
+                    </td>
+                    <td className="px-5 py-4">
+                      {order.customer?.fullName || "Customer"}
+                    </td>
+                    <td className="px-5 py-4">
+                      {order.items
+                        .map(
+                          (item) =>
+                            `${item.productName} (${item.quantity} ${item.unit})`,
+                        )
+                        .join(", ")}
+                    </td>
+                    <td className="px-5 py-4">{money(order.total)} RWF</td>
+                    <td className="px-5 py-4">
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium">
+                        {order.status.replaceAll("_", " ")}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
                       <button
-                        key={status}
-                        onClick={() => void transition(order._id, status)}
-                        className="mr-2 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-semibold text-white"
+                        type="button"
+                        onClick={() => printSalesOrder(order)}
+                        className="mr-2 inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-gray-400 hover:text-gray-950"
                       >
-                        {status.replaceAll("_", " ")}
+                        <Printer size={13} />
+                        Print order
                       </button>
-                    ))}
-                  </td>
-                </tr>
-              ))
+                      {next[order.status]?.map((status) => (
+                        <button
+                          key={status}
+                          disabled={saving}
+                          onClick={() => void transition(order._id, status)}
+                          className="mr-2 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-semibold text-white"
+                        >
+                          {status.replaceAll("_", " ")}
+                        </button>
+                      ))}
+                    </td>
+                  </tr>
+                ))
             )}
             {!loading && orders.length === 0 && (
               <tr>

@@ -5,6 +5,7 @@ import {
 } from "react";
 
 import type { ReactNode } from "react";
+import SessionTimeout from "@/components/auth/SessionTimeout";
 
 type User = {
   _id: string;
@@ -74,6 +75,7 @@ export function AuthProvider({
       "token",
       token
     );
+    localStorage.setItem("cana:last-session-activity", String(Date.now()));
   };
 
   const logout = () => {
@@ -82,6 +84,7 @@ export function AuthProvider({
 
     localStorage.removeItem("user");
     localStorage.removeItem("token");
+    localStorage.removeItem("cana:last-session-activity");
   };
 
   return (
@@ -93,7 +96,7 @@ export function AuthProvider({
         logout,
       }}
     >
-      {children}
+      <SessionTimeout token={token} logout={logout}>{children}</SessionTimeout>
     </AuthContext.Provider>
   );
 }

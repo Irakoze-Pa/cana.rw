@@ -559,7 +559,7 @@ const calculateTotals = (
 // BUILD STANDARD MATERIALS
 // =====================================================
 
-const buildConsumptionItems = (
+const buildConsumptionItems = async (
   orderItems: Array<{
     rawMaterial: mongoose.Types.ObjectId;
     rawMaterialName: string;
@@ -575,7 +575,7 @@ const buildConsumptionItems = (
   }>,
   orderQuantity: number,
   batchPlannedQuantity: number
-): MaterialConsumptionItemData[] => {
+): Promise<MaterialConsumptionItemData[]> => {
   const productionOrderQuantity =
     toNumber(orderQuantity);
 
@@ -619,6 +619,13 @@ const buildConsumptionItems = (
     batchQuantity /
     productionOrderQuantity;
 
+  const rawMaterials = await RawMaterial.find({
+    _id: { $in: orderItems.map((item) => item.rawMaterial) },
+  }).select("_id unit").lean();
+  const unitByMaterial = new Map(
+    rawMaterials.map((material) => [material._id.toString(), material.unit]),
+  );
+
   return orderItems.map(
     (item, index) => {
       if (!item.rawMaterial) {
@@ -656,8 +663,10 @@ const buildConsumptionItems = (
         rawMaterialCode:
           item.rawMaterialCode,
 
+        // Inventory is the unit authority. This avoids drafting a kg issue for
+        // a liquid material whose stock is correctly controlled in litres.
         unit:
-          item.unit,
+          unitByMaterial.get(item.rawMaterial.toString()) ?? item.unit,
 
         standardQuantity,
 
@@ -897,7 +906,7 @@ export const createMaterialConsumption =
     // =================================================
 
     const items =
-      buildConsumptionItems(
+      await buildConsumptionItems(
         order.items,
         orderQuantity,
         batchPlannedQuantity

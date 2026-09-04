@@ -122,25 +122,11 @@ export default function PayrollPage() {
   useEffect(() => {
     void loadAttendance();
   }, [attendanceDate]);
-  const totals = useMemo(
-    () =>
-      runs
-        .filter((run) => run.status !== "cancelled")
-        .reduce(
-          (all, run) => ({
-            gross:
-              all.gross +
-              run.lines.reduce((sum, line) => sum + line.grossPay, 0),
-            deductions:
-              all.deductions +
-              run.lines.reduce((sum, line) => sum + line.totalDeductions, 0),
-            net:
-              all.net + run.lines.reduce((sum, line) => sum + line.netPay, 0),
-          }),
-          { gross: 0, deductions: 0, net: 0 },
-        ),
-    [runs],
-  );
+  const currentRun = runs.find((run) => run.period === period);
+  const totals = useMemo(() => {
+    const lines = currentRun?.status === "cancelled" ? [] : currentRun?.lines || [];
+    return lines.reduce((all, line) => ({ gross: all.gross + line.grossPay, deductions: all.deductions + line.totalDeductions, net: all.net + line.netPay }), { gross: 0, deductions: 0, net: 0 });
+  }, [currentRun]);
   const attendanceSummary = useMemo(
     () => ({
       recorded: attendance.length,
@@ -261,51 +247,21 @@ export default function PayrollPage() {
     );
     popup.document.close();
   };
-  const currentRun = runs.find((run) => run.period === period);
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-8">
-      <section className="rounded-3xl border border-gray-200 bg-white p-6 text-gray-900 shadow-sm md:p-8">
-        <p className="text-xs font-bold uppercase tracking-[.18em] text-red-600">
-          CANA · Finance & people
-        </p>
-        <h1 className="mt-2 text-3xl font-extrabold text-gray-900">Payroll workspace</h1>
-        <p className="mt-2 max-w-2xl text-sm text-gray-500">
-          A simple place to record attendance, set salaries, manage advances,
-          and run monthly payroll.
-        </p>
+      <section className="flex flex-col justify-between gap-5 rounded-3xl border border-gray-200 bg-white p-6 text-gray-900 shadow-sm md:flex-row md:items-center md:p-8">
+        <div><p className="text-xs font-bold uppercase tracking-[.18em] text-red-600">CANA · Finance & people</p><h1 className="mt-2 text-3xl font-extrabold text-gray-900">Payroll</h1><p className="mt-2 text-sm text-gray-500">Manage one payroll month at a time: salaries, advances, review, approval and payment.</p></div>
+        <div className="rounded-2xl bg-slate-50 px-5 py-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Selected period</p><p className="mt-1 text-lg font-extrabold text-slate-900">{periodLabel(period)}</p><p className="mt-1 text-xs font-semibold capitalize text-red-700">{currentRun ? currentRun.status : "Ready to create"}</p></div>
       </section>
       {error && (
         <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
           {error}
         </p>
       )}
-      <section className="rounded-2xl border border-red-100 bg-red-50/70 p-5">
-        <p className="text-xs font-bold uppercase tracking-[.14em] text-red-700">
-          Four simple steps
-        </p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            ["1", "Record attendance"],
-            ["2", "Set salary"],
-            ["3", "Process advances"],
-            ["4", "Create, review & pay"],
-          ].map(([step, label]) => (
-            <div
-              key={step}
-              className="flex items-center gap-3 rounded-xl bg-white p-3 shadow-sm"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-xs font-extrabold text-white">
-                {step}
-              </span>
-              <strong className="text-sm text-slate-900">{label}</strong>
-            </div>
-          ))}
-        </div>
-      </section>
       <section className="grid gap-4 md:grid-cols-4">
         {[
-          ["Gross payroll", money(totals.gross), "text-gray-900"],
-          ["Advance recovery", money(totals.deductions), "text-amber-700"],
+          ["Gross pay", money(totals.gross), "text-gray-900"],
+          ["Advance deductions", money(totals.deductions), "text-amber-700"],
           ["Net payable", money(totals.net), "text-red-700"],
           [
             "Attendance today",
@@ -322,7 +278,7 @@ export default function PayrollPage() {
             <p className="mt-2 text-xs text-gray-500">
               {label === "Attendance today"
                 ? `${attendanceSummary.present} present · ${attendanceSummary.absent} absent`
-                : "Current active payroll runs"}
+                : currentRun ? `${periodLabel(period)} payroll` : "Create this month’s payroll to calculate"}
             </p>
           </article>
         ))}

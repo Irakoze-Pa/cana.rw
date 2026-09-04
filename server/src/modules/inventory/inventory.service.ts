@@ -419,7 +419,7 @@ export const createInventory =
 
 export const getInventory =
   async (): Promise<IInventory[]> => {
-    return Inventory.find()
+    const inventory = await Inventory.find()
       .populate(
         "rawMaterial",
         "name code category unit supplier minimumStock costPerUnit status"
@@ -427,6 +427,15 @@ export const getInventory =
       .sort({
         rawMaterialName: 1,
       });
+
+    // The operational inventory is the approved active material catalogue.
+    // Archived material records remain in the database for audit/history, but
+    // must not be offered as a live stock item.
+    return inventory.filter(
+      (item) =>
+        (item.rawMaterial as unknown as { status?: string } | null)
+          ?.status !== "Inactive"
+    );
   };
 
 // =========================================================
@@ -500,6 +509,16 @@ export const getInventorySummary =
   async () => {
     const summary =
       await Inventory.aggregate([
+        {
+          $lookup: {
+            from: "rawmaterials",
+            localField: "rawMaterial",
+            foreignField: "_id",
+            as: "rawMaterialRecord",
+          },
+        },
+        { $unwind: "$rawMaterialRecord" },
+        { $match: { "rawMaterialRecord.status": "Active" } },
         {
           $group: {
             _id: null,

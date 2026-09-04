@@ -51,7 +51,6 @@ function RawMaterialsPage() {
     useState("");
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
 
   // =====================================================
   // LOAD RAW MATERIALS
@@ -126,17 +125,17 @@ function RawMaterialsPage() {
   // =====================================================
 
   const summary = useMemo(() => {
+    const activeCatalog = materials.filter(
+      (material) => material.status === "Active"
+    );
     const totalMaterials =
-      materials.length;
+      activeCatalog.length;
 
     const activeMaterials =
-      materials.filter(
-        (material) =>
-          material.status === "Active"
-      ).length;
+      activeCatalog.length;
 
     const lowStockMaterials =
-      materials.filter((material) => {
+      activeCatalog.filter((material) => {
         if (
           typeof material.isLowStock ===
           "boolean"
@@ -153,7 +152,7 @@ function RawMaterialsPage() {
       }).length;
 
     const totalStock =
-      materials.reduce(
+      activeCatalog.reduce(
         (total, material) =>
           total +
           Number(
@@ -163,7 +162,7 @@ function RawMaterialsPage() {
       );
 
     const totalReserved =
-      materials.reduce(
+      activeCatalog.reduce(
         (total, material) =>
           total +
           Number(
@@ -174,7 +173,7 @@ function RawMaterialsPage() {
       );
 
     const totalAvailable =
-      materials.reduce(
+      activeCatalog.reduce(
         (total, material) =>
           total +
           Number(
@@ -206,11 +205,11 @@ function RawMaterialsPage() {
   const visibleMaterials = useMemo(() => {
     const query = search.trim().toLowerCase();
     return materials.filter((material) => {
+      if (material.status !== "Active") return false;
       const matchesSearch = !query || [material.name, material.code, material.category, material.supplier?.name].filter(Boolean).join(" ").toLowerCase().includes(query);
-      const matchesStatus = statusFilter === "All" || material.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      return matchesSearch;
     });
-  }, [materials, search, statusFilter]);
+  }, [materials, search]);
 
   // =====================================================
   // ADD
@@ -307,12 +306,11 @@ function RawMaterialsPage() {
 
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-                Raw Materials
+                Materials Setup
               </h1>
 
               <p className="mt-1 text-sm text-gray-500">
-                Manage raw materials used in
-                your paint production.
+                Define materials, units, minimum levels, costs, and supplier options. Stock is managed in Raw Material Inventory.
               </p>
             </div>
           </div>
@@ -560,11 +558,7 @@ function RawMaterialsPage() {
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search material name, code, category, or default supplier…" className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm outline-none transition focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100" />
           </div>
           <div className="flex items-center gap-3">
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700">
-              <option value="All">All statuses</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
+            <span className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Approved register</span>
             <span className="text-sm text-gray-500"><strong className="text-gray-900">{visibleMaterials.length}</strong> materials</span>
           </div>
         </div>

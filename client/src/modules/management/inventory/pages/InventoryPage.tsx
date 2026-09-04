@@ -221,11 +221,11 @@ const InventoryPage = () => {
 
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-                Raw-material store
+                Raw Material Inventory
               </h1>
 
               <p className="mt-1 text-sm text-gray-500">
-                Inputs only: materials received from suppliers and issued to production. This is not finished-product stock.
+                Live raw-material quantities, receipts, issues, lots, and adjustments. Material definitions are managed in Materials Setup.
               </p>
             </div>
           </div>

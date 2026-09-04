@@ -297,6 +297,11 @@ function ProductTable({
                 {/* STOCK */}
                 <td className="px-6 py-4 text-sm text-gray-600">
                   {Number(product.stock || 0).toLocaleString()} kg
+                  {Number(product.packSizeKg || 0) > 0 && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {(Number(product.stock || 0) / Number(product.packSizeKg)).toLocaleString("en-RW", { maximumFractionDigits: 2 })} packs
+                    </p>
+                  )}
                 </td>
 
                 {/* STATUS */}

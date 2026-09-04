@@ -16,6 +16,7 @@ type Product = {
   image?: string;
 };
 type Line = {
+  kind: "catalogue" | "manual" | "labour";
   productId: string;
   description: string;
   quantity: string;
@@ -32,11 +33,12 @@ const entities: Record<Company, { name: string; descriptor: string }> = {
     descriptor: "Professional project and support services",
   },
 };
-const emptyLine = (): Line => ({
+const emptyLine = (kind: Line["kind"] = "manual"): Line => ({
+  kind,
   productId: "",
-  description: "",
+  description: kind === "labour" ? "Painting labour" : "",
   quantity: "1",
-  unit: "unit",
+  unit: kind === "labour" ? "m²" : "unit",
   unitPrice: "",
 });
 const money = (value: number) =>
@@ -108,12 +110,13 @@ export default function ProformaBuilderPage() {
       index,
       product
         ? {
+            kind: "catalogue",
             productId,
             description: product.name,
             unit: product.unit,
             unitPrice: String(product.price),
           }
-        : { productId: "" },
+        : { kind: "manual", productId: "" },
     );
   };
   const print = () => {
@@ -294,17 +297,14 @@ export default function ProformaBuilderPage() {
             <div>
               <h2 className="font-bold">Products & services</h2>
               <p className="mt-1 text-xs text-gray-500">
-                Select a visible catalogue product, or enter a service manually.
+                Add catalogue products, non-catalogue items, or painting labour.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setLines((current) => [...current, emptyLine()])}
-              className="inline-flex items-center gap-1 text-sm font-semibold text-red-600"
-            >
-              <Plus size={16} />
-              Add line
-            </button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => setLines((current) => [...current, emptyLine("catalogue")])} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-semibold text-gray-700"><Package size={14} />Product</button>
+              <button type="button" onClick={() => setLines((current) => [...current, emptyLine("manual")])} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-semibold text-gray-700"><Plus size={14} />Manual item</button>
+              <button type="button" onClick={() => setLines((current) => [...current, emptyLine("labour")])} className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-2.5 py-2 text-xs font-semibold text-white"><Plus size={14} />Painting labour</button>
+            </div>
           </div>
           <div className="mt-5 space-y-3">
             {lines.map((line, index) => (
@@ -316,32 +316,33 @@ export default function ProformaBuilderPage() {
                   <div className="space-y-2">
                     <label className="flex items-center gap-1 text-xs font-semibold text-gray-600">
                       <Package size={13} />
-                      Catalogue product
+                      {line.kind === "labour" ? "Painting labour / service" : line.kind === "catalogue" ? "Catalogue product" : "Manual item"}
                     </label>
-                    <select
+                    {line.kind !== "labour" && <select
                       value={line.productId}
                       onChange={(event) =>
                         chooseProduct(index, event.target.value)
                       }
                       className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm"
                     >
-                      <option value="">Custom service / manual item</option>
+                      <option value="">Manual item (not in catalogue)</option>
                       {products.map((product) => (
                         <option key={product._id} value={product._id}>
                           {product.name} · {product.code} ·{" "}
                           {money(product.price)} RWF/{product.unit}
                         </option>
                       ))}
-                    </select>
+                    </select>}
                     <input
                       value={line.description}
                       onChange={(event) =>
                         updateLine(index, {
                           description: event.target.value,
                           productId: "",
+                          kind: line.kind === "catalogue" ? "manual" : line.kind,
                         })
                       }
-                      placeholder="Product or service description"
+                      placeholder={line.kind === "labour" ? "Labour description (e.g. wall preparation)" : "Product or service description"}
                       className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm"
                     />
                   </div>
@@ -402,6 +403,9 @@ export default function ProformaBuilderPage() {
                       {line.unit} · Tax included.
                     </span>
                   </p>
+                )}
+                {line.kind === "labour" && (
+                  <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">Labour is priced separately from paint. Use m² for area-based painting work, or day for daily labour.</p>
                 )}
               </div>
             ))}

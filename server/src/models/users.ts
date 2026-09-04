@@ -34,6 +34,9 @@ export interface IUser extends Document {
   fullName: string;
   phone: string;
   email?: string;
+  businessName?: string;
+  address?: string;
+  tin?: string;
   password: string;
 
   role: UserRole;
@@ -74,6 +77,12 @@ const userSchema = new Schema<IUser>(
       lowercase: true,
       trim: true,
     },
+
+    businessName: { type: String, default: "", trim: true },
+
+    address: { type: String, default: "", trim: true },
+
+    tin: { type: String, default: "", trim: true },
 
     password: {
       type: String,

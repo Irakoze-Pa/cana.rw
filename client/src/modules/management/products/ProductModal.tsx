@@ -142,11 +142,11 @@ function ProductModal({
       e.target;
 
     setFormData((prev) => {
-      if (name === "category") {
-        const isWallMaster = value === "Wall Master";
+      const isWallMaster = (name === "category" ? value === "Wall Master" : prev.category === "Wall Master") || /wall\s*master/i.test(name === "name" ? value : prev.name);
+      if (name === "category" || name === "name") {
         return {
           ...prev,
-          category: value,
+          [name]: value,
           unit: isWallMaster ? "30kg" : prev.unit === "30kg" ? "4L" : prev.unit,
           packSizeKg: isWallMaster ? "30" : prev.packSizeKg,
           densityKgPerL: isWallMaster ? "" : prev.densityKgPerL,
@@ -158,6 +158,8 @@ function ProductModal({
 
     setError("");
   };
+
+  const isWallMasterProduct = formData.category === "Wall Master" || /wall\s*master/i.test(formData.name);
 
   // =========================
   // IMAGE CHANGE
@@ -907,7 +909,7 @@ function ProductModal({
                   Select unit
                 </option>
 
-                {formData.category === "Wall Master" ? (
+                {isWallMasterProduct ? (
                   <option value="30kg">30 kg bag</option>
                 ) : (
                   <>
@@ -927,26 +929,26 @@ function ProductModal({
                 htmlFor="densityKgPerL"
                 className="mb-2 block text-sm font-semibold text-gray-700"
               >
-                {formData.category === "Wall Master"
+                {isWallMasterProduct
                   ? "Net weight per bag"
                   : "Paint density (kg/L)"}
               </label>
 
               <input
-                id={formData.category === "Wall Master" ? "packSizeKg" : "densityKgPerL"}
-                name={formData.category === "Wall Master" ? "packSizeKg" : "densityKgPerL"}
+                id={isWallMasterProduct ? "packSizeKg" : "densityKgPerL"}
+                name={isWallMasterProduct ? "packSizeKg" : "densityKgPerL"}
                 type="number"
                 min="0.001"
                 step="0.001"
-                value={formData.category === "Wall Master" ? "30" : formData.densityKgPerL}
+                value={isWallMasterProduct ? "30" : formData.densityKgPerL}
                 onChange={handleChange}
-                disabled={loading || formData.category === "Wall Master"}
+                disabled={loading || isWallMasterProduct}
                 placeholder="Example: 1.35"
                 className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-100"
               />
 
               <p className="mt-2 text-xs text-gray-500">
-                {formData.category === "Wall Master"
+                {isWallMasterProduct
                   ? "Wall Master is fixed at 30 kg per bag."
                   : "The system multiplies this by the selected 4 L or 20 L pack to obtain net kg and price per kg."}
               </p>
@@ -1020,10 +1022,10 @@ function ProductModal({
                 </span>
               </div>
 
-              {(formData.category === "Wall Master" || Number(formData.densityKgPerL) > 0) &&
+              {(isWallMasterProduct || Number(formData.densityKgPerL) > 0) &&
                 Number(formData.price) >= 0 && (
                   <p className="mt-2 text-xs font-semibold text-emerald-700">
-                    Calculated price: {Math.round((Number(formData.price) / (formData.category === "Wall Master" ? 30 : Number(formData.unit.replace("L", "")) * Number(formData.densityKgPerL))) * 100) / 100} RWF per kg
+                    Calculated price: {Math.round((Number(formData.price) / (isWallMasterProduct ? 30 : Number(formData.unit.replace("L", "")) * Number(formData.densityKgPerL))) * 100) / 100} RWF per kg
                   </p>
                 )}
             </div>

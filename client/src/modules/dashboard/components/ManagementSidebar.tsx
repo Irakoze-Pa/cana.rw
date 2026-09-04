@@ -20,9 +20,11 @@ import {
   ShieldCheck,
   FileText,
   ReceiptText,
-  House,
   Settings,
   Banknote,
+  HardHat,
+  Wrench,
+  ClipboardCheck,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/authContext";
@@ -63,7 +65,7 @@ const groups: Group[] = [
     companies: ["cana_paints", "cana_group"],
     items: [
       {
-        label: "Raw-material stock",
+        label: "Raw Material Inventory",
         to: "/management/inventory",
         icon: Warehouse,
         end: true,
@@ -107,7 +109,7 @@ const groups: Group[] = [
         departments: ["procurement", "management"],
       },
       {
-        label: "Raw-material catalogue",
+        label: "Materials Setup",
         to: "/management/raw-materials",
         icon: PackageOpen,
         departments: ["procurement", "warehouse", "production", "management"],
@@ -242,6 +244,18 @@ const groups: Group[] = [
       },
     ],
   },
+  {
+    label: "Factory Compliance",
+    icon: ShieldCheck,
+    companies: ["cana_paints", "cana_group"],
+    items: [
+      { label: "Records overview", to: "/management/compliance", icon: ShieldCheck, end: true, departments: ["production", "management", "warehouse"] },
+      { label: "Daily cleaning register", to: "/management/compliance/cleaning", icon: ClipboardCheck, departments: ["production", "management", "warehouse"] },
+      { label: "Maintenance register", to: "/management/compliance/maintenance", icon: Wrench, departments: ["production", "management"] },
+      { label: "Safety & HSE register", to: "/management/compliance/safety", icon: HardHat, departments: ["production", "management", "warehouse"] },
+      { label: "Equipment list", to: "/management/compliance/equipment", icon: Factory, departments: ["production", "management"] },
+    ],
+  },
 ];
 
 export default function ManagementSidebar({
@@ -332,25 +346,6 @@ export default function ManagementSidebar({
           <LayoutDashboard size={19} />
           {sidebarOpen && "Overview"}
         </NavLink>
-        <NavLink
-          to="/"
-          end
-          title={!sidebarOpen ? "View CANA website" : undefined}
-          className="mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-300 hover:text-gray-900"
-        >
-          <House size={19} />
-          {sidebarOpen && "View CANA website"}
-        </NavLink>
-        <NavLink
-          to="/management/profile"
-          title={!sidebarOpen ? "My profile & settings" : undefined}
-          className={({ isActive }) =>
-            `mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${isActive ? "bg-red-600 text-white" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`
-          }
-        >
-          <Settings size={19} />
-          {sidebarOpen && "My profile & settings"}
-        </NavLink>
         {!isAdmin && (
           <NavLink
             to="/management/staff-payments"
@@ -420,9 +415,15 @@ export default function ManagementSidebar({
           );
         })}
       </nav>
-      <footer
-        className={`border-t border-gray-200 px-3 py-4 ${sidebarOpen ? "" : "text-center"}`}
-      >
+      <footer className={`border-t border-gray-200 px-3 py-4 ${sidebarOpen ? "" : "text-center"}`}>
+        <NavLink
+          to="/management/profile"
+          title={!sidebarOpen ? "My profile & settings" : undefined}
+          className={({ isActive }) => `mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${isActive ? "bg-red-600 text-white" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`}
+        >
+          <Settings size={19} />
+          {sidebarOpen && "My profile & settings"}
+        </NavLink>
         {sidebarOpen ? (
           <>
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">

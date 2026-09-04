@@ -1,5 +1,6 @@
 import Product from "./product.model";
 import cloudinary from "../../config/cloudinary";
+import FinishedGoodsStoreBalance from "../finishedGoods/storeBalance.model";
 
 export interface CreateProductData {
   name: string;
@@ -32,6 +33,7 @@ export interface UpdateProductData {
 }
 
 function getPackagingData(data: {
+  name?: string;
   category?: string;
   unit?: string;
   densityKgPerL?: number;
@@ -39,7 +41,8 @@ function getPackagingData(data: {
   const category = String(data.category || "").trim();
   const normalizedUnit = String(data.unit || "").trim().toLowerCase();
 
-  if (category === "Wall Master") {
+  const isWallMaster = category === "Wall Master" || /wall\s*master/i.test(String(data.name || ""));
+  if (isWallMaster) {
     if (normalizedUnit !== "30kg") {
       throw new Error("Wall Master must be packed as 30kg.");
     }
@@ -220,6 +223,7 @@ export const updateProduct = async (
     }
 
     const packaging = getPackagingData({
+      name: data.name ?? existing.name,
       category: data.category ?? existing.category,
       unit: data.unit ?? existing.unit,
       densityKgPerL: data.densityKgPerL ?? existing.densityKgPerL,
@@ -244,7 +248,7 @@ export const updateProduct = async (
      UPDATE DATABASE
   ----------------------------------------- */
 
-  return await Product.findByIdAndUpdate(
+  const product = await Product.findByIdAndUpdate(
     id,
     updateData,
     {
@@ -252,6 +256,33 @@ export const updateProduct = async (
       runValidators: true,
     }
   );
+
+  if (!product) {
+    throw new Error("Product not found");
+  }
+
+  // The catalogue stock is the total finished-goods quantity. Store balances
+  // split that total between Production and Sales stores. When an authorised
+  // opening/count adjustment is made in the catalogue, reconcile the delta to
+  // Production store while retaining any stock already transferred to Sales.
+  if (data.stock !== undefined) {
+    const balances = await FinishedGoodsStoreBalance.find({ product: product._id }).lean();
+    const salesQuantity = balances.find((balance) => balance.store === "sales")?.quantity || 0;
+    const totalBefore = balances.reduce((sum, balance) => sum + Number(balance.quantity || 0), 0);
+    const totalAfter = Number(product.stock || 0);
+
+    if (totalAfter < salesQuantity) {
+      throw new Error("Finished-goods stock cannot be lower than the quantity already in Sales Store. Transfer stock back first or enter a higher total.");
+    }
+
+    await FinishedGoodsStoreBalance.findOneAndUpdate(
+      { product: product._id, store: "production" },
+      { $inc: { quantity: Number((totalAfter - totalBefore).toFixed(4)) } },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+  }
+
+  return product;
 };
 
 /* =========================================================

@@ -7,12 +7,14 @@ import {
 import {
   ArrowRightLeft,
   Factory,
+  PencilLine,
   PackageCheck,
   RefreshCw,
   Send,
   Store,
   Truck,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
 
@@ -22,6 +24,7 @@ type Product = {
   code: string;
   unit: string;
   baseUnit?: string;
+  packSizeKg?: number;
   category?: string;
   status?: string;
 };
@@ -46,6 +49,14 @@ type Transfer = {
 const number = (value: number) => Number(value || 0).toLocaleString("en-RW");
 const storeName = (store: string) =>
   store === "production" ? "Production Store" : "Sales Store";
+const packs = (quantity: number, product?: Product | null) => {
+  const packSizeKg = Number(product?.packSizeKg || 0);
+  if (!Number.isFinite(packSizeKg) || packSizeKg <= 0) return null;
+  const packCount = quantity / packSizeKg;
+  return `${number(packCount)} ${packCount === 1 ? "pack" : "packs"}`;
+};
+const stockWithPacks = (quantity: number, product?: Product | null) =>
+  `${number(quantity)} ${product?.baseUnit || "kg"}${packs(quantity, product) ? ` · ${packs(quantity, product)}` : ""}`;
 
 export default function FinishedGoodsPage() {
   const { toast } = useToast();
@@ -171,13 +182,10 @@ export default function FinishedGoodsPage() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => void load()}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"
-        >
-          <RefreshCw size={16} />
-          Refresh
-        </button>
+        <div className="flex gap-2">
+          <Link to="/management/products" className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white"><PencilLine size={16} />Product catalogue</Link>
+          <button onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16} />Refresh</button>
+        </div>
       </header>
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -187,7 +195,7 @@ export default function FinishedGoodsPage() {
       <section className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
         <p className="text-sm font-semibold text-slate-900">Finished-goods store workflow</p>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          Completed production batches add finished stock to Production Store. Transfers replenish Sales Store, and confirmed sales reduce only Sales Store. Raw materials are managed separately in Raw-material Store.
+              Completed production batches add stock to Production Store. Transfer it to Sales Store before delivery; confirmed sales then reduce Sales Store only.
         </p>
       </section>
       <section className="grid gap-4 md:grid-cols-3">
@@ -315,8 +323,7 @@ export default function FinishedGoodsPage() {
               <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                 Available in {storeName(form.fromStore)}:{" "}
                 <strong>
-                  {number(balanceFor(selected._id, form.fromStore))}{" "}
-                  {selected.baseUnit || "kg"}
+                  {stockWithPacks(balanceFor(selected._id, form.fromStore), selected)}
                 </strong>
               </p>
             )}
@@ -372,20 +379,20 @@ export default function FinishedGoodsPage() {
                           {product.name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {product.code} · stock unit: {product.baseUnit || "kg"}
+                          {product.code} · {product.unit} pack · {number(product.packSizeKg || 0)} kg per pack
                         </p>
                       </td>
                       <td className="px-5 py-4 text-right font-semibold">
-                        {number(production)}
+                        <span>{number(production)} kg</span>
+                        <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(production, product) || "Pack size not set"}</p>
                       </td>
                       <td className="px-5 py-4 text-right font-semibold">
-                        {number(sales)}
+                        <span>{number(sales)} kg</span>
+                        <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(sales, product) || "Pack size not set"}</p>
                       </td>
                       <td className="px-5 py-4 text-right font-bold text-slate-900">
-                        {number(production + sales)}{" "}
-                        <span className="text-xs font-normal text-gray-500">
-                          {product.baseUnit || "kg"}
-                        </span>
+                        {number(production + sales)} kg
+                        <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(production + sales, product) || "Pack size not set"}</p>
                       </td>
                     </tr>
                   );

@@ -8,12 +8,14 @@ import ProductionOrder from "../production/productionOrder/productionOrder.model
 import RawMaterial from "../raw-materials/rawMaterial.model";
 import Quotation from "../quotation/quotation.model";
 import { Invoice } from "../billing/billing.model";
+import { ComplianceEquipment, ComplianceRecord } from "../compliance/compliance.model";
 
 const router = Router();
 
 router.get("/summary", async (_req, res, next) => {
   try {
-    const [products, lowStock, purchaseOrders, activeBatches, completedBatches, openSales, recentSales, pendingQuotations, openProductionOrders, lowMaterials, outstandingInvoices, salesTotals, recentQuotations, attentionOrders] = await Promise.all([
+    const today = new Date().toISOString().slice(0, 10);
+    const [products, lowStock, purchaseOrders, activeBatches, completedBatches, openSales, recentSales, pendingQuotations, openProductionOrders, lowMaterials, outstandingInvoices, salesTotals, recentQuotations, attentionOrders, activeEquipment, openCompliance, overdueCompliance] = await Promise.all([
       Product.countDocuments({ status: "Active" }),
       Inventory.countDocuments({ status: { $in: ["Low Stock", "Out of Stock"] } }),
       PurchaseOrder.countDocuments({ status: { $in: ["pending_approval", "approved", "partially_received"] } }),
@@ -28,9 +30,12 @@ router.get("/summary", async (_req, res, next) => {
       SalesOrder.aggregate([{ $match: { status: { $ne: "cancelled" } } }, { $group: { _id: null, total: { $sum: "$total" }, delivered: { $sum: { $cond: [{ $eq: ["$status", "delivered"] }, "$total", 0] } } } }]),
       Quotation.find({ status: "Pending" }).sort({ createdAt: -1 }).limit(5).populate("customer", "fullName").select("createdAt customer items").lean(),
       SalesOrder.find({ status: { $in: ["draft", "confirmed", "in_production", "ready_for_delivery"] } }).sort({ requestedDeliveryDate: 1, createdAt: 1 }).limit(6).populate("customer", "fullName").select("orderNumber status total requestedDeliveryDate customer").lean(),
+      ComplianceEquipment.countDocuments({ status: "active" }),
+      ComplianceRecord.countDocuments({ status: { $in: ["open", "completed"] } }),
+      ComplianceRecord.countDocuments({ scheduledDate: { $lt: today }, status: { $in: ["open", "completed"] } }),
     ]);
     const sales = salesTotals[0] || { total: 0, delivered: 0 };
-    res.json({ data: { products, lowStock: Math.max(lowStock, lowMaterials.length), purchaseOrders, activeBatches, completedBatches, openSales, recentSales, pendingQuotations, openProductionOrders, outstandingInvoices: outstandingInvoices.length, salesValue: sales.total || 0, deliveredValue: sales.delivered || 0, lowMaterials, outstandingInvoiceList: outstandingInvoices, recentQuotations, attentionOrders } });
+    res.json({ data: { products, lowStock: Math.max(lowStock, lowMaterials.length), purchaseOrders, activeBatches, completedBatches, openSales, recentSales, pendingQuotations, openProductionOrders, outstandingInvoices: outstandingInvoices.length, salesValue: sales.total || 0, deliveredValue: sales.delivered || 0, lowMaterials, outstandingInvoiceList: outstandingInvoices, recentQuotations, attentionOrders, activeEquipment, openCompliance, overdueCompliance } });
   } catch (error) { next(error); }
 });
 

@@ -104,7 +104,7 @@ function Footer() {
             >
               <img
                 src={logo}
-                alt="CANA Group"
+                alt="CANAN Business Group"
                 className="h-16 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.02] sm:h-[72px]"
               />
             </Link>
@@ -112,7 +112,7 @@ function Footer() {
             <div className="mt-6">
 
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-red-500">
-                CANA GROUP
+                CANAN BUSINESS GROUP
               </p>
 
               <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
@@ -192,6 +192,18 @@ function Footer() {
               Paint Products
             </FooterLink>
 
+            <FooterLink to="/cana-paints/painting-services">
+              Painting Services
+            </FooterLink>
+
+            <FooterLink to="/cana-paints/estimate-cost">
+              Cost Calculator
+            </FooterLink>
+
+            <FooterLink to="/cana-paints/request-quote">
+              Request a Quote
+            </FooterLink>
+
             <FooterLink to="/cana-services">
               CANA Services
             </FooterLink>
@@ -247,7 +259,7 @@ function Footer() {
               </a>
 
               <a
-                href="mailto:info@cbg.rw"
+                href="mailto:info@cana.rw"
                 className="group flex items-start gap-4"
               >
                 <span className="mt-0.5 text-red-500">
@@ -310,7 +322,7 @@ function Footer() {
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 sm:flex-row sm:items-center sm:justify-between lg:px-8">
 
           <p className="text-xs text-neutral-500 sm:text-sm">
-            © {year} CANA Group. All rights reserved.
+            © {year} CANAN Business Group Ltd. All rights reserved.
           </p>
 
           <p className="text-xs text-neutral-500 sm:text-sm">

@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "npm run build && node test/api-smoke.cjs",
+    "test": "npm run build && node test/api-smoke.cjs && node test/billing-workflow.cjs",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "start": "node dist/server.js",
     "build": "tsc"

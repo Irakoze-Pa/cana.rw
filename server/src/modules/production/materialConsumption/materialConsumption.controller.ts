@@ -111,9 +111,12 @@ const handleControllerError = (
   /**
    * 500
    */
-  return res.status(500).json({
+  // Issuing can legitimately fail on live stock checks, receipt-lot checks,
+  // or current workflow status. Return the real message so the operator can
+  // correct the record instead of receiving an unhelpful generic error.
+  return res.status(400).json({
     success: false,
-    message: "Internal server error.",
+    message,
   });
 };
 

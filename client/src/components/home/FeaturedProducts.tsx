@@ -13,7 +13,10 @@ export default function FeaturedProducts() {
       try {
         const response = await fetch(`${apiUrl}/products`);
         const result = await response.json() as { data?: Product[] };
-        setProducts((result.data || []).filter((product) => product.status === "Active").slice(0, 3));
+        const activeProducts = (result.data || []).filter((product) => product.status === "Active");
+        const featuredNames = ["silk vinyl", "weather guard", "wall master"];
+        const featured = featuredNames.flatMap((term) => activeProducts.filter((product) => product.name.toLowerCase().includes(term)));
+        setProducts((featured.length ? featured : activeProducts).slice(0, 3));
       } catch {
         setProducts([]);
       }

@@ -6,6 +6,7 @@ export type PrintParty = { label: string; name: string; lines?: Array<string | n
 export type PrintApproval = { status: string; signatoryTitle: string; signatoryName: string };
 
 type PrintDocumentOptions = {
+  issueDate?: string;
   title: string;
   reference: string;
   status?: string;
@@ -34,6 +35,7 @@ export const cananLetterheadMarkup = () => `<header style="display:grid;grid-tem
 
 /** Opens a letterhead-style CANA document that can be printed or saved as PDF. */
 export function printCanaDocument({
+  issueDate,
   title,
   reference,
   status,
@@ -47,7 +49,7 @@ export function printCanaDocument({
   const popup = window.open("", "_blank", "width=1000,height=820");
   if (!popup) return;
 
-  const issued = new Date().toLocaleDateString("en-RW", { dateStyle: "long" });
+  const issued = (issueDate ? new Date(issueDate) : new Date()).toLocaleDateString("en-RW", { dateStyle: "long" });
   const documentDetails = [
     { label: "Reference no.", value: reference },
     { label: "Issue date", value: issued },

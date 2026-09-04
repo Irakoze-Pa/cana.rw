@@ -1,4 +1,6 @@
 import mongoose from "mongoose";
+import { Invoice } from "../billing/billing.model";
+import User, { UserRole, UserStatus } from "../../models/users";
 import Product from "../product/product.model";
 import FinishedGoodsStoreBalance from "../finishedGoods/storeBalance.model";
 import SalesOrder, { salesOrderStatuses, SalesOrderStatus } from "./salesOrder.model";
@@ -11,6 +13,8 @@ const transitions: Record<SalesOrderStatus, SalesOrderStatus[]> = {
 export async function createSalesOrder(input: { customer: string; quotation?: string; items: { product: string; quantity: number; unit?: string; unitPrice?: number }[]; tax?: number; deliveryAddress?: string; requestedDeliveryDate?: string; notes?: string; allowInactiveProducts?: boolean }) {
   if (!mongoose.Types.ObjectId.isValid(input.customer)) throw new Error("A valid customer is required.");
   if (!Array.isArray(input.items) || input.items.length === 0) throw new Error("At least one sales item is required.");
+  if (!await User.exists({ _id: input.customer, role: UserRole.CUSTOMER, status: UserStatus.ACTIVE })) throw new Error("Select an active customer.");
+  if (new Set(input.items.map(item => item.product)).size !== input.items.length) throw new Error("Combine repeated products into one order line.");
   const items = await Promise.all(input.items.map(async (item) => {
     if (!mongoose.Types.ObjectId.isValid(item.product) || !Number.isFinite(item.quantity) || item.quantity <= 0) throw new Error("Each sales item needs a valid product and positive quantity.");
     const product = await Product.findById(item.product);
@@ -22,6 +26,7 @@ export async function createSalesOrder(input: { customer: string; quotation?: st
       throw new Error(`${product.name} is inactive and cannot be added to a new sales order.`);
     }
     const unitPrice = item.unitPrice ?? product.price;
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error("Unit price must be a non-negative number.");
     return { product: product._id, productName: product.name, productCode: product.code, quantity: item.quantity, unit: item.unit || product.unit, unitPrice, total: Number((item.quantity * unitPrice).toFixed(2)) };
   }));
   const subtotal = Number(items.reduce((sum, item) => sum + item.total, 0).toFixed(2));
@@ -29,7 +34,8 @@ export async function createSalesOrder(input: { customer: string; quotation?: st
   if (!Number.isFinite(tax) || tax < 0) throw new Error("Tax cannot be negative.");
   const orderNumber = `SO-${new Date().getFullYear()}-${String((await SalesOrder.countDocuments()) + 1).padStart(5, "0")}`;
   const { allowInactiveProducts: _allowInactiveProducts, ...orderInput } = input;
-  return SalesOrder.create({ ...orderInput, orderNumber, items, subtotal, tax, total: Number((subtotal + tax).toFixed(2)), statusHistory: [{ status: "draft" }] });
+  const order = await SalesOrder.create({ ...orderInput, orderNumber, items, subtotal, tax, total: Number((subtotal + tax).toFixed(2)), statusHistory: [{ status: "draft" }] });
+  return order.populate("customer", "fullName phone email");
 }
 
 export const listSalesOrders = () => SalesOrder.find().sort({ createdAt: -1 }).populate("customer", "fullName phone email").lean();
@@ -46,6 +52,8 @@ export async function transitionSalesOrder(id: string, status: SalesOrderStatus,
   const order = await SalesOrder.findById(id);
   if (!order) throw new Error("Sales order not found.");
   if (!transitions[order.status as SalesOrderStatus].includes(status)) throw new Error(`Cannot change a ${order.status} sales order to ${status}.`);
+
+  if (status === "cancelled" && await Invoice.exists({ salesOrder: id, status: { $ne: "void" } })) throw new Error("An invoiced order cannot be cancelled. Resolve its invoice first.");
 
   if (status === "ready_for_delivery" || status === "delivered") {
     for (const item of order.items) {
@@ -68,5 +76,6 @@ export async function transitionSalesOrder(id: string, status: SalesOrderStatus,
   }
   order.status = status;
   order.statusHistory.push({ status, ...(performedBy && mongoose.Types.ObjectId.isValid(performedBy) ? { by: new mongoose.Types.ObjectId(performedBy) } : {}) });
-  return order.save();
+  await order.save();
+  return order.populate("customer", "fullName phone email");
 }

@@ -98,9 +98,14 @@ const reconcileAvailableQuantities = async () => {
 export const createRawMaterial = async (
   data: CreateRawMaterialData
 ) => {
-  const code =
-    data.code?.trim().toUpperCase() ||
-    `RM-${new Date().getFullYear()}-${String((await RawMaterial.countDocuments()) + 1).padStart(5, "0")}`;
+  const requestedCode = data.code?.trim().toUpperCase();
+  const year = new Date().getFullYear();
+  const existingCodes = await RawMaterial.find({ code: new RegExp(`^RM-${year}-\\d+$`) }).select("code").lean();
+  const nextSequence = existingCodes.reduce((highest, material) => {
+    const sequence = Number(String(material.code).split("-").pop());
+    return Number.isFinite(sequence) ? Math.max(highest, sequence) : highest;
+  }, 0) + 1;
+  const code = requestedCode || `RM-${year}-${String(nextSequence).padStart(5, "0")}`;
 
   /**
    * Check duplicate material code
@@ -387,7 +392,7 @@ export const updateRawMaterial =
     /**
      * Update material.
      */
-    return await RawMaterial.findByIdAndUpdate(
+    const updatedRawMaterial = await RawMaterial.findByIdAndUpdate(
       id,
       updateData,
       {
@@ -398,6 +403,41 @@ export const updateRawMaterial =
       "supplier",
       "name code"
     );
+
+    // Keep the operational inventory snapshot aligned when a material is
+    // renamed, reactivated, or its unit/minimum level changes in setup.
+    // Quantity itself continues to be controlled only by inventory movements.
+    if (updatedRawMaterial) {
+      const inventory = await Inventory.findOne({
+        rawMaterial: updatedRawMaterial._id,
+      });
+      if (inventory) {
+        const quantity = Number(inventory.quantity || 0);
+        const minimumStock = Number(updatedRawMaterial.minimumStock || 0);
+        const status =
+          updatedRawMaterial.status !== "Active"
+            ? "Inactive"
+            : quantity <= 0
+              ? "Out of Stock"
+              : quantity <= minimumStock
+                ? "Low Stock"
+                : "Available";
+        await Inventory.updateOne(
+          { _id: inventory._id },
+          {
+            $set: {
+              rawMaterialName: updatedRawMaterial.name,
+              rawMaterialCode: updatedRawMaterial.code,
+              unit: updatedRawMaterial.unit,
+              minimumStock,
+              status,
+            },
+          }
+        );
+      }
+    }
+
+    return updatedRawMaterial;
   };
 
 /**
