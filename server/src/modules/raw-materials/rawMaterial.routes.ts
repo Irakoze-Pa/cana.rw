@@ -23,6 +23,8 @@ router.get(
   getRawMaterialsController
 );
 
+router.get("/lots", lotController.list);
+
 router.get(
   "/:id/lots",
   lotController.list
@@ -32,6 +34,7 @@ router.post(
   "/:id/lots",
   lotController.create
 );
+router.patch("/:id/lots/:lotId/release", lotController.release);
 
 router.get(
   "/:id",

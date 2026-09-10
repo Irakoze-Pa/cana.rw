@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -16,12 +17,7 @@ import {
 
 import PurchaseOrderModal from "../components/PurchaseOrderModal";
 import { printCanaDocument } from "../../utils/printCanaDocument";
-
-// =====================================================
-// API
-// =====================================================
-
-const API_URL = (import.meta.env.VITE_API_URL || "/api/v1");
+import api from "@/services/api";
 
 // =====================================================
 // TYPES
@@ -30,6 +26,7 @@ const API_URL = (import.meta.env.VITE_API_URL || "/api/v1");
 interface PurchaseOrderItem {
   rawMaterial:
     | string
+    | null
     | {
         _id: string;
         name: string;
@@ -55,6 +52,10 @@ const formatQuantity = (quantity: number, unit: string) => {
   if (unit.trim().toLowerCase() !== "kg") return `${value} ${unit}`;
   return `${value.toLocaleString("en-RW", { maximumFractionDigits: 2 })} kg (${(value / 1000).toLocaleString("en-RW", { maximumFractionDigits: 3 })} t)`;
 };
+const materialName = (rawMaterial: PurchaseOrderItem["rawMaterial"]) =>
+  rawMaterial && typeof rawMaterial !== "string" ? rawMaterial.name || "Material record unavailable" : rawMaterial || "Material record unavailable";
+const materialCode = (rawMaterial: PurchaseOrderItem["rawMaterial"]) =>
+  rawMaterial && typeof rawMaterial !== "string" ? rawMaterial.code || "—" : "—";
 
 interface PurchaseOrder {
   _id: string;
@@ -144,7 +145,15 @@ function PurchaseOrdersPage() {
   const [updatingId, setUpdatingId] =
     useState<string | null>(null);
 
-  const printPurchaseOrder = (order: PurchaseOrder) => printCanaDocument({ title: "Purchase order", reference: order.poNumber, status: getStatusLabel(order.status), details: [{ label: "Supplier", value: getSupplierName(order.supplier) }, { label: "Supplier code", value: typeof order.supplier === "string" ? "—" : order.supplier.code }, { label: "Order date", value: formatDate(order.orderDate) }, { label: "Expected delivery", value: formatDate(order.expectedDeliveryDate) }, { label: "Materials requested", value: order.items.length }], table: { headers: ["Raw material", "Code", "Quantity (kg / t)"], rows: order.items.map((item) => [typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial.name, typeof item.rawMaterial === "string" ? "—" : item.rawMaterial.code, formatQuantity(item.quantity, item.unit)]) }, notes: order.notes || "Please supply the listed raw materials according to the agreed delivery date and terms.", approval: { status: order.status === "approved" || order.status === "received" ? "Official purchase order" : "Draft — pending approval", signatoryTitle: "Managing Director", signatoryName: "KABANDA Fred" } });
+  const printPurchaseOrder = async (order: PurchaseOrder) => {
+    try {
+      const response = await api.get<{ data: PurchaseOrder }>(`/purchase-orders/${order._id}`);
+      const fullOrder = response.data.data || order;
+      printCanaDocument({ title: "Purchase order", reference: fullOrder.poNumber, status: getStatusLabel(fullOrder.status), details: [{ label: "Supplier", value: getSupplierName(fullOrder.supplier) }, { label: "Supplier code", value: typeof fullOrder.supplier === "string" ? "—" : fullOrder.supplier.code }, { label: "Order date", value: formatDate(fullOrder.orderDate) }, { label: "Expected delivery", value: formatDate(fullOrder.expectedDeliveryDate) }, { label: "Materials requested", value: fullOrder.items.length }], table: { headers: ["Raw material", "Code", "Quantity (kg / t)"], rows: fullOrder.items.map((item) => [materialName(item.rawMaterial), materialCode(item.rawMaterial), formatQuantity(item.quantity, item.unit)]) }, notes: fullOrder.notes || "Please supply the listed raw materials according to the agreed delivery date and terms.", approval: { status: fullOrder.status === "approved" || fullOrder.status === "received" ? "Official purchase order" : "Draft — pending approval", signatoryTitle: "Managing Director", signatoryName: "KABANDA Fred" } });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Could not prepare the purchase order for printing.");
+    }
+  };
 
   // ===================================================
   // FETCH PURCHASE ORDERS
@@ -154,17 +163,8 @@ function PurchaseOrdersPage() {
     try {
       setLoading(true);
 
-      const response = await fetch(
-        `${API_URL}/purchase-orders`
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          "Failed to load purchase orders."
-        );
-      }
-
-      const result = await response.json();
+      const response = await api.get<{ data: PurchaseOrder[] }>("/purchase-orders");
+      const result = response.data;
 
       const data = Array.isArray(result.data)
         ? result.data
@@ -226,27 +226,7 @@ function PurchaseOrdersPage() {
         notes: data.notes || undefined,
       };
 
-      const response = await fetch(
-        `${API_URL}/purchase-orders`,
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify(payload),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message ||
-            "Failed to create purchase order."
-        );
-      }
+      await api.post("/purchase-orders", payload);
 
       await fetchPurchaseOrders();
 
@@ -283,21 +263,7 @@ function PurchaseOrdersPage() {
     try {
       setDeletingId(id);
 
-      const response = await fetch(
-        `${API_URL}/purchase-orders/${id}`,
-        {
-          method: "DELETE",
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message ||
-            "Failed to delete purchase order."
-        );
-      }
+      await api.delete(`/purchase-orders/${id}`);
 
       setPurchaseOrders(
         (previousOrders) =>
@@ -383,31 +349,7 @@ function PurchaseOrdersPage() {
     try {
       setUpdatingId(id);
 
-      const response = await fetch(
-        `${API_URL}/purchase-orders/${id}/status`,
-        {
-          method: "PATCH",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            status,
-          }),
-        }
-      );
-
-      const result =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message ||
-            "Failed to update purchase order status."
-        );
-      }
+      const result = (await api.patch(`/purchase-orders/${id}/status`, { status })).data;
 
       const updatedStatus =
         result?.data?.status || status;
@@ -704,11 +646,16 @@ function PurchaseOrdersPage() {
   // VIEW DETAILS
   // ===================================================
 
-  const handleViewDetails = (
+  const handleViewDetails = async (
     order: PurchaseOrder
   ) => {
-    setSelectedOrder(order);
-    setShowDetails(true);
+    try {
+      const response = await api.get<{ data: PurchaseOrder }>(`/purchase-orders/${order._id}`);
+      setSelectedOrder(response.data.data || order);
+      setShowDetails(true);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Could not load purchase-order details.");
+    }
   };
 
   // ===================================================
@@ -1888,9 +1835,10 @@ function PurchaseOrdersPage() {
 
                 {/* TOTALS */}
 
-                <div className="hidden">
+                {selectedOrder.status === "received" && (
+                <div className="w-full max-w-sm rounded-xl border border-emerald-200 bg-emerald-50 p-5">
 
-                  <div className="w-full max-w-sm rounded-xl bg-gray-50 p-5">
+                  <p className="mb-4 text-xs font-bold uppercase tracking-wide text-emerald-700">Received material cost</p>
 
                     <div className="flex items-center justify-between">
 
@@ -1934,9 +1882,8 @@ function PurchaseOrdersPage() {
 
                     </div>
 
-                  </div>
-
                 </div>
+                )}
 
                 {/* NOTES */}
 
@@ -1967,6 +1914,8 @@ function PurchaseOrdersPage() {
               <div className="flex shrink-0 justify-end gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4">
 
                 <button type="button" onClick={() => printPurchaseOrder(selectedOrder)} className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"><Printer size={16} />Print purchase order</button>
+
+                {selectedOrder.status === "received" && <Link to="/management/supplier-payments" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">Record supplier payment</Link>}
 
                 <button
                   type="button"

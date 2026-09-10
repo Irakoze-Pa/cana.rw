@@ -100,6 +100,10 @@ import RawMaterialConsumptionDetailsPage from "@/modules/management/rawMaterialC
 // =====================================================
 
 import PurchaseOrders from "@/modules/management/purchaseOrder/pages/PurchaseOrders";
+import SupplierPaymentsPage from "@/modules/management/purchaseOrder/pages/SupplierPaymentsPage";
+import ExpensesPage from "@/modules/management/expenses/ExpensesPage";
+import GeneralActivityReportPage from "@/modules/management/reports/GeneralActivityReportPage";
+import ProcurementReportPage from "@/modules/management/reports/ProcurementReportPage";
 
 // =====================================================
 // CANA PAINTS
@@ -314,6 +318,13 @@ const router = createBrowserRouter([
         path: "purchase-orders",
         element: <PurchaseOrders />,
       },
+      {
+        path: "supplier-payments",
+        element: <SupplierPaymentsPage />,
+      },
+      { path: "expenses", element: <ExpensesPage /> },
+      { path: "general-report", element: <GeneralActivityReportPage /> },
+      { path: "procurement-report", element: <ProcurementReportPage /> },
 
       // =================================================
       // INVENTORY

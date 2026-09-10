@@ -50,6 +50,25 @@ export async function createCustomerSalesOrder(customer: string, input: { items:
   return createSalesOrder({ customer, items: input.items.map((item) => ({ product: item.product, quantity: item.quantity, unit: item.unit })), deliveryAddress: input.deliveryAddress, requestedDeliveryDate: input.requestedDeliveryDate, notes: input.notes, initialStatus: "submitted" });
 }
 
+export async function updateSalesOrderPrices(id: string, prices: Array<{ product: string; unitPrice: number }>, performedBy?: string) {
+  if (!mongoose.Types.ObjectId.isValid(id) || !Array.isArray(prices)) throw new Error("Invalid sales-order price update.");
+  const order = await SalesOrder.findById(id);
+  if (!order) throw new Error("Sales order not found.");
+  if (!["draft", "submitted"].includes(order.status)) throw new Error("Prices can only be changed before the order is confirmed.");
+  const values = new Map(prices.map((item) => [String(item.product), Number(item.unitPrice)]));
+  for (const item of order.items) {
+    const unitPrice = values.get(String(item.product));
+    if (!Number.isFinite(unitPrice) || (unitPrice as number) < 0) throw new Error(`Enter a valid agreed price for ${item.productName}.`);
+    item.unitPrice = Number(unitPrice);
+    item.total = Number((item.quantity * Number(unitPrice)).toFixed(2));
+  }
+  order.subtotal = Number(order.items.reduce((sum: number, item: { total: number }) => sum + item.total, 0).toFixed(2));
+  order.total = Number((order.subtotal + Number(order.tax || 0)).toFixed(2));
+  order.statusHistory.push({ status: order.status, ...(performedBy && mongoose.Types.ObjectId.isValid(performedBy) ? { by: new mongoose.Types.ObjectId(performedBy) } : {}) });
+  await order.save();
+  return order.populate("customer", "fullName phone email");
+}
+
 export async function transitionSalesOrder(id: string, status: SalesOrderStatus, performedBy?: string) {
   if (!mongoose.Types.ObjectId.isValid(id)) throw new Error("Invalid sales order ID.");
   if (!salesOrderStatuses.includes(status)) throw new Error("Invalid sales order status.");

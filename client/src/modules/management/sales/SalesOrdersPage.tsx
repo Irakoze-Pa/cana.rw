@@ -18,6 +18,7 @@ type Order = {
   requestedDeliveryDate?: string;
   notes?: string;
   items: {
+    product: string;
     productName: string;
     productCode?: string;
     quantity: number;
@@ -168,6 +169,22 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
     } finally {
       setSaving(false);
     }
+  };
+  const setAgreedPrices = async (order: Order) => {
+    const prices = [] as Array<{ product: string; unitPrice: number }>;
+    for (const item of order.items) {
+      const value = window.prompt(`Agreed price for ${item.productName} (RWF per ${item.unit})`, String(item.unitPrice ?? 0));
+      if (value === null) return;
+      const unitPrice = Number(value);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) return setError(`Enter a valid price for ${item.productName}.`);
+      prices.push({ product: item.product, unitPrice });
+    }
+    try {
+      setSaving(true);
+      const response = await api.patch<{ data: Order }>(`/sales-orders/${order._id}/prices`, { prices });
+      setOrders((current) => current.map((item) => item._id === order._id ? response.data.data : item));
+      toast("Agreed prices saved. You can now confirm the order.", "success");
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to save agreed prices."); } finally { setSaving(false); }
   };
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -525,6 +542,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                         <Printer size={13} />
                         Print order
                       </button>
+                      {['draft', 'submitted'].includes(order.status) && <button type="button" disabled={saving} onClick={() => void setAgreedPrices(order)} className="mr-2 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700">Set agreed prices</button>}
                       {next[order.status]?.map((status) => (
                         <button
                           key={status}

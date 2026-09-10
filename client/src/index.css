@@ -4,6 +4,12 @@ html {
   font-family: "Manrope", sans-serif;
 }
 
+/* Keep dense management tables and forms comfortably visible on small phones. */
+@media (max-width: 640px) {
+  html { font-size: 15px; }
+  input, select, textarea { min-height: 2.5rem; }
+}
+
 body {
   margin: 0;
   min-width: 320px;

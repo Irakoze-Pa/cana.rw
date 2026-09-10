@@ -8,5 +8,6 @@ router.post("/my", authorizeRoles("customer"), controller.createMine);
 router.use(authorizeRoles("admin", "staff"));
 router.get("/", controller.list);
 router.post("/", controller.create);
+router.patch("/:id/prices", controller.updatePrices);
 router.patch("/:id/status", controller.transition);
 export default router;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, Layers, Plus, Printer, RefreshCw, X } from "lucide-react";
 import api from "@/services/api";
 import { getRawMaterials } from "../services/rawMaterialService";
@@ -9,6 +9,7 @@ import { printCanaDocument } from "../../utils/printCanaDocument";
 
 type Lot = {
   _id: string;
+  grnNumber?: string;
   lotNumber: string;
   receivedQuantity: number;
   availableQuantity: number;
@@ -40,7 +41,7 @@ export default function RawMaterialLotsPage() {
     supplier: "",
     lotNumber: "",
     receivedQuantity: "",
-    unitCost: "",
+    unitCost: "0",
     receivedAt: new Date().toISOString().slice(0, 10),
     expiresAt: "",
     status: "available",
@@ -58,15 +59,10 @@ export default function RawMaterialLotsPage() {
     }
   };
   const loadLots = async (id = materialId) => {
-    if (!id) {
-      setLots([]);
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     try {
       const response = await api.get<{ data: Lot[] }>(
-        `/raw-materials/${id}/lots`,
+        id ? `/raw-materials/${id}/lots` : "/raw-materials/lots",
       );
       setLots(response.data.data || []);
     } catch (err) {
@@ -84,14 +80,24 @@ export default function RawMaterialLotsPage() {
   useEffect(() => {
     void loadLots();
   }, [materialId]);
+  const summary = useMemo(() => {
+    const now = new Date();
+    const thirtyDays = new Date(now); thirtyDays.setDate(now.getDate() + 30);
+    return {
+      available: lots.filter((lot) => lot.status === "available").reduce((sum, lot) => sum + Number(lot.availableQuantity || 0), 0),
+      quarantined: lots.filter((lot) => lot.status === "quarantined").length,
+      expiring: lots.filter((lot) => lot.expiresAt && new Date(lot.expiresAt) >= now && new Date(lot.expiresAt) <= thirtyDays).length,
+      expired: lots.filter((lot) => lot.status === "expired" || (lot.expiresAt && new Date(lot.expiresAt) < now)).length,
+    };
+  }, [lots]);
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!materialId) return setError("Select a raw material first.");
     try {
       await api.post(`/raw-materials/${materialId}/lots`, {
         ...form,
-        receivedQuantity: Number(form.receivedQuantity),
-        unitCost: Number(form.unitCost),
+        receivedQuantity: form.receivedQuantity.replaceAll(",", ""),
+        unitCost: form.unitCost.replaceAll(",", ""),
         expiresAt: form.expiresAt || undefined,
         lotNumber: form.lotNumber || undefined,
       });
@@ -100,7 +106,7 @@ export default function RawMaterialLotsPage() {
         supplier: "",
         lotNumber: "",
         receivedQuantity: "",
-        unitCost: "",
+        unitCost: "0",
         receivedAt: new Date().toISOString().slice(0, 10),
         expiresAt: "",
         status: "available",
@@ -111,19 +117,28 @@ export default function RawMaterialLotsPage() {
       setError(err instanceof Error ? err.message : "Unable to receive lot.");
     }
   };
+  const release = async (lot: Lot) => {
+    if (!materialId || !window.confirm(`Release ${lot.lotNumber} to available stock after quality approval?`)) return;
+    try {
+      await api.patch(`/raw-materials/${materialId}/lots/${lot._id}/release`);
+      await loadLots();
+      window.dispatchEvent(new Event("cana:stock-updated"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not release this lot.");
+    }
+  };
   const printReceipt = (lot: Lot) => {
     const material = materials.find((item) => item._id === materialId);
     printCanaDocument({
-      title: "Goods receipt",
-      reference: lot.lotNumber,
-      status: lot.status,
+      title: "Goods Received Note",
+      reference: lot.grnNumber || `GRN-${lot.lotNumber}`,
+      status: lot.status === "available" ? "Received and available" : "Received — quality hold",
       details: [
         { label: "Raw material", value: material ? `${material.name} · ${material.code}` : lot.rawMaterial?.name },
+        { label: "Supplier lot / batch", value: lot.lotNumber },
         { label: "Supplier", value: lot.supplier?.name },
         { label: "Received quantity", value: `${lot.receivedQuantity} ${lot.unit}` },
         { label: "Available quantity", value: `${lot.availableQuantity} ${lot.unit}` },
-        { label: "Unit cost", value: `${Number(lot.unitCost || 0).toLocaleString()} RWF` },
-        { label: "Receipt value", value: `${(Number(lot.receivedQuantity || 0) * Number(lot.unitCost || 0)).toLocaleString()} RWF` },
         { label: "Received on", value: new Date(lot.receivedAt).toLocaleDateString("en-RW") },
         { label: "Expiry date", value: lot.expiresAt ? new Date(lot.expiresAt).toLocaleDateString("en-RW") : "Not specified" },
       ],
@@ -142,8 +157,7 @@ export default function RawMaterialLotsPage() {
               Raw-material lots
             </h1>
             <p className="mt-1 text-sm text-gray-500">
-              Track received batches, cost, expiry and quality status. Available
-              lots post stock to Inventory.
+              Receive raw materials using an official GRN. Each note links the supplier, supplier batch, cost, quality status, and production consumption.
             </p>
           </div>
         </div>
@@ -174,7 +188,7 @@ export default function RawMaterialLotsPage() {
           onChange={(event) => setMaterialId(event.target.value)}
           className="mt-2 h-11 w-full max-w-xl rounded-xl border border-gray-200 bg-white px-3 text-sm"
         >
-          <option value="">Select material to view lots</option>
+          <option value="">All received raw materials</option>
           {materials.map((material) => (
             <option key={material._id} value={material._id}>
               {material.name} · {material.code}
@@ -185,6 +199,7 @@ export default function RawMaterialLotsPage() {
       {error && (
         <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
       )}
+      {materialId && <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Available stock in lots</p><p className="mt-2 text-xl font-extrabold text-slate-950">{summary.available.toLocaleString()} {materials.find((item) => item._id === materialId)?.unit || ""}</p><p className="mt-1 text-xs text-slate-500">Ready for production issue</p></div><div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-amber-700">Quality hold</p><p className="mt-2 text-xl font-extrabold text-amber-950">{summary.quarantined}</p><p className="mt-1 text-xs text-amber-700">Lot(s) waiting for release</p></div><div className="rounded-2xl border border-orange-200 bg-orange-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-orange-700">Expiring in 30 days</p><p className="mt-2 text-xl font-extrabold text-orange-950">{summary.expiring}</p><p className="mt-1 text-xs text-orange-700">Use these lots first</p></div><div className="rounded-2xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-red-700">Expired</p><p className="mt-2 text-xl font-extrabold text-red-950">{summary.expired}</p><p className="mt-1 text-xs text-red-700">Blocked from production</p></div></section>}
       {open && (
         <form
           onSubmit={create}
@@ -214,30 +229,21 @@ export default function RawMaterialLotsPage() {
             <option value="">Select supplier that delivered this lot</option>
             {suppliers.map((supplier) => <option key={supplier._id} value={supplier._id}>{supplier.name} · {supplier.code}</option>)}
           </select>
-          <input
-            required
-            type="number"
-            min="0.0001"
-            step="0.01"
-            value={form.receivedQuantity}
-            onChange={(event) =>
-              setForm({ ...form, receivedQuantity: event.target.value })
-            }
-            placeholder="Received quantity"
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
-          />
-          <input
-            required
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.unitCost}
-            onChange={(event) =>
-              setForm({ ...form, unitCost: event.target.value })
-            }
-            placeholder="Cost per unit (RWF)"
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
-          />
+          <label className="text-sm font-semibold text-gray-700">
+            Received quantity ({materials.find((item) => item._id === materialId)?.unit || "kg"})
+            <input
+              required
+              type="text"
+              inputMode="decimal"
+              value={form.receivedQuantity}
+              onChange={(event) =>
+                setForm({ ...form, receivedQuantity: event.target.value })
+              }
+              placeholder="Example: 10000"
+              className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
+            />
+            <span className="mt-1 block text-xs font-normal text-gray-500">Enter the delivered weight only. Example: 10000 means 10,000 kg (10 tonnes).</span>
+          </label>
           <select
             value={form.status}
             onChange={(event) =>
@@ -289,10 +295,9 @@ export default function RawMaterialLotsPage() {
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="px-5 py-3">Lot</th>
+              <th className="px-5 py-3">GRN / supplier lot</th>
               <th className="px-5 py-3">Received</th>
               <th className="px-5 py-3">Available</th>
-              <th className="px-5 py-3">Cost</th>
               <th className="px-5 py-3">Expiry</th>
               <th className="px-5 py-3">Status</th>
               <th className="px-5 py-3 text-right">Document</th>
@@ -301,18 +306,19 @@ export default function RawMaterialLotsPage() {
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-gray-500">
-                  Select a material to load lots.
+                <td colSpan={6} className="p-8 text-center text-gray-500">
+                  Loading goods received notes.
                 </td>
               </tr>
             ) : (
               lots.map((lot) => (
                 <tr key={lot._id}>
                   <td className="px-5 py-4">
-                    <p className="font-semibold">{lot.lotNumber}</p>
+                    <p className="font-semibold">{lot.grnNumber || "Legacy receipt"}</p>
                     <p className="text-xs text-gray-500">
-                      {lot.supplier?.name}
+                      {lot.supplier?.name} · Lot {lot.lotNumber}
                     </p>
+                    <p className="text-xs text-slate-500">{lot.rawMaterial?.name || "Raw material"} · {lot.rawMaterial?.code || "—"}</p>
                   </td>
                   <td className="px-5 py-4">
                     {lot.receivedQuantity} {lot.unit}
@@ -322,9 +328,6 @@ export default function RawMaterialLotsPage() {
                   </td>
                   <td className="px-5 py-4 font-semibold">
                     {lot.availableQuantity} {lot.unit}
-                  </td>
-                  <td className="px-5 py-4">
-                    {lot.unitCost.toLocaleString()} RWF
                   </td>
                   <td className="px-5 py-4">
                     {lot.expiresAt ? (
@@ -343,14 +346,14 @@ export default function RawMaterialLotsPage() {
                       {lot.status}
                     </span>
                   </td>
-                  <td className="px-5 py-4 text-right"><button type="button" onClick={() => printReceipt(lot)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"><Printer size={13} />Receipt</button></td>
+                  <td className="px-5 py-4 text-right"><div className="flex justify-end gap-2">{lot.status === "quarantined" && <button type="button" onClick={() => void release(lot)} className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800">Release to stock</button>}<button type="button" onClick={() => printReceipt(lot)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"><Printer size={13} />Receipt</button></div></td>
                 </tr>
               ))
             )}
             {!loading && lots.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-gray-500">
-                  No lots received for this material yet.
+                <td colSpan={6} className="p-8 text-center text-gray-500">
+                  No goods received notes match this view yet.
                 </td>
               </tr>
             )}

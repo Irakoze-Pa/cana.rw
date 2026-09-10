@@ -150,6 +150,16 @@ export const updatePurchaseOrderStatus = async (
     );
   }
 
+  const transitions: Record<string, string[]> = {
+    draft: ["pending_approval", "cancelled"],
+    pending_approval: ["approved", "draft", "cancelled"],
+    approved: ["received", "cancelled"],
+    partially_received: ["received", "cancelled"],
+  };
+  if (!transitions[purchaseOrder.status]?.includes(status)) {
+    throw new Error(`Cannot change a ${purchaseOrder.status.replace(/_/g, " ")} purchase order to ${status.replace(/_/g, " ")}.`);
+  }
+
   // ===================================================
   // ONLY APPROVED CAN BECOME RECEIVED
   // ===================================================
@@ -425,8 +435,12 @@ export const updatePurchaseOrderStatus = async (
 export const deletePurchaseOrder = async (
   id: string
 ) => {
-  const purchaseOrder =
-    await PurchaseOrder.findByIdAndDelete(id);
+  const purchaseOrder = await PurchaseOrder.findById(id);
+  if (!purchaseOrder) return null;
+  if (purchaseOrder.status !== "draft") {
+    throw new Error("Only draft purchase orders can be deleted. Cancel an unapproved order instead.");
+  }
+  await purchaseOrder.deleteOne();
 
   return purchaseOrder;
 };

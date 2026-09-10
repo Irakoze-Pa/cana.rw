@@ -2,12 +2,12 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/authContext";
 
 const access: Record<string, string[]> = {
-  procurement: ["/management", "/management/suppliers", "/management/supplier-materials", "/management/purchase-orders", "/management/raw-materials", "/management/inventory"],
+  procurement: ["/management", "/management/suppliers", "/management/supplier-materials", "/management/purchase-orders", "/management/supplier-payments", "/management/procurement-report", "/management/raw-materials", "/management/inventory"],
   warehouse: ["/management", "/management/raw-materials", "/management/inventory"],
   production: ["/management", "/management/raw-materials", "/management/inventory", "/management/production"],
   sales: ["/management", "/management/products", "/management/quotations", "/management/sales", "/management/billing", "/management/inventory/finished-goods", "/management/customers"],
   customer_service: ["/management", "/management/quotations", "/management/sales", "/management/customers"],
-  finance: ["/management", "/management/sales", "/management/billing", "/management/purchase-orders", "/management/reports"],
+  finance: ["/management", "/management/sales", "/management/billing", "/management/purchase-orders", "/management/supplier-payments", "/management/expenses", "/management/reports", "/management/general-report"],
   management: ["/management"],
 };
 

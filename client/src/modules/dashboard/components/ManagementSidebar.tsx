@@ -121,6 +121,30 @@ const groups: Group[] = [
         departments: ["procurement", "finance", "management"],
       },
       {
+        label: "Supplier payments",
+        to: "/management/supplier-payments",
+        icon: ClipboardList,
+        departments: ["procurement", "finance", "management"],
+      },
+      {
+        label: "Expenses",
+        to: "/management/expenses",
+        icon: ClipboardList,
+        departments: ["finance", "management"],
+      },
+      {
+        label: "General activity report",
+        to: "/management/general-report",
+        icon: FileBarChart,
+        departments: ["finance", "management"],
+      },
+      {
+        label: "Raw materials & payments report",
+        to: "/management/procurement-report",
+        icon: FileBarChart,
+        departments: ["procurement", "finance", "management"],
+      },
+      {
         label: "Supplier material offers",
         to: "/management/supplier-materials",
         icon: PackageOpen,
