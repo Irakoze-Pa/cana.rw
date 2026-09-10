@@ -23,6 +23,7 @@ type Line = {
   unit: string;
   unitPrice: string;
 };
+type SavedProforma = { _id: string; proformaNumber: string; company: Company; client: { name?: string; phone?: string; email?: string; address?: string }; documentDetails: { issueDate?: string; validUntil?: string; clientReference?: string; paymentTerms?: string }; notes?: string; lines: Line[]; total?: number; updatedAt?: string };
 const entities: Record<Company, { name: string; descriptor: string }> = {
   cana_paints: {
     name: "CANA Paints",
@@ -73,6 +74,8 @@ export default function ProformaBuilderPage() {
   );
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [error, setError] = useState("");
+  const [savedId, setSavedId] = useState("");
+  const [savedProformas, setSavedProformas] = useState<SavedProforma[]>([]);
   useEffect(() => {
     void api
       .get<{ data: Product[] }>("/products")
@@ -89,6 +92,8 @@ export default function ProformaBuilderPage() {
         ),
       );
   }, []);
+  const loadSavedProformas = async () => { try { const response = await api.get<{ data: SavedProforma[] }>("/proformas"); setSavedProformas(response.data.data || []); } catch { setError("Unable to load saved proformas."); } };
+  useEffect(() => { void loadSavedProformas(); }, []);
   const total = useMemo(
     () =>
       lines.reduce(
@@ -146,7 +151,7 @@ export default function ProformaBuilderPage() {
       { dateStyle: "long" },
     );
     popup.document.write(
-      `<!doctype html><html><head><title>${escapeHtml(documentDetails.number)} · Proforma</title><style>body{font-family:Arial;color:#172033;margin:0}.page{max-width:760px;margin:28px auto;padding:42px}.head{display:flex;justify-content:space-between;border-bottom:3px solid #c8242f;padding-bottom:20px}.brand{display:flex;gap:13px;align-items:center}.logo{width:80px;max-height:60px;object-fit:contain}.brand-name{font-size:22px;font-weight:800}.muted{font-size:11px;color:#64748b;line-height:1.65}.title{text-align:right}.title h1{margin:0;font-size:30px}.badge{color:#b91c1c;font-size:10px;font-weight:bold;letter-spacing:1px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:28px 0}.card{border:1px solid #e5e7eb;border-radius:8px;padding:14px}.label{font-size:10px;color:#c8242f;font-weight:bold;letter-spacing:1.2px;text-transform:uppercase}.data{margin-top:8px;font-size:13px;line-height:1.7}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#172033;color:white;padding:11px;text-align:left;font-size:10px;text-transform:uppercase}td{padding:12px 10px;border-bottom:1px solid #e5e7eb}th:nth-last-child(-n+3),td:nth-last-child(-n+3){text-align:right}.total{margin:24px 0 0 auto;width:270px;border-top:2px solid #172033;padding-top:10px;display:flex;justify-content:space-between;font-size:18px;font-weight:800}.notes{margin-top:34px;background:#fafafa;border-left:3px solid #c8242f;padding:14px;font-size:12px;line-height:1.65}.foot{margin-top:42px;border-top:1px solid #e5e7eb;padding-top:14px;font-size:10px;color:#94a3b8}@media print{.page{margin:0}}</style></head><body><main class="page">${cananLetterheadMarkup()}<h1 style="margin:25px 0 15px;text-align:center;color:#af0808;font:700 26px Georgia,serif;letter-spacing:.4px;text-transform:uppercase">Proforma</h1><header class="head" style="display:none"><div class="brand"><img class="logo" src="${logo}" alt="CANA"><div><div class="brand-name">${entity.name}</div><div class="muted">${entity.descriptor}<br>Kigali, Rwanda · +250 789 408 367</div></div></div><div class="title"><h1>PROFORMA</h1><div class="badge">${escapeHtml(documentDetails.number)} · TAX INCLUSIVE</div><div class="muted">Issued: ${issued}<br>Valid until: ${validUntil}</div></div></header><section class="cards"><div class="card"><div class="label">Prepared for</div><div class="data"><strong>${escapeHtml(client.name)}</strong><br>${escapeHtml(client.phone)}<br>${escapeHtml(client.email)}<br>${escapeHtml(client.address)}</div></div><div class="card"><div class="label">Commercial terms</div><div class="data"><strong>${escapeHtml(documentDetails.paymentTerms)}</strong><br>${documentDetails.clientReference ? `Client reference: ${escapeHtml(documentDetails.clientReference)}` : "All prices include applicable taxes."}</div></div></section><table><thead><tr><th>Product / service</th><th>Qty</th><th>Unit price (tax incl.)</th><th>Amount (tax incl.)</th></tr></thead><tbody>${lines
+      `<!doctype html><html><head><title>${escapeHtml(documentDetails.number)} · Proforma</title><style>body{font-family:Arial;color:#172033;margin:0}.page{max-width:760px;margin:28px auto;padding:42px}.head{display:flex;justify-content:space-between;border-bottom:3px solid #c8242f;padding-bottom:20px}.brand{display:flex;gap:13px;align-items:center}.logo{width:80px;max-height:60px;object-fit:contain}.brand-name{font-size:22px;font-weight:800}.muted{font-size:11px;color:#64748b;line-height:1.65}.title{text-align:right}.title h1{margin:0;font-size:30px}.badge{color:#b91c1c;font-size:10px;font-weight:bold;letter-spacing:1px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:28px 0}.card{border:1px solid #e5e7eb;border-radius:8px;padding:14px}.label{font-size:10px;color:#c8242f;font-weight:bold;letter-spacing:1.2px;text-transform:uppercase}.data{margin-top:8px;font-size:13px;line-height:1.7}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#172033;color:white;padding:11px;text-align:left;font-size:10px;text-transform:uppercase}td{padding:12px 10px;border-bottom:1px solid #e5e7eb}th:nth-last-child(-n+3),td:nth-last-child(-n+3){text-align:right}.total{margin:24px 0 0 auto;width:270px;border-top:2px solid #172033;padding-top:10px;display:flex;justify-content:space-between;font-size:18px;font-weight:800}.notes{margin-top:34px;background:#fafafa;border-left:3px solid #c8242f;padding:14px;font-size:12px;line-height:1.65}.foot{margin-top:42px;border-top:1px solid #e5e7eb;padding-top:14px;font-size:10px;color:#94a3b8}@media print{.page{margin:0}}</style></head><body><main class="page">${cananLetterheadMarkup()}<h1 style="margin:25px 0 4px;text-align:center;color:#af0808;font:700 26px Georgia,serif;letter-spacing:.4px;text-transform:uppercase">Proforma</h1><p style="margin:0 0 15px;text-align:center;color:#172033;font:700 13px Arial,sans-serif;letter-spacing:1px;text-transform:uppercase">CANA Paints</p><header class="head" style="display:none"><div class="brand"><img class="logo" src="${logo}" alt="CANA"><div><div class="brand-name">${entity.name}</div><div class="muted">${entity.descriptor}<br>Kigali, Rwanda · +250 789 408 367</div></div></div><div class="title"><h1>PROFORMA</h1><div class="badge">${escapeHtml(documentDetails.number)} · TAX INCLUSIVE</div><div class="muted">Issued: ${issued}<br>Valid until: ${validUntil}</div></div></header><section class="cards"><div class="card"><div class="label">Prepared for</div><div class="data"><strong>${escapeHtml(client.name)}</strong><br>${escapeHtml(client.phone)}<br>${escapeHtml(client.email)}<br>${escapeHtml(client.address)}</div></div><div class="card"><div class="label">Proforma details</div><div class="data"><strong>Issued: ${issued}</strong><br>Valid until: ${validUntil}${documentDetails.clientReference ? `<br>Client reference: ${escapeHtml(documentDetails.clientReference)}` : ""}</div></div></section><table><thead><tr><th>Product / service</th><th>Qty</th><th>Unit price (tax incl.)</th><th>Amount (tax incl.)</th></tr></thead><tbody>${lines
         .filter((line) => line.description.trim())
         .map(
           (line) =>
@@ -158,6 +163,17 @@ export default function ProformaBuilderPage() {
     );
     popup.document.close();
   };
+  const saveProforma = async () => {
+    if (!client.name.trim() || !documentDetails.number.trim() || !lines.some((line) => line.description.trim() && Number(line.quantity) > 0)) return setError("Enter the client, proforma number, and at least one line before saving.");
+    try {
+      setError("");
+      const payload = { proformaNumber: documentDetails.number.trim(), company, client, documentDetails, notes, lines };
+      const response = savedId ? await api.put<{ data: { _id: string } }>(`/proformas/${savedId}`, payload) : await api.post<{ data: { _id: string } }>("/proformas", payload);
+      setSavedId(response.data.data._id);
+      await loadSavedProformas();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save proforma."); }
+  };
+  const editSaved = (proforma: SavedProforma) => { setSavedId(proforma._id); setCompany(proforma.company || "cana_paints"); setClient({ name: proforma.client?.name || "", phone: proforma.client?.phone || "", email: proforma.client?.email || "", address: proforma.client?.address || "" }); setDocumentDetails({ number: proforma.proformaNumber, issueDate: proforma.documentDetails?.issueDate || new Date().toISOString().slice(0, 10), validUntil: proforma.documentDetails?.validUntil || "", clientReference: proforma.documentDetails?.clientReference || "", paymentTerms: proforma.documentDetails?.paymentTerms || "Payment before delivery" }); setNotes(proforma.notes || ""); setLines(proforma.lines?.length ? proforma.lines : [emptyLine()]); window.scrollTo({ top: 0, behavior: "smooth" }); };
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <Link
@@ -179,6 +195,7 @@ export default function ProformaBuilderPage() {
       {error && (
         <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
       )}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Saved documents</p><h2 className="mt-1 font-extrabold text-slate-950">Editable proformas</h2></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{savedProformas.length}</span></div>{savedProformas.length ? <div className="mt-4 grid gap-3 md:grid-cols-2">{savedProformas.slice(0, 6).map((proforma) => <div key={proforma._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><div className="min-w-0"><p className="font-bold text-slate-900">{proforma.proformaNumber}</p><p className="truncate text-xs text-slate-500">{proforma.client?.name || "Client"} · {money(proforma.total || 0)} RWF</p></div><button type="button" onClick={() => editSaved(proforma)} className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Edit</button></div>)}</div> : <p className="mt-3 text-sm text-slate-500">Saved proformas will appear here. Select one to edit and update it.</p>}</section>
       <div className="grid gap-6 lg:grid-cols-[.9fr_1.3fr]">
         <section className="space-y-5 rounded-2xl border border-gray-200 bg-white p-5">
           <h2 className="font-bold">Document & client</h2>
@@ -261,28 +278,21 @@ export default function ProformaBuilderPage() {
               className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
             />
           ))}
+          <div className="rounded-xl bg-slate-100 p-3 text-xs leading-5 text-slate-700">
+            <strong>CANAN BUSINESS GROUP LTD</strong><br/>Official commercial document · Kigali, Rwanda
+          </div>
           <div className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-800">
             Prices are tax-inclusive. No additional tax is calculated or added
             to this proforma.
           </div>
-          <label className="block text-xs font-semibold text-gray-600">
-            Payment terms
-            <input
-              value={documentDetails.paymentTerms}
-              onChange={(event) =>
-                setDocumentDetails({
-                  ...documentDetails,
-                  paymentTerms: event.target.value,
-                })
-              }
-              className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
-            />
-          </label>
           <textarea
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             className="min-h-24 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
           />
+          <button type="button" onClick={() => void saveProforma()} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800">
+            {savedId ? "Update saved proforma" : "Save editable proforma"}
+          </button>
           <button
             type="button"
             onClick={print}
