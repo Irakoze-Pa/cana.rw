@@ -688,7 +688,8 @@ function PurchaseOrdersPage() {
             </div>
 
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+              <p className="cana-section-kicker">Procurement & materials</p>
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
                 Purchase Orders
               </h1>
 
@@ -706,7 +707,7 @@ function PurchaseOrdersPage() {
           onClick={() =>
             setIsModalOpen(true)
           }
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"
         >
           <Plus size={18} />
           Create Purchase Order
@@ -722,7 +723,7 @@ function PurchaseOrdersPage() {
 
         {/* TOTAL */}
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <div className="flex items-center justify-between">
 
             <p className="text-sm font-medium text-gray-500">
@@ -736,14 +737,14 @@ function PurchaseOrdersPage() {
 
           </div>
 
-          <p className="mt-3 text-2xl font-bold text-gray-900">
+          <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
             {stats.total}
           </p>
         </div>
 
         {/* DRAFT */}
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <div className="flex items-center justify-between">
 
             <p className="text-sm font-medium text-gray-500">
@@ -757,14 +758,14 @@ function PurchaseOrdersPage() {
 
           </div>
 
-          <p className="mt-3 text-2xl font-bold text-gray-900">
+          <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
             {stats.draft}
           </p>
         </div>
 
         {/* PENDING */}
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <div className="flex items-center justify-between">
 
             <p className="text-sm font-medium text-gray-500">
@@ -778,14 +779,14 @@ function PurchaseOrdersPage() {
 
           </div>
 
-          <p className="mt-3 text-2xl font-bold text-gray-900">
+          <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
             {stats.pending}
           </p>
         </div>
 
         {/* APPROVED */}
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <div className="flex items-center justify-between">
 
             <p className="text-sm font-medium text-gray-500">
@@ -799,14 +800,14 @@ function PurchaseOrdersPage() {
 
           </div>
 
-          <p className="mt-3 text-2xl font-bold text-gray-900">
+          <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
             {stats.approved}
           </p>
         </div>
 
         {/* RECEIVED */}
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <div className="flex items-center justify-between">
 
             <p className="text-sm font-medium text-gray-500">
@@ -820,7 +821,7 @@ function PurchaseOrdersPage() {
 
           </div>
 
-          <p className="mt-3 text-2xl font-bold text-gray-900">
+          <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
             {stats.received}
           </p>
         </div>
@@ -831,7 +832,7 @@ function PurchaseOrdersPage() {
           FILTER BAR
       ================================================= */}
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="cana-panel p-4">
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
 
@@ -929,7 +930,7 @@ function PurchaseOrdersPage() {
           TABLE
       ================================================= */}
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="cana-panel overflow-hidden">
 
         {/* TABLE HEADER */}
 

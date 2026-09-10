@@ -566,7 +566,8 @@ const ProductionBatchesPage = () => {
           </div>
 
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <p className="cana-section-kicker">Production control</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
               Production Batches
             </h1>
 
@@ -603,7 +604,7 @@ const ProductionBatchesPage = () => {
             onClick={() =>
               setIsCreateModalOpen(true)
             }
-            className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+            className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"
           >
             <Plus size={17} />
             New Production Batch
@@ -616,17 +617,17 @@ const ProductionBatchesPage = () => {
       ================================================= */}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <p className="text-sm text-gray-500">
             Total
           </p>
 
-          <p className="mt-2 text-2xl font-bold text-gray-900">
+          <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-950">
             {stats.total}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <p className="text-sm text-gray-500">
             Planned
           </p>
@@ -636,7 +637,7 @@ const ProductionBatchesPage = () => {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <p className="text-sm text-gray-500">
             Ready
           </p>
@@ -646,7 +647,7 @@ const ProductionBatchesPage = () => {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <p className="text-sm text-gray-500">
             In Progress
           </p>
@@ -656,7 +657,7 @@ const ProductionBatchesPage = () => {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <p className="text-sm text-gray-500">
             Paused
           </p>
@@ -666,7 +667,7 @@ const ProductionBatchesPage = () => {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <p className="text-sm text-gray-500">
             Completed
           </p>
@@ -676,7 +677,7 @@ const ProductionBatchesPage = () => {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="cana-panel p-5">
           <p className="text-sm text-gray-500">
             Cancelled
           </p>
@@ -691,7 +692,7 @@ const ProductionBatchesPage = () => {
           TABLE CARD
       ================================================= */}
 
-      <div className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="cana-panel w-full min-w-0 max-w-full overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-gray-200 p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="font-bold text-gray-900">

@@ -521,11 +521,11 @@ export default function FormulasPage() {
 
             <div className="min-w-0">
 
-              <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
-                Production
+              <p className="cana-section-kicker">
+                Production control
               </p>
 
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
                 Formulas
               </h1>
 
@@ -622,7 +622,7 @@ export default function FormulasPage() {
           FILTERS
       ===================================================== */}
 
-      <div className="mt-7 w-full min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="cana-panel mt-7 w-full min-w-0 p-4">
 
         <div className="flex min-w-0 flex-col gap-3 xl:flex-row">
 
@@ -731,7 +731,7 @@ export default function FormulasPage() {
           TABLE CARD
       ===================================================== */}
 
-      <div className="mt-5 w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="cana-panel mt-5 w-full min-w-0 max-w-full overflow-hidden">
 
         {loading ? (
 
@@ -1227,7 +1227,7 @@ function StatCard({
   iconClass = "bg-gray-100 text-gray-600",
 }: StatCardProps) {
   return (
-    <div className="min-w-0 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="cana-panel min-w-0 p-5">
 
       <div className="flex items-center justify-between">
 
@@ -1243,7 +1243,7 @@ function StatCard({
         {label}
       </p>
 
-      <p className="mt-1 text-2xl font-bold text-gray-900">
+      <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
         {value.toLocaleString()}
       </p>
 

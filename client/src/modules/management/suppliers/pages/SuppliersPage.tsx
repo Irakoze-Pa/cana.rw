@@ -230,7 +230,8 @@ function SuppliersPage() {
             </div>
 
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <p className="cana-section-kicker">Procurement & materials</p>
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
                 Suppliers
               </h1>
 
@@ -305,17 +306,17 @@ function SuppliersPage() {
       {/* STATISTICS */}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="cana-panel p-5">
           <p className="text-sm text-gray-500">
             Total Suppliers
           </p>
 
-          <p className="mt-2 text-2xl font-bold text-gray-900">
+          <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-950">
             {totalSuppliers}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="cana-panel p-5">
           <p className="text-sm text-gray-500">
             Active Suppliers
           </p>
@@ -325,7 +326,7 @@ function SuppliersPage() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="cana-panel p-5">
           <p className="text-sm text-gray-500">
             Inactive Suppliers
           </p>
@@ -374,7 +375,7 @@ function SuppliersPage() {
 
       {/* FILTERS */}
 
-      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4">
+      <div className="cana-panel mb-6 p-4">
         <div className="flex flex-col gap-3 md:flex-row">
           {/* SEARCH */}
 
@@ -461,7 +462,7 @@ function SuppliersPage() {
       {/* CONTENT */}
 
       {loading ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
+        <div className="cana-panel p-12 text-center">
           <RefreshCw
             size={28}
             className="mx-auto animate-spin text-red-600"

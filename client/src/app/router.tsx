@@ -9,7 +9,6 @@ import MainLayout from "@/layouts/MainLayout";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/NotFound";
 import AppErrorPage from "@/pages/AppErrorPage";
-import ManagementPlaceholderPage from "@/pages/ManagementPlaceholderPage";
 import ProtectedRoutes from "@/routes/ProtectedRoutes";
 import AdminRoutes from "@/routes/AdminRoutes";
 
@@ -82,6 +81,7 @@ import ProformaBuilderPage from "@/modules/management/sales/ProformaBuilderPage"
 import BillingPage from "@/modules/management/billing/BillingPage";
 import UsersPage from "@/modules/management/users/UsersPage";
 import ProfileSettingsPage from "@/modules/management/users/ProfileSettingsPage";
+import SettingsHubPage from "@/modules/management/users/SettingsHubPage";
 import StaffPaymentsPage from "@/modules/management/users/StaffPaymentsPage";
 import CustomersPage from "@/modules/management/users/CustomersPage";
 import PayrollPage from "@/modules/management/users/PayrollPage";
@@ -503,6 +503,7 @@ const router = createBrowserRouter([
       { path: "compliance/maintenance", element: <FactoryCompliancePage view="maintenance" /> },
       { path: "compliance/safety", element: <FactoryCompliancePage view="safety" /> },
       { path: "compliance/equipment", element: <FactoryCompliancePage view="equipment" /> },
+      { path: "compliance/settings", element: <FactoryCompliancePage view="settings" /> },
 
       // =================================================
       // REPORTS
@@ -519,7 +520,7 @@ const router = createBrowserRouter([
 
       {
         path: "settings",
-        element: <ManagementPlaceholderPage title="Settings" description="Configure organization details, workflows, and application preferences." />,
+        element: <SettingsHubPage />,
       },
             ],
           },

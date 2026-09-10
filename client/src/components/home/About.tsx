@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 
 function About() {
   return (
-    <section id="about" className="relative overflow-hidden bg-white py-24 lg:py-32">
+    <section id="about" className="relative overflow-hidden bg-white py-16 lg:py-20">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
 
         {/* =========================
@@ -19,9 +19,9 @@ function About() {
           {/* Heading */}
           <div>
             <div className="flex items-center gap-3">
-              <span className="h-px w-10 bg-red-600" />
+              <span className="h-px w-10 bg-neutral-900" />
 
-              <span className="text-xs font-semibold uppercase tracking-[0.25em] text-red-600">
+              <span className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
                 About CANA Group
               </span>
             </div>
@@ -49,7 +49,7 @@ function About() {
         {/* =========================
             MAIN CONTENT
         ========================== */}
-        <div className="mt-20 grid gap-14 lg:grid-cols-[0.85fr_1.15fr] lg:gap-24">
+        <div className="mt-12 grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
 
           {/* =========================
               LEFT
@@ -57,7 +57,7 @@ function About() {
           <div className="relative">
 
             {/* Main Statement */}
-            <div className="border-l-2 border-red-600 pl-7">
+            <div className="border-l-2 border-neutral-900 pl-7">
               <p className="text-lg font-medium leading-8 text-black sm:text-xl">
                 We combine quality manufacturing, skilled teams and
                 customer-focused service to help our clients build,
@@ -70,11 +70,11 @@ function About() {
               to="/about"
               className="group mt-10 inline-flex items-center gap-3"
             >
-              <span className="border-b border-black pb-1 text-sm font-semibold text-black transition-colors duration-300 group-hover:border-red-600 group-hover:text-red-600">
+              <span className="border-b border-black pb-1 text-sm font-semibold text-black transition-colors duration-300 group-hover:border-neutral-500 group-hover:text-neutral-600">
                 Discover CANA Group
               </span>
 
-              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-black transition-all duration-300 group-hover:border-red-600 group-hover:bg-red-600 group-hover:text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-black transition-all duration-300 group-hover:border-neutral-900 group-hover:bg-neutral-900 group-hover:text-white">
                 <ArrowUpRight
                   size={16}
                   strokeWidth={2}
@@ -83,7 +83,7 @@ function About() {
             </Link>
 
             {/* Company Identity */}
-            <div className="mt-16 flex items-center gap-4">
+            <div className="mt-10 flex items-center gap-4">
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black text-white">
                 <Building2 size={18} />
               </div>
@@ -103,7 +103,7 @@ function About() {
           {/* =========================
               RIGHT
           ========================== */}
-          <div className="divide-y divide-gray-200 border-y border-gray-200">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm">
 
             <InfoBlock
               number="01"
@@ -125,7 +125,7 @@ function About() {
         {/* =========================
             BOTTOM STATEMENT
         ========================== */}
-        <div className="mt-20 border-t border-gray-200 pt-7">
+        <div className="mt-12 border-t border-gray-200 pt-6">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
 
             <p className="text-xs font-medium uppercase tracking-[0.25em] text-gray-400">
@@ -160,11 +160,11 @@ function InfoBlock({
   text,
 }: InfoBlockProps) {
   return (
-    <div className="group flex gap-6 py-9 sm:gap-8">
+    <div className={`group flex gap-5 p-6 sm:gap-7 sm:p-8 ${number === "01" ? "bg-slate-950 text-white" : "bg-white text-slate-950"}`}>
 
       {/* Number */}
       <div className="pt-1">
-        <span className="text-xs font-semibold tracking-[0.2em] text-gray-400">
+        <span className={`text-xs font-semibold tracking-[0.2em] ${number === "01" ? "text-slate-400" : "text-slate-400"}`}>
           {number}
         </span>
       </div>
@@ -175,18 +175,18 @@ function InfoBlock({
         {/* Title */}
         <div className="flex items-center gap-3">
 
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-black transition-all duration-300 group-hover:bg-red-600 group-hover:text-white">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all duration-300 ${number === "01" ? "bg-white/10 text-white group-hover:bg-white group-hover:text-slate-950" : "bg-slate-100 text-slate-800 group-hover:bg-slate-950 group-hover:text-white"}`}>
             {icon}
           </div>
 
-          <h3 className="text-xl font-semibold tracking-tight text-black">
+          <h3 className={`text-xl font-semibold tracking-tight ${number === "01" ? "text-white" : "text-slate-950"}`}>
             {title}
           </h3>
 
         </div>
 
         {/* Description */}
-        <p className="mt-4 max-w-2xl text-sm leading-7 text-gray-600 sm:text-base">
+        <p className={`mt-4 max-w-2xl text-sm leading-7 sm:text-base ${number === "01" ? "text-slate-300" : "text-slate-600"}`}>
           {text}
         </p>
 

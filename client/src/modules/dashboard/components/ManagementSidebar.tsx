@@ -347,9 +347,9 @@ export default function ManagementSidebar({
     if (active) setOpen((current) => ({ ...current, [active.label]: true }));
   }, [location.pathname, visibleGroups]);
   return (
-    <div className="flex h-full flex-col border-r border-gray-200 bg-gray-100 text-gray-700">
+    <div className="flex h-full flex-col border-r border-slate-200 bg-slate-100 text-slate-700 shadow-[4px_0_20px_rgba(15,23,42,.025)]">
       <div
-        className={`flex h-28 items-center border-b border-gray-200 ${sidebarOpen ? "justify-between px-5" : "justify-center px-3"}`}
+        className={`flex h-28 items-center border-b border-slate-200 ${sidebarOpen ? "justify-between px-5" : "justify-center px-3"}`}
       >
         <div className="flex items-center gap-3 overflow-hidden">
           <img
@@ -359,18 +359,18 @@ export default function ManagementSidebar({
           />
           {sidebarOpen && (
             <div>
-              <p className="text-2xl font-extrabold tracking-[0.08em] text-gray-950">
+              <p className="text-2xl font-extrabold tracking-[0.08em] text-slate-950">
                 CANA
               </p>
-              <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.14em] text-red-600">
-                Operations hub
+              <p className="mt-0.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                CANAN Operations
               </p>
             </div>
           )}
         </div>
         <button
           onClick={onToggle}
-          className="hidden rounded-lg p-2 text-gray-700 hover:bg-gray-300 lg:block"
+          className="hidden rounded-lg p-2 text-slate-600 hover:bg-slate-200 lg:block"
         >
           {sidebarOpen ? "‹" : "›"}
         </button>
@@ -456,7 +456,7 @@ export default function ManagementSidebar({
           );
         })}
       </nav>
-      <footer className={`border-t border-gray-200 px-3 py-4 ${sidebarOpen ? "" : "text-center"}`}>
+      <footer className={`border-t border-slate-200 px-3 py-4 ${sidebarOpen ? "" : "text-center"}`}>
         <NavLink
           to="/management/profile"
           title={!sidebarOpen ? "My profile & settings" : undefined}
@@ -467,10 +467,10 @@ export default function ManagementSidebar({
         </NavLink>
         {sidebarOpen ? (
           <>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">
-              CANA Operations
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+              CANAN Business Group Ltd
             </p>
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-slate-400">
               Inventory · Production · Sales
             </p>
           </>

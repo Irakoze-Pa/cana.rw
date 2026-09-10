@@ -31,12 +31,12 @@ function CustomerDashboardLayout() {
               PAGE CONTENT
           ================================================= */}
 
-          <main className="flex-1 p-4 pb-24 sm:p-6 md:pb-6">
-            <Outlet />
+          <main className="flex-1">
+            <div className="cana-page-content"><Outlet /></div>
           </main>
         </div>
       </div>
-      <nav aria-label="Customer navigation" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-slate-200 bg-white/95 px-2 py-2 shadow-[0_-8px_24px_rgba(15,23,42,.08)] backdrop-blur md:hidden">
+      <nav aria-label="Customer navigation" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-slate-200 bg-white/95 px-2 py-2 pb-[calc(.5rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,.08)] backdrop-blur md:hidden">
         <MobileNav to="/dashboard" end icon={LayoutDashboard} label="Home"/>
         <MobileNav to="/cana-paints/products" icon={Package} label="Products"/>
         <MobileNav to="/dashboard/orders" icon={ShoppingCart} label="Orders"/>

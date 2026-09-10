@@ -301,7 +301,8 @@ export default function RawMaterialConsumptionPage() {
               </div>
 
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                <p className="cana-section-kicker">Production control</p>
+                <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
                   Raw Material Consumption
                 </h1>
 
@@ -381,7 +382,7 @@ export default function RawMaterialConsumptionPage() {
             return (
               <div
                 key={card.label}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
+                className="cana-panel p-5 transition hover:shadow-md"
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -389,7 +390,7 @@ export default function RawMaterialConsumptionPage() {
                       {card.label}
                     </p>
 
-                    <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+                    <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-950">
                       {formatNumber(
                         card.value,
                       )}
@@ -416,7 +417,7 @@ export default function RawMaterialConsumptionPage() {
         {/* TABLE                                                              */}
         {/* ================================================================== */}
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="cana-panel overflow-hidden">
           <div className="border-b border-slate-200 px-5 py-5 md:px-6">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <div>

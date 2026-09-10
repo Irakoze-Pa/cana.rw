@@ -305,7 +305,8 @@ function RawMaterialsPage() {
             </div>
 
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+              <p className="cana-section-kicker">Procurement & materials</p>
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
                 Materials Setup
               </h1>
 
@@ -512,7 +513,7 @@ function RawMaterialsPage() {
           STOCK OVERVIEW
       ================================================== */}
 
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className="cana-panel p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-sm font-bold text-gray-900">
@@ -551,7 +552,7 @@ function RawMaterialsPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="cana-panel p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-lg">
             <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -568,7 +569,7 @@ function RawMaterialsPage() {
           TABLE
       ================================================== */}
 
-      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <div className="cana-panel overflow-hidden">
         <RawMaterialTable
           materials={visibleMaterials}
           loading={loading}

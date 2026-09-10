@@ -250,7 +250,7 @@ export default function PayrollPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-8">
       <section className="flex flex-col justify-between gap-5 rounded-3xl border border-gray-200 bg-white p-6 text-gray-900 shadow-sm md:flex-row md:items-center md:p-8">
-        <div><p className="text-xs font-bold uppercase tracking-[.18em] text-red-600">CANA · Finance & people</p><h1 className="mt-2 text-3xl font-extrabold text-gray-900">Payroll</h1><p className="mt-2 text-sm text-gray-500">Manage one payroll month at a time: salaries, advances, review, approval and payment.</p></div>
+        <div><p className="cana-section-kicker">CANA · Finance & people</p><h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950">Payroll</h1><p className="mt-2 text-sm text-gray-500">Manage one payroll month at a time: salaries, advances, review, approval and payment.</p></div>
         <div className="rounded-2xl bg-slate-50 px-5 py-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Selected period</p><p className="mt-1 text-lg font-extrabold text-slate-900">{periodLabel(period)}</p><p className="mt-1 text-xs font-semibold capitalize text-red-700">{currentRun ? currentRun.status : "Ready to create"}</p></div>
       </section>
       {error && (
@@ -271,7 +271,7 @@ export default function PayrollPage() {
         ].map(([label, value, colour]) => (
           <article
             key={label}
-            className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+            className="cana-panel p-5"
           >
             <p className="text-sm font-semibold text-gray-500">{label}</p>
             <p className={`mt-2 text-2xl font-extrabold ${colour}`}>{value}</p>
@@ -283,7 +283,7 @@ export default function PayrollPage() {
           </article>
         ))}
       </section>
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <section className="cana-panel p-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="font-bold text-slate-900">Create monthly payroll</h2>
@@ -310,7 +310,7 @@ export default function PayrollPage() {
           </div>
         </div>
       </section>
-      <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <section className="cana-panel overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-5">
           <div className="flex gap-3">
             <span className="rounded-xl bg-red-50 p-2 text-red-700">
@@ -372,7 +372,7 @@ export default function PayrollPage() {
           })}
         </div>
       </section>
-      <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <section className="cana-panel overflow-hidden">
         <div className="flex items-center justify-between border-b border-gray-100 p-5">
           <div>
             <h2 className="font-bold text-slate-900">Payroll runs</h2>
@@ -494,7 +494,7 @@ export default function PayrollPage() {
         )}
       </section>
       <section className="grid gap-6 xl:grid-cols-[1.55fr_.85fr]">
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="cana-panel overflow-hidden">
           <div className="flex items-center gap-3 border-b p-5">
             <span className="rounded-xl bg-blue-50 p-2 text-blue-700">
               <Users size={19} />
@@ -534,7 +534,7 @@ export default function PayrollPage() {
             </div>
           ))}
         </div>
-        <aside className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <aside className="cana-panel p-5">
           <div className="flex gap-3">
             <span className="rounded-xl bg-amber-50 p-2 text-amber-700">
               <ShieldCheck size={19} />

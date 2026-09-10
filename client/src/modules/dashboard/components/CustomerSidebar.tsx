@@ -44,21 +44,22 @@ function CustomerSidebar() {
       "duration-200",
       sidebarOpen ? "px-4" : "justify-center px-3",
       isActive
-        ? "bg-red-600 text-white shadow-sm"
-        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
+        ? "bg-red-700 text-white shadow-sm"
+        : "text-slate-600 hover:bg-white hover:text-slate-950",
     ].join(" ");
 
   return (
     <aside
       className={[
-        "relative",
+        "sticky",
+        "top-0",
         "hidden md:flex",
         "h-screen",
         "shrink-0",
         "flex-col",
         "border-r",
-        "border-gray-200",
-        "bg-white",
+        "border-slate-200",
+        "bg-slate-50",
         "transition-all",
         "duration-300",
         "ease-in-out",
@@ -73,7 +74,7 @@ function CustomerSidebar() {
         className={[
           "shrink-0",
           "border-b",
-          "border-gray-100",
+          "border-slate-200",
           "py-5",
           sidebarOpen ? "px-5" : "px-3",
         ].join(" ")}
@@ -95,11 +96,11 @@ function CustomerSidebar() {
 
           {sidebarOpen && (
             <div className="min-w-0">
-              <h1 className="truncate text-base font-bold tracking-tight text-gray-900">
+              <h1 className="truncate text-base font-extrabold tracking-tight text-slate-950">
                 CANA
               </h1>
 
-              <p className="truncate text-xs text-gray-500">
+              <p className="truncate text-[10px] font-bold uppercase tracking-[0.13em] text-red-700">
                 Customer Portal
               </p>
             </div>
@@ -120,7 +121,7 @@ function CustomerSidebar() {
         title={
           sidebarOpen ? "Collapse sidebar" : "Expand sidebar"
         }
-        className="absolute -right-3 top-16 z-50 flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:bg-gray-50 hover:text-gray-900"
+        className="absolute -right-3 top-16 z-50 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-950"
       >
         {sidebarOpen ? (
           <ChevronLeft size={15} strokeWidth={2.5} />
@@ -195,7 +196,7 @@ function CustomerSidebar() {
           LOGOUT
       ================================================= */}
 
-      <div className="shrink-0 border-t border-gray-100 p-3">
+      <div className="shrink-0 border-t border-slate-200 p-3">
         <button
           type="button"
           onClick={handleLogout}

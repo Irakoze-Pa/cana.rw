@@ -170,23 +170,23 @@ function CustomerDashboard() {
     quotations.slice(0, 5);
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-7xl px-5 py-8 lg:px-8">
+    <div className="mx-auto max-w-7xl">
 
         {/* HEADER */}
-        <section className="rounded-3xl bg-black px-6 py-8 text-white md:px-8">
+        <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-xl md:px-8">
+          <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent,rgba(255,255,255,.04))]" />
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
 
-            <div>
-              <p className="text-sm font-medium text-gray-400">
-                CANA Customer Portal
+            <div className="relative">
+              <p className="text-[11px] font-extrabold uppercase tracking-[.18em] text-slate-400">
+                CANAN Business Group · Customer Portal
               </p>
 
               <h1 className="mt-2 text-3xl font-extrabold tracking-tight md:text-4xl">
                 Welcome, {user?.fullName || "Customer"}
               </h1>
 
-              <p className="mt-2 max-w-xl text-sm leading-6 text-gray-400">
+              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">
                 Manage your quotations, orders and
                 CANA account from one place.
               </p>
@@ -194,7 +194,7 @@ function CustomerDashboard() {
 
             <Link
               to="/dashboard/orders/new"
-              className="inline-flex w-fit items-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-white hover:text-black"
+              className="relative inline-flex w-fit items-center gap-2 rounded-xl bg-red-700 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-red-950/30 transition hover:bg-red-600"
             >
               Place an order
               <ArrowRight size={17} />
@@ -207,7 +207,7 @@ function CustomerDashboard() {
         <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
           {/* QUOTES */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="cana-panel p-5">
             <div className="flex items-start justify-between">
 
               <div>
@@ -215,7 +215,7 @@ function CustomerDashboard() {
                   Quotes
                 </p>
 
-                <p className="mt-2 text-3xl font-extrabold text-black">
+                <p className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950">
                   {quotations.length}
                 </p>
 
@@ -235,7 +235,7 @@ function CustomerDashboard() {
           </div>
 
           {/* ORDERS */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="cana-panel p-5">
             <div className="flex items-start justify-between">
 
               <div>
@@ -243,7 +243,7 @@ function CustomerDashboard() {
                   Orders
                 </p>
 
-                <p className="mt-2 text-3xl font-extrabold text-black">
+                <p className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950">
                   {orders.length}
                 </p>
 
@@ -263,7 +263,7 @@ function CustomerDashboard() {
           </div>
 
           {/* ACCOUNT */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="cana-panel p-5">
             <div className="flex items-start justify-between">
 
               <div>
@@ -271,7 +271,7 @@ function CustomerDashboard() {
                   Account
                 </p>
 
-                <p className="mt-2 text-xl font-extrabold text-black">
+                <p className="mt-2 text-xl font-extrabold tracking-tight text-slate-950">
                   Active
                 </p>
 
@@ -296,7 +296,7 @@ function CustomerDashboard() {
         <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
 
           {/* QUOTATIONS */}
-          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <div className="cana-panel overflow-hidden">
 
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
 
@@ -552,7 +552,7 @@ function CustomerDashboard() {
           {/* QUICK ACTIONS */}
           <aside className="space-y-6">
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div className="cana-panel p-6">
 
               <h2 className="font-bold text-black">
                 Quick Actions
@@ -561,7 +561,7 @@ function CustomerDashboard() {
               <div className="mt-4 space-y-3">
 
                 <Link
-                  to="/dashboard/orders/new"
+                  to="/cana-paints/products"
                   className="flex items-center gap-3 rounded-xl bg-gray-50 p-3 text-sm font-semibold text-black transition hover:bg-red-600 hover:text-white"
                 >
                   <Package size={18} />
@@ -581,7 +581,7 @@ function CustomerDashboard() {
                   className="flex items-center gap-3 rounded-xl bg-gray-50 p-3 text-sm font-semibold text-black transition hover:bg-red-600 hover:text-white"
                 >
                   <ShoppingCart size={18} />
-                  Place an Order
+                  Browse products
                 </Link>
 
               </div>
@@ -589,7 +589,7 @@ function CustomerDashboard() {
             </div>
 
             {/* ACCOUNT */}
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div className="cana-panel p-6">
 
               <div className="flex items-center gap-3">
 
@@ -621,8 +621,7 @@ function CustomerDashboard() {
 
         </section>
 
-      </div>
-    </main>
+    </div>
   );
 }
 

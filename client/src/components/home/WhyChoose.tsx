@@ -39,7 +39,7 @@ const reasons = [
 
 function WhyChoose() {
   return (
-    <section className="relative overflow-hidden bg-[#f7f7f7] py-24 lg:py-32">
+    <section className="relative overflow-hidden bg-[#f7f7f7] py-16 lg:py-20">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
 
         {/* =====================================================
@@ -50,9 +50,9 @@ function WhyChoose() {
           {/* Heading */}
           <div>
             <div className="flex items-center gap-3">
-              <span className="h-px w-10 bg-red-600" />
+              <span className="h-px w-10 bg-neutral-900" />
 
-              <span className="text-xs font-semibold uppercase tracking-[0.25em] text-red-600">
+              <span className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
                 Why Choose CANA
               </span>
             </div>
@@ -80,17 +80,17 @@ function WhyChoose() {
         {/* =====================================================
             REASONS
         ====================================================== */}
-        <div className="mt-20 border-y border-gray-200">
+        <div className="mt-12 border-y border-gray-200">
 
           {reasons.map((item) => (
             <div
               key={item.number}
-              className="group grid gap-6 border-b border-gray-200 py-9 last:border-b-0 md:grid-cols-[80px_1fr_1.5fr] md:items-center md:gap-10"
+              className="group grid gap-5 border-b border-gray-200 py-6 last:border-b-0 md:grid-cols-[70px_1fr_1.5fr] md:items-center md:gap-8"
             >
 
               {/* Number */}
               <div>
-                <span className="text-xs font-semibold tracking-[0.2em] text-gray-400 transition-colors duration-300 group-hover:text-red-600">
+                <span className="text-xs font-semibold tracking-[0.2em] text-gray-400 transition-colors duration-300 group-hover:text-neutral-900">
                   {item.number}
                 </span>
               </div>
@@ -98,7 +98,7 @@ function WhyChoose() {
               {/* Title */}
               <div className="flex items-center gap-4">
 
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-sm transition-all duration-300 group-hover:bg-red-600 group-hover:text-white">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-sm transition-all duration-300 group-hover:bg-neutral-900 group-hover:text-white">
                   {item.icon}
                 </div>
 
@@ -115,7 +115,7 @@ function WhyChoose() {
                   {item.description}
                 </p>
 
-                <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-300 text-black transition-all duration-300 group-hover:border-red-600 group-hover:bg-red-600 group-hover:text-white md:flex">
+                <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-300 text-black transition-all duration-300 group-hover:border-neutral-900 group-hover:bg-neutral-900 group-hover:text-white md:flex">
                   <ArrowUpRight
                     size={15}
                     strokeWidth={2}
@@ -132,7 +132,7 @@ function WhyChoose() {
         {/* =====================================================
             BOTTOM STATEMENT
         ====================================================== */}
-        <div className="mt-14 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
           <p className="max-w-xl text-sm leading-7 text-gray-500">
             Every project is an opportunity to deliver better quality,

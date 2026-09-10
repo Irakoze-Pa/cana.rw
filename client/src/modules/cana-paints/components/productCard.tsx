@@ -2,7 +2,6 @@ import {
   ArrowRight,
   Check,
   Package,
-  ShoppingBag,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -229,7 +228,7 @@ const ProductCard = ({
               font-bold
               uppercase
               tracking-[0.14em]
-              text-red-600
+              text-neutral-500
               shadow-md
               backdrop-blur-md
             "
@@ -262,36 +261,6 @@ const ProductCard = ({
           </span>
         </div>
 
-        {/* Product badge */}
-
-        <div
-          className="
-            absolute
-            bottom-4
-            left-4
-            z-30
-            flex
-            items-center
-            gap-2
-            rounded-full
-            border
-            border-white/70
-            bg-white/90
-            px-3
-            py-2
-            text-[9px]
-            font-semibold
-            uppercase
-            tracking-[0.1em]
-            text-neutral-600
-            shadow-sm
-            backdrop-blur-md
-          "
-        >
-          <ShoppingBag size={12} />
-
-          CANA Paints
-        </div>
       </div>
 
       {/* =====================================================
@@ -344,7 +313,7 @@ const ProductCard = ({
             <button
               type="button"
               onClick={() => setDescriptionExpanded((expanded) => !expanded)}
-              className="mt-1.5 text-xs font-bold text-red-600 transition hover:text-red-700"
+              className="mt-1.5 text-xs font-bold text-neutral-700 transition hover:text-neutral-950"
               aria-expanded={descriptionExpanded}
             >
               {descriptionExpanded ? "View less" : "View more"}
@@ -401,7 +370,7 @@ const ProductCard = ({
 
               {product.pricePerKg !== null &&
                 product.pricePerKg !== undefined && (
-                  <p className="mt-1 text-[10px] font-bold text-emerald-700">
+                  <p className="mt-1 text-[10px] font-bold text-neutral-600">
                     {formatPrice(product.pricePerKg)} RWF / kg
                   </p>
                 )}
@@ -414,12 +383,12 @@ const ProductCard = ({
                   items-center
                   gap-1.5
                   rounded-full
-                  bg-emerald-50
+                  bg-neutral-100
                   px-2.5
                   py-1.5
                   text-[10px]
                   font-semibold
-                  text-emerald-700
+                  text-neutral-700
                 "
               >
                 <Check size={12} />
@@ -455,7 +424,7 @@ const ProductCard = ({
             ${
               isOutOfStock
                 ? "cursor-not-allowed bg-neutral-100 text-neutral-400"
-                : "bg-neutral-950 text-white shadow-sm hover:-translate-y-0.5 hover:bg-red-600 hover:shadow-lg"
+                : "bg-neutral-950 text-white shadow-sm hover:-translate-y-0.5 hover:bg-neutral-800 hover:shadow-lg"
             }
           `}
         >

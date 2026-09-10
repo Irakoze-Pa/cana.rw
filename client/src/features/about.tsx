@@ -51,10 +51,10 @@ export default function About() {
     <main className="bg-white text-slate-950">
       {/* HERO */}
       <section className="border-b border-slate-200">
-        <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
+        <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-20">
           <div className="max-w-4xl">
             <div className="mb-7 flex items-center gap-3">
-              <span className="h-px w-10 bg-red-600" />
+              <span className="h-px w-10 bg-slate-900" />
               <span className="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">
                 CANA GROUP
               </span>
@@ -84,7 +84,7 @@ export default function About() {
 
               <Link
                 to="/projects"
-                className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 transition hover:text-red-600"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 transition hover:text-slate-950"
               >
                 Explore Our Work
                 <ArrowRight size={16} />
@@ -95,8 +95,8 @@ export default function About() {
       </section>
 
       {/* INTRODUCTION */}
-      <section className="py-24 lg:py-32">
-        <div className="mx-auto grid max-w-7xl gap-16 px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
+      <section className="py-16 lg:py-20">
+        <div className="mx-auto grid max-w-7xl gap-10 px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
               Who We Are
@@ -126,7 +126,7 @@ export default function About() {
       </section>
 
       {/* BUSINESS DIVISIONS */}
-      <section className="border-y border-slate-200 bg-slate-50/60 py-24 lg:py-28">
+      <section className="border-y border-slate-200 bg-slate-50/60 py-16 lg:py-20">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="max-w-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
@@ -140,7 +140,7 @@ export default function About() {
             </h2>
           </div>
 
-          <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 md:grid-cols-2">
+          <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 md:grid-cols-2">
             {/* PAINTS */}
             <div className="bg-white p-8 sm:p-10 lg:p-12">
               <Factory
@@ -207,57 +207,35 @@ export default function About() {
       </section>
 
       {/* MISSION / VISION */}
-      <section className="py-24 lg:py-32">
+      <section className="border-y border-slate-200 bg-slate-50/70 py-20 lg:py-28">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="grid gap-16 lg:grid-cols-2">
-            <div>
-              <Target
-                size={25}
-                strokeWidth={1.7}
-                className="text-slate-950"
-              />
-
-              <p className="mt-8 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-                Our Mission
-              </p>
-
-              <h2 className="mt-4 text-3xl font-semibold tracking-tight">
-                Delivering practical value through quality and service.
-              </h2>
-
-              <p className="mt-5 max-w-xl leading-8 text-slate-500">
-                We aim to provide dependable products and professional
-                services that solve real customer needs and create sustainable
-                value.
-              </p>
-            </div>
-
-            <div>
-              <Eye
-                size={25}
-                strokeWidth={1.7}
-                className="text-slate-950"
-              />
-
-              <p className="mt-8 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-                Our Vision
-              </p>
-
-              <h2 className="mt-4 text-3xl font-semibold tracking-tight">
-                Building a trusted and diversified African business group.
-              </h2>
-
-              <p className="mt-5 max-w-xl leading-8 text-slate-500">
-                We aspire to grow into a respected business group recognized
-                for quality, innovation, professionalism, and lasting impact.
-              </p>
-            </div>
+          <div className="max-w-2xl">
+            <p className="cana-section-kicker">Direction</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">The standard that guides every CANA decision.</h2>
+          </div>
+          <div className="mt-10 grid overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm lg:grid-cols-2">
+            <article className="relative bg-slate-950 p-7 text-white sm:p-10 lg:p-12">
+              <span className="absolute right-7 top-6 text-6xl font-semibold leading-none text-white/10 sm:right-10 sm:top-8">01</span>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/15 bg-white/10"><Target size={22} strokeWidth={1.8} /></div>
+              <p className="mt-10 text-xs font-bold uppercase tracking-[0.2em] text-slate-300">Our Mission</p>
+              <h3 className="mt-4 max-w-md text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">Deliver practical value through quality and service.</h3>
+              <p className="mt-5 max-w-lg leading-8 text-slate-300">We provide dependable products and professional services that solve real customer needs and create sustainable value.</p>
+              <div className="mt-10 border-t border-white/15 pt-5 text-sm font-semibold text-white/80">Quality in every deliverable.</div>
+            </article>
+            <article className="relative bg-white p-7 sm:p-10 lg:p-12">
+              <span className="absolute right-7 top-6 text-6xl font-semibold leading-none text-slate-100 sm:right-10 sm:top-8">02</span>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-800"><Eye size={22} strokeWidth={1.8} /></div>
+              <p className="mt-10 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Our Vision</p>
+              <h3 className="mt-4 max-w-md text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-3xl">Build a trusted and diversified African business group.</h3>
+              <p className="mt-5 max-w-lg leading-8 text-slate-600">We aspire to be recognized for quality, innovation, professionalism and lasting impact across the communities we serve.</p>
+              <div className="mt-10 border-t border-slate-200 pt-5 text-sm font-semibold text-slate-700">Growing with purpose and accountability.</div>
+            </article>
           </div>
         </div>
       </section>
 
       {/* VALUES */}
-      <section className="border-y border-slate-200 py-24 lg:py-28">
+      <section className="border-y border-slate-200 py-16 lg:py-20">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
             <div>
@@ -276,7 +254,7 @@ export default function About() {
             </p>
           </div>
 
-          <div className="mt-14 grid gap-0 border-t border-slate-200 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid gap-0 border-t border-slate-200 sm:grid-cols-2 lg:grid-cols-4">
             {values.map((value, index) => {
               const Icon = value.icon;
 
@@ -308,8 +286,8 @@ export default function About() {
       </section>
 
       {/* WHY CANA */}
-      <section className="py-24 lg:py-32">
-        <div className="mx-auto grid max-w-7xl gap-16 px-6 lg:grid-cols-2 lg:px-8">
+      <section className="py-16 lg:py-20">
+        <div className="mx-auto grid max-w-7xl gap-10 px-6 lg:grid-cols-2 lg:px-8">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
               Why CANA
@@ -377,7 +355,7 @@ export default function About() {
       </section>
 
       {/* CTA */}
-      <section className="py-24 lg:py-32">
+      <section className="py-16 lg:py-20">
         <div className="mx-auto max-w-4xl px-6 text-center lg:px-8">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
             Start a Conversation

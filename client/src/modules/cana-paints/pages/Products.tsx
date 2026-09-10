@@ -387,7 +387,7 @@ const Products = () => {
               h-96
               w-96
               rounded-full
-              bg-red-100/70
+              bg-slate-200/65
               blur-3xl
             "
           />
@@ -431,7 +431,7 @@ const Products = () => {
 
               <div>
                 <div className="mb-7 flex items-center gap-3">
-                  <span className="h-px w-10 bg-red-600" />
+                  <span className="h-px w-10 bg-neutral-900" />
 
                   <span
                     className="
@@ -439,7 +439,7 @@ const Products = () => {
                       font-bold
                       uppercase
                       tracking-[0.24em]
-                      text-red-600
+                      text-neutral-500
                     "
                   >
                     CANA Paints Catalogue
@@ -509,7 +509,7 @@ const Products = () => {
                       transition-all
                       duration-300
                       hover:-translate-y-0.5
-                      hover:bg-red-600
+                      hover:bg-neutral-800
                     "
                   >
                     Browse Products
@@ -575,8 +575,8 @@ const Products = () => {
                           items-center
                           justify-center
                           rounded-xl
-                          bg-red-50
-                          text-red-600
+                          bg-neutral-100
+                          text-neutral-700
                         "
                       >
                         <Package size={21} />

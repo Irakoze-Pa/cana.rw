@@ -220,7 +220,8 @@ const InventoryPage = () => {
             </div>
 
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+              <p className="cana-section-kicker">Inventory & stores</p>
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
                 Raw Material Inventory
               </h1>
 
@@ -297,7 +298,7 @@ const InventoryPage = () => {
       </div>
 
       {/* Filters */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="cana-panel p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-lg">
             <Search
@@ -356,7 +357,7 @@ const InventoryPage = () => {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="cana-panel overflow-hidden">
         <InventoryTable
           inventory={filteredInventory}
           loading={loading}
@@ -392,7 +393,7 @@ const SummaryCard = ({
   danger = false,
 }: SummaryCardProps) => {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="cana-panel p-5">
       <div className="flex items-start justify-between">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 text-gray-600">
           {icon}
@@ -410,7 +411,7 @@ const SummaryCard = ({
           {label}
         </p>
 
-        <p className="mt-1 text-2xl font-bold tracking-tight text-gray-900">
+        <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
           {value}
         </p>
       </div>

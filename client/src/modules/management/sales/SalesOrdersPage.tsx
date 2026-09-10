@@ -253,8 +253,8 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
             <ShoppingCart size={21} />
           </div>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[.14em] text-red-600">Sales workspace</p>
-            <h1 className="mt-1 text-2xl font-bold text-gray-900">{pageTitle}</h1>
+            <p className="cana-section-kicker">Sales workspace</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{pageTitle}</h1>
             <p className="mt-1 text-sm text-gray-500">
               {pageDescription}
             </p>
@@ -263,12 +263,12 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
         <div className="flex gap-2">
           {!fulfilmentView && <button
             onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white"
+            className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"
           >
             <Plus size={16} />
             New sales order
           </button>}
-          {fulfilmentView && <Link to="/management/sales/orders" className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white"><Plus size={16}/>New sales order</Link>}
+          {fulfilmentView && <Link to="/management/sales/orders" className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"><Plus size={16}/>New sales order</Link>}
           <button
             onClick={() => void load()}
             className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"
@@ -478,7 +478,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
         </form>
       )}
       {fulfilmentView && <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950"><span className="rounded-xl bg-white p-2 text-blue-700"><PackageCheck size={18}/></span><span><strong>Fulfilment queue:</strong> confirmed, in-production and ready-for-delivery orders only. Update each stage here so sales, production and dispatch remain aligned.</span><Link to="/management/sales/orders" className="ml-auto inline-flex items-center gap-1 font-bold text-blue-800">All orders <ArrowRight size={15}/></Link></section>}
-      <section className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><label className="min-w-52 flex-1 text-xs font-bold uppercase tracking-wide text-slate-500">Search<input aria-label="Search orders" placeholder="Order number or customer" value={search} onChange={(event) => setSearch(event.target.value)} className="mt-1.5 block w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Order date from<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1.5 block rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Order date to<input type="date" min={dateFrom || undefined} value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1.5 block rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label>
+      <section className="cana-panel flex flex-wrap items-end gap-3 p-4"><label className="min-w-52 flex-1 text-xs font-bold uppercase tracking-wide text-slate-500">Search<input aria-label="Search orders" placeholder="Order number or customer" value={search} onChange={(event) => setSearch(event.target.value)} className="mt-1.5 block w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Order date from<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1.5 block rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Order date to<input type="date" min={dateFrom || undefined} value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1.5 block rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label>
         <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Status<select aria-label="Filter order status"
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
@@ -491,7 +491,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
             </option>
           ))}
         </select></label><div className="ml-auto pb-1 text-sm text-slate-500"><strong className="text-slate-900">{visibleOrders.length}</strong> transaction{visibleOrders.length === 1 ? "" : "s"} shown</div>{(dateFrom || dateTo || search || statusFilter) && <button type="button" onClick={() => { setSearch(""); setStatusFilter(""); setDateFrom(""); setDateTo(""); }} className="pb-1 text-sm font-bold text-red-700">Clear filters</button>}</section>
-      <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
+      <div className="cana-panel overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>

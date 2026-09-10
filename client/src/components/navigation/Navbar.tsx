@@ -277,10 +277,10 @@ function Navbar() {
           <div
             className="
               flex
-              h-[84px]
+              h-[72px]
               items-center
               justify-between
-              lg:h-[94px]
+              lg:h-[80px]
             "
           >
             {/* ==================================================
@@ -306,15 +306,15 @@ function Navbar() {
                 src={logo}
                 alt="CANA"
                 className="
-                  h-[54px]
+                  h-[44px]
                   w-auto
                   object-contain
                   transition-transform
                   duration-300
                   group-hover:scale-[1.025]
-                  sm:h-[62px]
-                  lg:h-[72px]
-                  xl:h-[76px]
+                  sm:h-[50px]
+                  lg:h-[56px]
+                  xl:h-[60px]
                 "
               />
 
@@ -329,13 +329,13 @@ function Navbar() {
               >
                 <span
                   className="
-                    text-[26px]
+                    text-[24px]
                     font-extrabold
                     leading-none
                     tracking-[-0.065em]
                     text-neutral-950
-                    sm:text-[28px]
-                    lg:text-[30px]
+                    sm:text-[26px]
+                    lg:text-[28px]
                   "
                 >
                   CANA
@@ -349,7 +349,7 @@ function Navbar() {
                     font-bold
                     uppercase
                     tracking-[0.22em]
-                    text-red-600
+                    text-neutral-500
                     sm:text-[8px]
                   "
                 >
@@ -421,8 +421,8 @@ function Navbar() {
                         text-neutral-700
                         transition-colors
                         duration-200
-                        group-hover:bg-red-50
-                        group-hover:text-red-600
+                        group-hover:bg-neutral-200
+                        group-hover:text-neutral-800
                       "
                     >
                       {userInitials}
@@ -466,7 +466,7 @@ function Navbar() {
                         duration-300
                         ${
                           accountOpen
-                            ? "rotate-180 text-red-600"
+                            ? "rotate-180 text-neutral-700"
                             : ""
                         }
                       `}
@@ -505,7 +505,7 @@ function Navbar() {
                             font-bold
                             uppercase
                             tracking-[0.18em]
-                            text-red-600
+                            text-neutral-500
                           "
                         >
                           Account
@@ -564,7 +564,7 @@ function Navbar() {
                             rounded-lg
                             bg-neutral-100
                             text-neutral-600
-                            group-hover:bg-red-600
+                            group-hover:bg-slate-950
                             group-hover:text-white
                           "
                         >
@@ -604,7 +604,7 @@ function Navbar() {
                           px-3
                           py-3
                           text-left
-                          hover:bg-red-50
+                          hover:bg-slate-50
                         "
                       >
                         <div
@@ -617,7 +617,7 @@ function Navbar() {
                             rounded-lg
                             bg-neutral-100
                             text-neutral-600
-                            group-hover:bg-red-600
+                            group-hover:bg-slate-950
                             group-hover:text-white
                           "
                         >

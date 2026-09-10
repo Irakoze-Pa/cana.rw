@@ -88,9 +88,9 @@ function Footer() {
           MAIN FOOTER
       ====================================================== */}
 
-      <div className="mx-auto max-w-7xl px-6 py-16 sm:py-20 lg:px-8 lg:py-24">
+      <div className="mx-auto max-w-7xl px-6 py-12 sm:py-14 lg:px-8 lg:py-16">
 
-        <div className="grid gap-14 md:grid-cols-2 lg:grid-cols-[1.5fr_0.8fr_0.9fr_1.1fr] lg:gap-16">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.5fr_0.8fr_0.9fr_1.1fr] lg:gap-12">
 
           {/* =================================================
               BRAND
@@ -105,13 +105,13 @@ function Footer() {
               <img
                 src={logo}
                 alt="CANAN Business Group"
-                className="h-16 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.02] sm:h-[72px]"
+                className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.02] sm:h-16"
               />
             </Link>
 
             <div className="mt-6">
 
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-red-500">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">
                 CANAN BUSINESS GROUP
               </p>
 
@@ -224,7 +224,7 @@ function Footer() {
 
           <div>
 
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-500">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
               Contact
             </p>
 
@@ -248,7 +248,7 @@ function Footer() {
                 href="tel:+250789408367"
                 className="group flex items-start gap-4"
               >
-                <span className="mt-0.5 text-red-500">
+                <span className="mt-0.5 text-neutral-400">
                   <Phone size={17} />
                 </span>
 
@@ -262,7 +262,7 @@ function Footer() {
                 href="mailto:info@cana.rw"
                 className="group flex items-start gap-4"
               >
-                <span className="mt-0.5 text-red-500">
+                <span className="mt-0.5 text-neutral-400">
                   <Mail size={17} />
                 </span>
 
@@ -278,7 +278,7 @@ function Footer() {
             ================================================== */}
 
             <div className="mt-7 border-t border-white/10 pt-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-500">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
                 Follow CANA
               </p>
 
@@ -389,7 +389,7 @@ function FooterLink({
         <span
           className="
             h-px w-0
-            bg-red-500
+            bg-neutral-400
             transition-all duration-300
             group-hover:w-3
           "
@@ -421,7 +421,7 @@ function ContactItem({
   return (
     <div className="flex items-start gap-4">
 
-      <span className="mt-0.5 shrink-0 text-red-500">
+      <span className="mt-0.5 shrink-0 text-neutral-400">
         {icon}
       </span>
 

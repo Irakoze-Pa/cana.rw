@@ -117,8 +117,8 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
             <Icon size={21} />
           </span>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[.16em] text-slate-500">Operations workspace</p>
-            <h1 className="text-2xl font-bold text-gray-900">{meta.title}</h1>
+            <p className="cana-section-kicker">Production control</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{meta.title}</h1>
             <p className="mt-1 text-sm text-gray-500">{meta.description}</p>
           </div>
         </div>
@@ -159,7 +159,7 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
           icon={<ClipboardCheck size={18} />}
         />
       </section>
-      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <section className="cana-panel overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-5">
           <div>
             <h2 className="font-bold text-slate-900">
@@ -275,14 +275,14 @@ function Metric({
   warning?: boolean;
 }) {
   return (
-    <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <article className="cana-panel p-5">
       <span
         className={`flex h-9 w-9 items-center justify-center rounded-lg ${warning ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-600"}`}
       >
         {icon}
       </span>
       <p className="mt-4 text-sm text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
+      <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{value}</p>
     </article>
   );
 }

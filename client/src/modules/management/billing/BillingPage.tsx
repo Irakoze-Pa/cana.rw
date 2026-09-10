@@ -155,6 +155,7 @@ export default function BillingPage() {
       reference: invoice.invoiceNumber,
       issueDate: invoice.issueDate,
       company: issuer,
+      brandLine: issuer,
       status: invoice.status.replaceAll("_", " "),
       recipient: {
         label: "Bill to",
@@ -196,6 +197,7 @@ export default function BillingPage() {
       reference: payment.receiptNumber,
       issueDate: payment.receivedAt,
       company: issuer,
+      brandLine: issuer,
       status: "Payment received",
       recipient: {
         label: "Received from",
@@ -212,7 +214,7 @@ export default function BillingPage() {
         "Acknowledgement of the payment shown above. This receipt does not imply that the invoice is fully settled.",
     });
   const filteredPayments = useMemo(() => payments.filter((payment) => { const paymentDate = payment.receivedAt.slice(0, 10); return (!receiptFrom || paymentDate >= receiptFrom) && (!receiptTo || paymentDate <= receiptTo); }), [payments, receiptFrom, receiptTo]);
-  const printPaymentRegister = () => printCanaDocument({ title: "Payment receipt register", reference: "PAY-" + (receiptFrom || "ALL") + "-" + (receiptTo || "TODAY"), company: issuer, status: "Official payment register", details: [{ label: "Period from", value: receiptFrom || "Beginning" }, { label: "Period to", value: receiptTo || "Today" }, { label: "Receipts", value: String(filteredPayments.length) }, { label: "Total received", value: money(filteredPayments.reduce((sum, payment) => sum + payment.amount, 0)) + " RWF" }], table: { headers: ["Receipt no.", "Date", "Customer", "Invoice", "Method", "Reference", "Amount (RWF)"], rows: filteredPayments.map((payment) => [payment.receiptNumber, new Date(payment.receivedAt).toLocaleDateString("en-RW"), payment.customer?.fullName || "Customer", payment.invoice?.invoiceNumber || "—", payment.method.replaceAll("_", " "), payment.reference || "—", money(payment.amount)]) }, notes: "This register lists all payments recorded in the selected period. Each payment has its own printable receipt." });
+  const printPaymentRegister = () => printCanaDocument({ title: "Payment receipt register", reference: "PAY-" + (receiptFrom || "ALL") + "-" + (receiptTo || "TODAY"), company: issuer, brandLine: issuer, status: "Official payment register", details: [{ label: "Period from", value: receiptFrom || "Beginning" }, { label: "Period to", value: receiptTo || "Today" }, { label: "Receipts", value: String(filteredPayments.length) }, { label: "Total received", value: money(filteredPayments.reduce((sum, payment) => sum + payment.amount, 0)) + " RWF" }], table: { headers: ["Receipt no.", "Date", "Customer", "Invoice", "Method", "Reference", "Amount (RWF)"], rows: filteredPayments.map((payment) => [payment.receiptNumber, new Date(payment.receivedAt).toLocaleDateString("en-RW"), payment.customer?.fullName || "Customer", payment.invoice?.invoiceNumber || "—", payment.method.replaceAll("_", " "), payment.reference || "—", money(payment.amount)]) }, notes: "This register lists all payments recorded in the selected period. Each payment has its own printable receipt." });
   const invoicedOrders = new Set(
     invoices.map((invoice) => invoice.salesOrder?.orderNumber),
   );
@@ -224,7 +226,8 @@ export default function BillingPage() {
             <ReceiptText size={21} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <p className="cana-section-kicker">Sales & finance</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
               Invoices & payments
             </h1>
             <p className="mt-1 text-sm text-gray-500">
@@ -235,14 +238,14 @@ export default function BillingPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setInvoiceOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white"
+            className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"
           >
             <Plus size={16} />
             New invoice
           </button>
           <button
             onClick={() => void load()}
-            className="rounded-xl border border-gray-200 bg-white p-2.5"
+            className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50"
           >
             <RefreshCw size={17} />
           </button>
@@ -266,10 +269,10 @@ export default function BillingPage() {
         ].map(([label, amount]) => (
           <div
             key={String(label)}
-            className="rounded-2xl border border-gray-200 bg-white p-5"
+            className="cana-panel p-5"
           >
             <p className="text-sm text-gray-500">{label}</p>
-            <p className="mt-2 text-xl font-bold">
+            <p className="mt-2 text-xl font-extrabold tracking-tight text-slate-950">
               {money(Number(amount))} RWF
             </p>
           </div>
@@ -278,7 +281,7 @@ export default function BillingPage() {
       {error && (
         <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
       )}
-      <section className="rounded-2xl border border-gray-200 bg-white p-5">
+      <section className="cana-panel p-5">
         <label className="text-sm font-semibold text-gray-700">
           Company shown on invoices and receipts
           <select
@@ -358,7 +361,7 @@ export default function BillingPage() {
         onChange={(event) => setSearch(event.target.value)}
         className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm"
       />
-      <section className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
+      <section className="cana-panel overflow-x-auto">
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <h2 className="font-bold">Invoices</h2>
           <button
@@ -515,7 +518,7 @@ export default function BillingPage() {
           </button>
         </form>
       )}
-      <section className="rounded-2xl border border-gray-200 bg-white p-5">
+      <section className="cana-panel p-5">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">Payment receipts</h2><p className="mt-1 text-sm text-gray-500">Every recorded payment has a unique receipt number.</p></div><div className="flex flex-wrap items-center gap-2"><input aria-label="Receipts from date" type="date" value={receiptFrom} onChange={(event) => setReceiptFrom(event.target.value)} className="rounded-lg border border-gray-200 px-2.5 py-2 text-sm"/><input aria-label="Receipts to date" type="date" value={receiptTo} onChange={(event) => setReceiptTo(event.target.value)} className="rounded-lg border border-gray-200 px-2.5 py-2 text-sm"/><button type="button" onClick={printPaymentRegister} disabled={!filteredPayments.length} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"><Printer size={15}/>Print register</button></div></div><p className="mt-3 text-sm font-semibold text-emerald-700">{filteredPayments.length} receipt{filteredPayments.length === 1 ? "" : "s"} · {money(filteredPayments.reduce((sum, payment) => sum + payment.amount, 0))} RWF received</p>
         <div className="mt-4 space-y-3">
           {filteredPayments.map((payment) => (

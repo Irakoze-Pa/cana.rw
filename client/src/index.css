@@ -1,41 +1,174 @@
 @import "tailwindcss";
 
+:root {
+  --cana-font-ui: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --cana-font-display: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --cana-ink: #172033;
+  --cana-muted: #64748b;
+  --cana-line: #e2e8f0;
+  --cana-canvas: #f4f6f9;
+  --cana-panel: #ffffff;
+  --cana-red: #af0808;
+  --cana-red-soft: #fff1f1;
+}
+
 html {
-  font-family: "Manrope", sans-serif;
+  font-family: var(--cana-font-ui);
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
 }
 
 /* Keep dense management tables and forms comfortably visible on small phones. */
 @media (max-width: 640px) {
   html { font-size: 15px; }
-  input, select, textarea { min-height: 2.5rem; }
+
+  body { overflow-x: hidden; }
+
+  /* 16px controls prevent Safari from zooming the page during data entry. */
+  input, select, textarea {
+    min-height: 2.75rem;
+    font-size: 16px;
+  }
+
+  button, a { -webkit-tap-highlight-color: transparent; }
+
+  /* Dense record screens keep their tables scrollable inside the card. */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
 }
 
 body {
   margin: 0;
   min-width: 320px;
   background: #ffffff;
-  color: #171717;
-  font-family: "Manrope", sans-serif;
+  color: var(--cana-ink);
+  font-family: var(--cana-font-ui);
+  font-size: 0.9375rem;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* The application uses a quiet sans for dense operational work and a more
+   distinctive display face for titles. This keeps data screens compact while
+   giving public and dashboard pages a clear corporate hierarchy. */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--cana-font-display);
+  text-wrap: balance;
+}
+
+::selection {
+  background: #dce3ec;
+  color: #0f172a;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(71, 85, 105, 0.28);
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: #64748b;
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.12);
 }
 
 /* Shared CANA surfaces: quiet visual depth without competing with content. */
 .cana-public-surface {
   background-color: #fbfbfa;
   background-image:
-    radial-gradient(circle at 8% 8%, rgba(220, 38, 38, 0.055), transparent 29rem),
     radial-gradient(circle at 92% 72%, rgba(17, 24, 39, 0.035), transparent 32rem),
     linear-gradient(rgba(17, 24, 39, 0.018) 1px, transparent 1px),
     linear-gradient(90deg, rgba(17, 24, 39, 0.018) 1px, transparent 1px);
-  background-size: auto, auto, 42px 42px, 42px 42px;
+  background-size: auto, 42px 42px, 42px 42px;
 }
 
 .cana-operations-surface {
-  background-color: #f5f6f8;
+  background-color: var(--cana-canvas);
   background-image:
-    radial-gradient(circle at 84% 0%, rgba(220, 38, 38, 0.045), transparent 26rem),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(248, 250, 252, 0.3));
+    radial-gradient(circle at 0% 100%, rgba(15, 23, 42, 0.035), transparent 26rem),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.42));
+}
+
+/* Shared application shell for customer and management workspaces. */
+.cana-page-content {
+  width: 100%;
+  max-width: 1920px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.cana-panel {
+  border: 1px solid var(--cana-line);
+  border-radius: 1rem;
+  background: var(--cana-panel);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 20px rgba(15, 23, 42, 0.018);
+}
+
+.cana-page-title {
+  color: var(--cana-ink);
+  font-family: var(--cana-font-display);
+  font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.cana-page-description {
+  max-width: 48rem;
+  color: var(--cana-muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.cana-data-label {
+  color: var(--cana-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.cana-number {
+  font-variant-numeric: tabular-nums;
+}
+
+.cana-section-kicker {
+  color: var(--cana-muted);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Public home sections share one compact rhythm. Individual components can
+   still add space for content, but no longer create large empty bands. */
+.cana-home > section:not(:first-child) {
+  padding-block: 4rem;
+}
+
+@media (min-width: 1024px) {
+  .cana-home > section:not(:first-child) {
+    padding-block: 5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .cana-page-content { padding: 0.875rem 0.875rem 6.25rem; }
+
+  .cana-panel { border-radius: 0.875rem; }
+
+  /* Full-width actions are easier to find and tap on narrow screens. */
+  .cana-mobile-stack {
+    display: grid;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .cana-mobile-stack > * { width: 100%; justify-content: center; }
 }
 
 button,
@@ -43,4 +176,8 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+button {
+  font-weight: 600;
 }

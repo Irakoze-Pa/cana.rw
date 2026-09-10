@@ -192,7 +192,8 @@ export default function FinishedGoodsPage() {
             <PackageCheck size={21} />
           </span>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <p className="cana-section-kicker">Inventory & stores</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
               Finished goods stores
             </h1>
             <p className="mt-1 text-sm text-gray-500">
@@ -202,7 +203,7 @@ export default function FinishedGoodsPage() {
         </div>
         <div className="flex gap-2">
           {isSuperAdmin && <button onClick={() => setShowAdjustment(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"><SlidersHorizontal size={16} />Adjust stock</button>}
-          <Link to="/management/products" className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white"><PencilLine size={16} />Product catalogue</Link>
+          <Link to="/management/products" className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"><PencilLine size={16} />Product catalogue</Link>
           <button onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16} />Refresh</button>
         </div>
       </header>
@@ -241,7 +242,7 @@ export default function FinishedGoodsPage() {
       <section className="grid gap-6 xl:grid-cols-[.95fr_1.55fr]">
         <form
           onSubmit={sendTransfer}
-          className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+          className="cana-panel p-5"
         >
           <div className="flex items-center gap-3">
             <span className="rounded-xl bg-red-50 p-2 text-red-700">
@@ -353,7 +354,7 @@ export default function FinishedGoodsPage() {
             </button>
           </div>
         </form>
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="cana-panel overflow-hidden">
           <div className="border-b border-gray-100 p-5">
             <h2 className="font-bold text-slate-900">
               Store balances by product
@@ -413,7 +414,7 @@ export default function FinishedGoodsPage() {
           </div>
         </div>
       </section>
-      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <section className="cana-panel overflow-hidden">
         <div className="flex items-center gap-3 border-b border-gray-100 p-5">
           <Truck size={19} className="text-slate-600" />
           <div>
@@ -484,12 +485,12 @@ function Metric({
   hint: string;
 }) {
   return (
-    <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <article className="cana-panel p-5">
       <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-700">
         {icon}
       </span>
       <p className="mt-4 text-sm text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
+      <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{value}</p>
       <p className="mt-1 text-xs text-gray-500">{hint}</p>
     </article>
   );

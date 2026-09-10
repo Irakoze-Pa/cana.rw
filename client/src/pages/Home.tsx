@@ -1,19 +1,19 @@
-import Hero from "@/components/home/Hero";
+import CorporateHero from "@/components/home/CorporateHero";
 import About from "@/components/home/About";
 import WhyChoose from "@/components/home/WhyChoose";
 import FeaturedProducts from "@/components/home/FeaturedProducts";
-import Testimonials from "@/components/home/Testimonials";
+import CorporateTestimonials from "@/components/home/CorporateTestimonials";
 
 
 
 function Home() {
   return (
-    <main>
-      <Hero />
+    <main className="cana-home">
+      <CorporateHero />
       <About />
       <FeaturedProducts />
       <WhyChoose />
-      <Testimonials />
+      <CorporateTestimonials />
     </main>
   );
 }

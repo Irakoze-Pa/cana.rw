@@ -1023,12 +1023,12 @@ export default function ProductionOrdersPage() {
   /* ========================================================================== */
 
   return (
-    <div className="min-h-full bg-gray-50">
+    <div className="min-h-full">
       {/* ====================================================================== */}
       {/* HEADER                                                                  */}
       {/* ====================================================================== */}
 
-      <div className="border-b border-gray-200 bg-white">
+      <div className="border-b border-slate-200 bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
@@ -1037,7 +1037,8 @@ export default function ProductionOrdersPage() {
               </div>
 
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+                <p className="cana-section-kicker">Production control</p>
+                <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
                   Production Orders
                 </h1>
 
@@ -1077,7 +1078,7 @@ export default function ProductionOrdersPage() {
                     true
                   );
                 }}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"
               >
                 <Plus size={18} />
 
@@ -1152,13 +1153,13 @@ export default function ProductionOrdersPage() {
             ([label, value]) => (
               <div
                 key={String(label)}
-                className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                className="cana-panel p-4"
               >
                 <p className="text-xs font-medium text-gray-500">
                   {label}
                 </p>
 
-                <p className="mt-2 text-2xl font-bold text-gray-900">
+                <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-950">
                   {Number(value)}
                 </p>
               </div>
@@ -1170,7 +1171,7 @@ export default function ProductionOrdersPage() {
         {/* FILTERS                                                               */}
         {/* ==================================================================== */}
 
-        <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="cana-panel mb-5 p-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_210px_190px_auto]">
             <div className="relative">
               <Search
@@ -1293,7 +1294,7 @@ export default function ProductionOrdersPage() {
         {/* TABLE                                                                 */}
         {/* ==================================================================== */}
 
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="cana-panel overflow-hidden">
           {isLoading ? (
             <div className="flex min-h-[380px] items-center justify-center">
               <div className="flex flex-col items-center gap-3 text-gray-500">

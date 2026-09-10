@@ -153,7 +153,8 @@ export default function RawMaterialLotsPage() {
             <Layers size={21} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <p className="cana-section-kicker">Procurement & traceability</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
               Raw-material lots
             </h1>
             <p className="mt-1 text-sm text-gray-500">
@@ -165,7 +166,7 @@ export default function RawMaterialLotsPage() {
           <button
             onClick={() => setOpen(true)}
             disabled={!materialId}
-            className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus size={16} />
             Receive lot
@@ -179,7 +180,7 @@ export default function RawMaterialLotsPage() {
           </button>
         </div>
       </header>
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="cana-panel p-5">
         <label className="text-sm font-semibold text-gray-800">
           Raw material
         </label>
@@ -291,7 +292,7 @@ export default function RawMaterialLotsPage() {
           </button>
         </form>
       )}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+      <div className="cana-panel overflow-hidden">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
             <tr>
