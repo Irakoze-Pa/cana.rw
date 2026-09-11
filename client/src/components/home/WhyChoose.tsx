@@ -39,7 +39,7 @@ const reasons = [
 
 function WhyChoose() {
   return (
-    <section className="relative overflow-hidden bg-[#f7f7f7] py-16 lg:py-20">
+    <section className="relative overflow-hidden border-y border-black bg-white py-16 lg:py-20">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
 
         {/* =====================================================
@@ -50,7 +50,7 @@ function WhyChoose() {
           {/* Heading */}
           <div>
             <div className="flex items-center gap-3">
-              <span className="h-px w-10 bg-neutral-900" />
+              <span className="h-px w-10 bg-red-700" />
 
               <span className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
                 Why Choose CANA
@@ -80,7 +80,7 @@ function WhyChoose() {
         {/* =====================================================
             REASONS
         ====================================================== */}
-        <div className="mt-12 border-y border-gray-200">
+        <div className="mt-12 border-y border-black">
 
           {reasons.map((item) => (
             <div
@@ -90,7 +90,7 @@ function WhyChoose() {
 
               {/* Number */}
               <div>
-                <span className="text-xs font-semibold tracking-[0.2em] text-gray-400 transition-colors duration-300 group-hover:text-neutral-900">
+                <span className="text-xs font-semibold tracking-[0.2em] text-red-700 transition-colors duration-300 group-hover:text-black">
                   {item.number}
                 </span>
               </div>
@@ -98,7 +98,7 @@ function WhyChoose() {
               {/* Title */}
               <div className="flex items-center gap-4">
 
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-sm transition-all duration-300 group-hover:bg-neutral-900 group-hover:text-white">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white shadow-sm transition-all duration-300 group-hover:bg-red-700">
                   {item.icon}
                 </div>
 
@@ -115,7 +115,7 @@ function WhyChoose() {
                   {item.description}
                 </p>
 
-                <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-300 text-black transition-all duration-300 group-hover:border-neutral-900 group-hover:bg-neutral-900 group-hover:text-white md:flex">
+                <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black text-black transition-all duration-300 group-hover:border-red-700 group-hover:bg-red-700 group-hover:text-white md:flex">
                   <ArrowUpRight
                     size={15}
                     strokeWidth={2}

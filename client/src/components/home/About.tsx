@@ -19,7 +19,7 @@ function About() {
           {/* Heading */}
           <div>
             <div className="flex items-center gap-3">
-              <span className="h-px w-10 bg-neutral-900" />
+              <span className="h-px w-10 bg-red-700" />
 
               <span className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
                 About CANA Group
@@ -57,7 +57,7 @@ function About() {
           <div className="relative">
 
             {/* Main Statement */}
-            <div className="border-l-2 border-neutral-900 pl-7">
+            <div className="border-l-2 border-red-700 pl-7">
               <p className="text-lg font-medium leading-8 text-black sm:text-xl">
                 We combine quality manufacturing, skilled teams and
                 customer-focused service to help our clients build,
@@ -103,7 +103,7 @@ function About() {
           {/* =========================
               RIGHT
           ========================== */}
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm">
+          <div className="overflow-hidden rounded-2xl border border-black bg-black shadow-[0_16px_34px_rgba(0,0,0,.12)]">
 
             <InfoBlock
               number="01"
@@ -128,7 +128,7 @@ function About() {
         <div className="mt-12 border-t border-gray-200 pt-6">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
 
-            <p className="text-xs font-medium uppercase tracking-[0.25em] text-gray-400">
+            <p className="text-xs font-medium uppercase tracking-[0.25em] text-red-700">
               Driven by excellence
             </p>
 
@@ -160,11 +160,11 @@ function InfoBlock({
   text,
 }: InfoBlockProps) {
   return (
-    <div className={`group flex gap-5 p-6 sm:gap-7 sm:p-8 ${number === "01" ? "bg-slate-950 text-white" : "bg-white text-slate-950"}`}>
+    <div className={`group flex gap-5 p-6 sm:gap-7 sm:p-8 ${number === "01" ? "bg-black text-white" : "border-t border-white/15 bg-black text-white"}`}>
 
       {/* Number */}
       <div className="pt-1">
-        <span className={`text-xs font-semibold tracking-[0.2em] ${number === "01" ? "text-slate-400" : "text-slate-400"}`}>
+        <span className="text-xs font-semibold tracking-[0.2em] text-red-400">
           {number}
         </span>
       </div>
@@ -175,18 +175,18 @@ function InfoBlock({
         {/* Title */}
         <div className="flex items-center gap-3">
 
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all duration-300 ${number === "01" ? "bg-white/10 text-white group-hover:bg-white group-hover:text-slate-950" : "bg-slate-100 text-slate-800 group-hover:bg-slate-950 group-hover:text-white"}`}>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-all duration-300 group-hover:bg-red-700">
             {icon}
           </div>
 
-          <h3 className={`text-xl font-semibold tracking-tight ${number === "01" ? "text-white" : "text-slate-950"}`}>
+          <h3 className="text-xl font-semibold tracking-tight text-white">
             {title}
           </h3>
 
         </div>
 
         {/* Description */}
-        <p className={`mt-4 max-w-2xl text-sm leading-7 sm:text-base ${number === "01" ? "text-slate-300" : "text-slate-600"}`}>
+        <p className="mt-4 max-w-2xl text-sm leading-7 text-neutral-300 sm:text-base">
           {text}
         </p>
 
