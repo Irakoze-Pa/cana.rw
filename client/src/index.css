@@ -136,6 +136,25 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* Quiet movement gives the home gallery depth while allowing the content to
+   remain the focus. It is disabled for visitors who prefer reduced motion. */
+@keyframes cana-gallery-float {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(1.5deg); }
+  50% { transform: translate3d(0, -12px, 0) rotate(-.5deg); }
+}
+
+@keyframes cana-gallery-float-delayed {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-2deg); }
+  50% { transform: translate3d(0, 10px, 0) rotate(.5deg); }
+}
+
+.cana-hero-float { animation: cana-gallery-float 6s ease-in-out infinite; }
+.cana-hero-float-delayed { animation: cana-gallery-float-delayed 7s ease-in-out 1s infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cana-hero-float, .cana-hero-float-delayed { animation: none; }
+}
+
 .cana-section-kicker {
   color: var(--cana-muted);
   font-size: 0.6875rem;

@@ -57,7 +57,7 @@ function getStatusClass(
 ): string {
   switch (status) {
     case "Planned":
-      return "bg-blue-100 text-blue-700";
+      return "bg-slate-100 text-slate-700";
 
     case "Ready":
       return "bg-green-100 text-green-700";
@@ -632,7 +632,7 @@ const ProductionBatchesPage = () => {
             Planned
           </p>
 
-          <p className="mt-2 text-2xl font-bold text-blue-600">
+          <p className="mt-2 text-2xl font-bold text-slate-600">
             {stats.planned}
           </p>
         </div>
@@ -1047,7 +1047,7 @@ const ProductionBatchesPage = () => {
                                   batch
                                 )
                               }
-                              className="rounded-xl border border-gray-200 p-2 text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
+                              className="rounded-xl border border-gray-200 p-2 text-slate-600 transition hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
                               title={
                                 canEditBatch(
                                   batch

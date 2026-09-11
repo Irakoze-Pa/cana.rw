@@ -1464,53 +1464,53 @@ export default function ProductionBatchModal({
             {/* ============================================================ */}
 
             {!isEdit && (
-              <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5">
-                <p className="text-sm font-semibold text-blue-900">
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-semibold text-slate-900">
                   Automatic batch values
                 </p>
 
                 <div className="mt-4 grid gap-4 sm:grid-cols-3">
 
                   <div>
-                    <p className="text-xs text-blue-700">
+                    <p className="text-xs text-slate-700">
                       Batch Number
                     </p>
 
-                    <p className="mt-1 text-sm font-semibold text-blue-950">
+                    <p className="mt-1 text-sm font-semibold text-slate-950">
                       Generated automatically
                     </p>
                   </div>
 
                   <div>
-                    <p className="text-xs text-blue-700">
+                    <p className="text-xs text-slate-700">
                       Status
                     </p>
 
-                    <p className="mt-1 text-sm font-semibold text-blue-950">
+                    <p className="mt-1 text-sm font-semibold text-slate-950">
                       Planned
                     </p>
                   </div>
 
                   <div>
-                    <p className="text-xs text-blue-700">
+                    <p className="text-xs text-slate-700">
                       Actual Quantity
                     </p>
 
-                    <p className="mt-1 text-sm font-semibold text-blue-950">
+                    <p className="mt-1 text-sm font-semibold text-slate-950">
                       0 {unit}
                     </p>
                   </div>
 
                 </div>
 
-                <p className="mt-4 border-t border-blue-200 pt-4 text-xs leading-5 text-blue-800">
+                <p className="mt-4 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-800">
                   The batch stays <span className="font-semibold">Planned</span> until the production team marks it Ready and then In Progress. Finished-product stock is posted only when a batch is completed with an actual output quantity.
                 </p>
 
                 {selectedOrder &&
                   (selectedOrder.status === "Draft" ||
                     selectedOrder.status === "Planned") && (
-                    <p className="mt-3 text-xs leading-5 text-blue-800">
+                    <p className="mt-3 text-xs leading-5 text-slate-800">
                       Creating this first batch will release the production order after its material requirements are verified.
                     </p>
                   )}

@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import api from "@/services/api";
 
 type Order = { _id: string; orderNumber: string; total: number; status: string; createdAt: string; requestedDeliveryDate?: string; items: { productName: string; quantity: number; unit: string }[] };
-const statusMeta: Record<string, { label: string; style: string; icon: typeof Clock3 }> = { confirmed: { label: "Confirmed", style: "bg-blue-50 text-blue-700", icon: CheckCircle2 }, in_production: { label: "In production", style: "bg-amber-50 text-amber-700", icon: Package }, ready_for_delivery: { label: "Ready for delivery", style: "bg-violet-50 text-violet-700", icon: Truck }, delivered: { label: "Delivered", style: "bg-emerald-50 text-emerald-700", icon: CheckCircle2 } };
+const statusMeta: Record<string, { label: string; style: string; icon: typeof Clock3 }> = { confirmed: { label: "Confirmed", style: "bg-slate-50 text-slate-700", icon: CheckCircle2 }, in_production: { label: "In production", style: "bg-amber-50 text-amber-700", icon: Package }, ready_for_delivery: { label: "Ready for delivery", style: "bg-violet-50 text-violet-700", icon: Truck }, delivered: { label: "Delivered", style: "bg-emerald-50 text-emerald-700", icon: CheckCircle2 } };
 
 export default function CustomerOrdersPage() {
   const location = useLocation(); const createdOrder = (location.state as { createdOrder?: string } | null)?.createdOrder; const [orders, setOrders] = useState<Order[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState("");

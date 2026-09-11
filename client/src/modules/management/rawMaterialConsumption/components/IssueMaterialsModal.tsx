@@ -245,19 +245,19 @@ export default function IssueMaterialsModal({
             </div>
           )}
 
-          <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4">
+          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex gap-3">
               <CheckCircle2
                 size={18}
-                className="mt-0.5 text-blue-600"
+                className="mt-0.5 text-slate-600"
               />
 
               <div>
-                <p className="text-sm font-semibold text-blue-900">
+                <p className="text-sm font-semibold text-slate-900">
                   Material Issue
                 </p>
 
-                <p className="mt-1 text-sm text-blue-700">
+                <p className="mt-1 text-sm text-slate-700">
                   Enter the quantity physically issued
                   from inventory to this production batch.
                 </p>

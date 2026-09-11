@@ -977,7 +977,7 @@ export default function ProductionOrdersPage() {
         return "bg-gray-100 text-gray-700";
 
       case "Planned":
-        return "bg-blue-50 text-blue-700";
+        return "bg-slate-50 text-slate-700";
 
       case "Released":
         return "bg-indigo-50 text-indigo-700";
@@ -1010,7 +1010,7 @@ export default function ProductionOrdersPage() {
         return "bg-orange-50 text-orange-700";
 
       case "Normal":
-        return "bg-blue-50 text-blue-700";
+        return "bg-slate-50 text-slate-700";
 
       case "Low":
       default:

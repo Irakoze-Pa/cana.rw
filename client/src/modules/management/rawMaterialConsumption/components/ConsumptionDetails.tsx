@@ -622,14 +622,14 @@ export default function ConsumptionTable({
                       <div className="flex items-center justify-end gap-1.5">
                         {consumption.totalReturnQuantity >
                           0 && (
-                          <RotateCcw className="h-3.5 w-3.5 text-blue-500" />
+                          <RotateCcw className="h-3.5 w-3.5 text-slate-500" />
                         )}
 
                         <span
                           className={`text-sm font-medium ${
                             consumption.totalReturnQuantity >
                             0
-                              ? "text-blue-600"
+                              ? "text-slate-600"
                               : "text-gray-500"
                           }`}
                         >

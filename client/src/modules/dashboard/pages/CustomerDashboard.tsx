@@ -138,7 +138,7 @@ function CustomerDashboard() {
         return "bg-green-100 text-green-700";
 
       case "Reviewed":
-        return "bg-blue-100 text-blue-700";
+        return "bg-slate-100 text-slate-700";
 
       case "Rejected":
         return "bg-red-100 text-red-700";

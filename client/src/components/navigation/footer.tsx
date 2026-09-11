@@ -39,7 +39,7 @@ function Footer() {
         import.meta.env.VITE_CANA_FACEBOOK_URL ||
         "https://www.facebook.com/Cana-paints",
       icon: FaFacebookF,
-      hoverClass: "hover:border-[#1877F2]/60 hover:bg-[#1877F2]/15 hover:text-[#4d9cff]",
+      hoverClass: "hover:border-white/60 hover:bg-white/10 hover:text-white",
     },
     {
       label: "Instagram",
@@ -63,7 +63,7 @@ function Footer() {
         import.meta.env.VITE_CANA_LINKEDIN_URL ||
         "https://www.linkedin.com/company/cana-paints/",
       icon: FaLinkedinIn,
-      hoverClass: "hover:border-[#0A66C2]/60 hover:bg-[#0A66C2]/15 hover:text-[#58a6ef]",
+      hoverClass: "hover:border-white/60 hover:bg-white/10 hover:text-white",
     },
     {
       label: "YouTube",

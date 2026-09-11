@@ -21,7 +21,7 @@ export default function AdminDashboard() {
   const cards = [
     { label: "Quotation inbox", value: data.pendingQuotations, note: "New client requests", icon: FileText, to: "/management/quotations", tone: "bg-red-50 text-red-600" },
     { label: "Open sales orders", value: data.openSales, note: "Need fulfilment", icon: ShoppingCart, to: "/management/sales", tone: "bg-amber-50 text-amber-700" },
-    { label: "Production workload", value: data.openProductionOrders, note: `${data.activeBatches} active batches`, icon: Factory, to: "/management/production/orders", tone: "bg-blue-50 text-blue-700" },
+    { label: "Production workload", value: data.openProductionOrders, note: `${data.activeBatches} active batches`, icon: Factory, to: "/management/production/orders", tone: "bg-slate-50 text-slate-700" },
     { label: "Material risks", value: data.lowStock, note: "At or below minimum", icon: AlertTriangle, to: "/management/raw-materials", tone: "bg-red-50 text-red-600" },
     { label: "Open procurement", value: data.purchaseOrders, note: "Orders to receive", icon: Truck, to: "/management/purchase-orders", tone: "bg-violet-50 text-violet-700" },
     { label: "Outstanding invoices", value: data.outstandingInvoices, note: "Balances to collect", icon: CircleDollarSign, to: "/management/billing", tone: "bg-emerald-50 text-emerald-700" },

@@ -73,7 +73,7 @@ function getStatusClass(
       return "bg-green-50 text-green-700";
 
     case "In Progress":
-      return "bg-blue-50 text-blue-700";
+      return "bg-slate-50 text-slate-700";
 
     case "Paused":
       return "bg-amber-50 text-amber-700";

@@ -125,7 +125,7 @@ const getStatusClasses = (
       return "border-slate-200 bg-slate-100 text-slate-700";
 
     case "Issued":
-      return "border-blue-200 bg-blue-50 text-blue-700";
+      return "border-slate-200 bg-slate-50 text-slate-700";
 
     case "Partially Consumed":
       return "border-amber-200 bg-amber-50 text-amber-700";
@@ -526,10 +526,10 @@ export default function RawMaterialConsumptionDetailsPage() {
             icon={
               <Factory
                 size={19}
-                className="text-blue-600"
+                className="text-slate-600"
               />
             }
-            iconClass="bg-blue-50"
+            iconClass="bg-slate-50"
             label="Production Batch"
             title={getBatchName(
               consumption.productionBatch,
@@ -1041,19 +1041,19 @@ export default function RawMaterialConsumptionDetailsPage() {
 
         {(isIssued ||
           isPartiallyConsumed) && (
-          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <div className="flex gap-3">
               <PackageCheck
                 size={20}
-                className="mt-0.5 shrink-0 text-blue-600"
+                className="mt-0.5 shrink-0 text-slate-600"
               />
 
               <div>
-                <h3 className="text-sm font-bold text-blue-900">
+                <h3 className="text-sm font-bold text-slate-900">
                   Materials issued
                 </h3>
 
-                <p className="mt-1 text-sm leading-6 text-blue-800">
+                <p className="mt-1 text-sm leading-6 text-slate-800">
                   Raw materials have been issued from inventory. The next step is to record actual usage, waste and returns.
                 </p>
               </div>

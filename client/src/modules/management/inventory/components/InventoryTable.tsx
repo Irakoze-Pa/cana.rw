@@ -338,7 +338,7 @@ const InventoryTable = ({
                         onClick={() =>
                           onAdjustStock(item)
                         }
-                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700"
                       >
                         <Settings2 className="h-4 w-4" />
 

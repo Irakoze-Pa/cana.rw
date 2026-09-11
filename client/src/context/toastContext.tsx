@@ -5,7 +5,7 @@ type Tone = "success" | "error" | "warning" | "info";
 type Toast = { id: number; message: string; tone: Tone };
 type ToastContextValue = { toast: (message: string, tone?: Tone) => void };
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
-const style = { success: "border-emerald-200 bg-emerald-50 text-emerald-800", error: "border-red-200 bg-red-50 text-red-800", warning: "border-amber-200 bg-amber-50 text-amber-800", info: "border-blue-200 bg-blue-50 text-blue-800" };
+const style = { success: "border-emerald-200 bg-emerald-50 text-emerald-800", error: "border-red-200 bg-red-50 text-red-800", warning: "border-amber-200 bg-amber-50 text-amber-800", info: "border-slate-200 bg-slate-50 text-slate-800" };
 const Icon = ({ tone }: { tone: Tone }) => tone === "success" ? <CheckCircle2 size={18} /> : tone === "error" ? <CircleAlert size={18} /> : tone === "warning" ? <CircleAlert size={18} /> : <Info size={18} />;
 
 export function ToastProvider({ children }: { children: ReactNode }) {

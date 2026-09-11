@@ -626,7 +626,7 @@ function PurchaseOrdersPage() {
         return "bg-yellow-100 text-yellow-700";
 
       case "approved":
-        return "bg-blue-100 text-blue-700";
+        return "bg-slate-100 text-slate-700";
 
       case "partially_received":
         return "bg-orange-100 text-orange-700";
@@ -795,7 +795,7 @@ function PurchaseOrdersPage() {
 
             <Truck
               size={19}
-              className="text-blue-500"
+              className="text-slate-500"
             />
 
           </div>

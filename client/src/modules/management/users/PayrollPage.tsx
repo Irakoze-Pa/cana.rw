@@ -496,7 +496,7 @@ export default function PayrollPage() {
       <section className="grid gap-6 xl:grid-cols-[1.55fr_.85fr]">
         <div className="cana-panel overflow-hidden">
           <div className="flex items-center gap-3 border-b p-5">
-            <span className="rounded-xl bg-blue-50 p-2 text-blue-700">
+            <span className="rounded-xl bg-slate-50 p-2 text-slate-700">
               <Users size={19} />
             </span>
             <div>
@@ -593,7 +593,7 @@ export default function PayrollPage() {
                       <button
                         disabled={busy}
                         onClick={() => void updateAdvance(advance._id, "paid")}
-                        className="text-blue-700"
+                        className="text-slate-700"
                       >
                         Mark paid
                       </button>

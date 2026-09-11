@@ -8,7 +8,7 @@ type Notice = { id: string; title: string; description: string; to: string; tone
 type RecordData = Record<string, unknown>;
 const titles: Record<string, string> = { "/management": "Operations overview", "/management/inventory": "Inventory control", "/management/production": "Production workspace", "/management/purchase-orders": "Procurement", "/management/sales": "Sales workspace", "/management/sales/orders": "Sales orders", "/management/sales/fulfilment": "Fulfilment & delivery", "/management/staff": "Staff & access", "/dashboard": "My workspace", "/dashboard/quotations": "My quotations", "/dashboard/orders": "My orders" };
 const icons = { quote: FileText, order: ShoppingCart, production: Settings2, stock: TriangleAlert, billing: ReceiptText };
-const tones = { red: "bg-red-50 text-red-700", amber: "bg-amber-50 text-amber-700", blue: "bg-blue-50 text-blue-700", green: "bg-emerald-50 text-emerald-700" };
+const tones = { red: "bg-red-50 text-red-700", amber: "bg-amber-50 text-amber-700", blue: "bg-slate-50 text-slate-700", green: "bg-emerald-50 text-emerald-700" };
 const rows = (payload: unknown): RecordData[] => Array.isArray((payload as { data?: unknown[] })?.data) ? ((payload as { data: RecordData[] }).data) : [];
 const countText = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 

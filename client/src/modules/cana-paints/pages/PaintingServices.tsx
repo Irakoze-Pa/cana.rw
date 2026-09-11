@@ -1,7 +1,6 @@
 import {
   ArrowRight,
   Check,
-  ChevronRight,
   Home,
   Paintbrush,
   ShieldCheck,
@@ -894,10 +893,6 @@ function ServiceCard({
         {description}
       </p>
 
-      <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-red-600">
-        Learn more
-        <ChevronRight size={15} />
-      </div>
     </div>
   );
 }
