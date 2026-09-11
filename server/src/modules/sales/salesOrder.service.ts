@@ -35,15 +35,15 @@ export async function createSalesOrder(input: { customer: string; quotation?: st
   const orderNumber = `SO-${new Date().getFullYear()}-${String((await SalesOrder.countDocuments()) + 1).padStart(5, "0")}`;
   const { allowInactiveProducts: _allowInactiveProducts, initialStatus = "draft", ...orderInput } = input;
   const order = await SalesOrder.create({ ...orderInput, orderNumber, items, subtotal, tax, total: Number((subtotal + tax).toFixed(2)), status: initialStatus, statusHistory: [{ status: initialStatus }] });
-  return order.populate("customer", "fullName phone email");
+  return order.populate("customer", "fullName phone email isCompanyCustomer businessName address tin");
 }
 
-export const listSalesOrders = () => SalesOrder.find().sort({ createdAt: -1 }).populate("customer", "fullName phone email").lean();
+export const listSalesOrders = () => SalesOrder.find().sort({ createdAt: -1 }).populate("customer", "fullName phone email isCompanyCustomer businessName address tin").lean();
 
 export const listCustomerSalesOrders = (customerId: string) =>
   SalesOrder.find({ customer: customerId, status: { $ne: "draft" } })
     .sort({ createdAt: -1 })
-    .populate("customer", "fullName phone email")
+    .populate("customer", "fullName phone email isCompanyCustomer businessName address tin")
     .lean();
 
 export async function createCustomerSalesOrder(customer: string, input: { items: { product: string; quantity: number; unit?: string }[]; deliveryAddress?: string; requestedDeliveryDate?: string; notes?: string }) {
@@ -66,7 +66,7 @@ export async function updateSalesOrderPrices(id: string, prices: Array<{ product
   order.total = Number((order.subtotal + Number(order.tax || 0)).toFixed(2));
   order.statusHistory.push({ status: order.status, ...(performedBy && mongoose.Types.ObjectId.isValid(performedBy) ? { by: new mongoose.Types.ObjectId(performedBy) } : {}) });
   await order.save();
-  return order.populate("customer", "fullName phone email");
+  return order.populate("customer", "fullName phone email isCompanyCustomer businessName address tin");
 }
 
 export async function transitionSalesOrder(id: string, status: SalesOrderStatus, performedBy?: string) {
@@ -100,5 +100,5 @@ export async function transitionSalesOrder(id: string, status: SalesOrderStatus,
   order.status = status;
   order.statusHistory.push({ status, ...(performedBy && mongoose.Types.ObjectId.isValid(performedBy) ? { by: new mongoose.Types.ObjectId(performedBy) } : {}) });
   await order.save();
-  return order.populate("customer", "fullName phone email");
+  return order.populate("customer", "fullName phone email isCompanyCustomer businessName address tin");
 }

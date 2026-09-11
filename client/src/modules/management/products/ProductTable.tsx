@@ -15,6 +15,7 @@ interface ProductTableProps {
   search?: string;
   category?: string;
   status?: string;
+  onSummary?: (summary: { total: number; active: number; stockKg: number }) => void;
 }
 
 function ProductTable({
@@ -22,6 +23,7 @@ function ProductTable({
   search = "",
   category = "",
   status = "",
+  onSummary,
 }: ProductTableProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +47,9 @@ function ProductTable({
 
       const result = await response.json();
 
-      setProducts(result.data || []);
+      const nextProducts = result.data || [];
+      setProducts(nextProducts);
+      onSummary?.({ total: nextProducts.length, active: nextProducts.filter((product: Product) => product.status === "Active").length, stockKg: nextProducts.reduce((total: number, product: Product) => total + Number(product.stock || 0), 0) });
     } catch (error) {
       console.error("Fetch products error:", error);
       setError("Failed to load products.");
@@ -192,13 +196,11 @@ function ProductTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <div className="cana-panel overflow-hidden">
       {/* TABLE HEADER */}
-      <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
         <div>
-          <h2 className="font-semibold text-gray-900">
-            Product List
-          </h2>
+          <p className="cana-section-kicker">Catalogue records</p><h2 className="mt-1 font-extrabold text-slate-950">Product list</h2>
 
           <p className="mt-1 text-xs text-gray-500">
             {filteredProducts.length} product
@@ -210,9 +212,9 @@ function ProductTable({
       </div>
 
       {/* TABLE */}
-      <div className="overflow-x-auto">
+      <div className="hidden overflow-x-auto lg:block">
         <table className="w-full min-w-[750px]">
-          <thead className="bg-gray-50">
+          <thead className="bg-slate-50">
             <tr>
               <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Product
@@ -244,7 +246,7 @@ function ProductTable({
             {filteredProducts.map((product) => (
               <tr
                 key={product._id}
-                className="transition hover:bg-gray-50"
+                className="transition hover:bg-slate-50/70"
               >
                 {/* PRODUCT */}
                 <td className="px-6 py-4">
@@ -378,6 +380,7 @@ function ProductTable({
           </tbody>
         </table>
       </div>
+      <div className="divide-y divide-slate-100 lg:hidden">{filteredProducts.map((product) => <article key={product._id} className="p-5"><div className="flex gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100">{product.image ? <img src={product.image} alt="" className="h-full w-full object-cover" /> : <span className="text-[10px] text-slate-400">No image</span>}</div><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div><h3 className="font-extrabold text-slate-950">{product.name}</h3><p className="mt-1 text-xs text-slate-500">{product.code} · {product.category}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${product.status === "Active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{product.status}</span></div><div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-sm"><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Pack & price</p><p className="mt-1 font-bold text-slate-900">{Number(product.packSizeKg || 0).toLocaleString()} kg · {Number(product.price).toLocaleString()} RWF</p><p className="mt-1 text-xs text-slate-500">{product.pricePerKg != null ? `${Number(product.pricePerKg).toLocaleString()} RWF / kg` : "Set pack weight"}</p></div><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">Finished stock</p><p className="mt-1 font-bold text-slate-900">{Number(product.stock || 0).toLocaleString()} kg</p><p className="mt-1 text-xs text-slate-500">{Number(product.packSizeKg || 0) > 0 ? `${(Number(product.stock || 0) / Number(product.packSizeKg)).toLocaleString("en-RW", { maximumFractionDigits: 2 })} packs` : "No pack set"}</p></div></div><button type="button" onClick={() => handleEdit(product)} className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-red-700"> <Pencil size={15} /> Edit product</button></div></div></article>)}</div>
     </div>
   );
 }

@@ -5,6 +5,7 @@ export type Customer = {
   fullName: string;
   phone: string;
   email?: string;
+  isCompanyCustomer?: boolean;
   businessName?: string;
   address?: string;
   tin?: string;
@@ -16,12 +17,12 @@ export default function CustomerForm({
   onCreated: (customer: Customer) => void;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState({ fullName: "", phone: "", email: "", businessName: "", address: "", tin: "" });
+  const [form, setForm] = useState({ fullName: "", phone: "", email: "", isCompanyCustomer: false, businessName: "", address: "", tin: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   return (
     <form
-      className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5"
+      className="cana-panel space-y-5 p-5 sm:p-6"
       onSubmit={async (event) => {
         event.preventDefault();
         if (saving) return;
@@ -44,46 +45,47 @@ export default function CustomerForm({
         }
       }}
     >
-      <h2 className="text-lg font-bold">New customer</h2>
-      <p className="text-sm text-gray-500">
-        Add a customer for quotations, orders, and billing. Portal access can be
-        set up separately.
-      </p>
+      <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-5"><div><p className="cana-section-kicker">Customer setup</p><h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-950">Create customer profile</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Capture the contact and document details sales needs before the first quotation or order.</p></div><button type="button" onClick={onCancel} className="rounded-lg px-2 py-1 text-sm font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-950">Close</button></div>
       {error && (
         <p role="alert" className="text-sm text-red-700">
           {error}
         </p>
       )}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {(
           [
             ["fullName", "Customer name", "text"],
             ["phone", "Phone number", "tel"],
             ["email", "Email (optional)", "email"],
-            ["businessName", "Business / company (optional)", "text"],
-            ["address", "Address (optional)", "text"],
-            ["tin", "TIN (optional)", "text"],
+            ["address", "Address", "text"],
           ] as const
         ).map(([key, label, type]) => (
           <label key={key} className="text-sm font-medium">
             {label}
             <input
-              required={key === "fullName" || key === "phone"}
+              required={key === "fullName" || key === "phone" || key === "address"}
               minLength={key === "fullName" ? 3 : undefined}
               type={type}
               value={form[key]}
               onChange={(event) =>
                 setForm({ ...form, [key]: event.target.value })
               }
-              className="mt-1 block w-full rounded-xl border border-gray-200 px-3 py-2.5"
+              className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-950 outline-none transition focus:border-slate-950 focus:ring-2 focus:ring-slate-950/5"
             />
           </label>
         ))}
       </div>
-      <div className="flex gap-3">
+      <fieldset className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+        <legend className="px-1 text-sm font-semibold text-gray-700">Is this a company customer?</legend>
+        <div className="mt-2 flex gap-3">
+          {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option) => <button key={option.label} type="button" onClick={() => setForm((current) => ({ ...current, isCompanyCustomer: option.value }))} aria-pressed={form.isCompanyCustomer === option.value} className={`rounded-lg border px-4 py-2 text-sm font-bold transition ${form.isCompanyCustomer === option.value ? "border-black bg-black text-white" : "border-gray-200 bg-white text-gray-600 hover:border-black"}`}>{option.label}</button>)}
+        </div>
+      </fieldset>
+      {form.isCompanyCustomer && <div className="grid gap-4 rounded-2xl border border-red-100 bg-red-50/40 p-4 sm:grid-cols-2">{([ ["businessName", "Company name"], ["tin", "TIN number"] ] as const).map(([key, label]) => <label key={key} className="text-sm font-medium text-slate-700">{label}<input required value={form[key]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-950 outline-none transition focus:border-slate-950 focus:ring-2 focus:ring-slate-950/5" /></label>)}</div>}
+      <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-5">
         <button
           disabled={saving}
-          className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-600 disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save customer"}
         </button>
@@ -91,7 +93,7 @@ export default function CustomerForm({
           type="button"
           disabled={saving}
           onClick={onCancel}
-          className="rounded-xl border px-4 py-2 text-sm"
+          className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-950 hover:text-slate-950"
         >
           Cancel
         </button>

@@ -4,6 +4,9 @@ import {
   Mail,
   Lock,
   Phone,
+  MapPin,
+  Building2,
+  FileText,
 } from "lucide-react";
 
 import { useState } from "react";
@@ -27,6 +30,10 @@ function RegisterModal({
     fullName: "",
     phone: "",
     email: "",
+    address: "",
+    isCompanyCustomer: false,
+    businessName: "",
+    tin: "",
     password: "",
   });
 
@@ -69,6 +76,21 @@ function RegisterModal({
       return;
     }
 
+    if (!formData.address.trim()) {
+      setError("Please enter your address.");
+      return;
+    }
+
+    if (formData.isCompanyCustomer && !formData.businessName.trim()) {
+      setError("Please enter the company name.");
+      return;
+    }
+
+    if (formData.isCompanyCustomer && !formData.tin.trim()) {
+      setError("Please enter the company TIN number.");
+      return;
+    }
+
     if (!formData.password) {
       setError("Please enter a password.");
       return;
@@ -99,6 +121,10 @@ function RegisterModal({
         fullName: "",
         phone: "",
         email: "",
+        address: "",
+        isCompanyCustomer: false,
+        businessName: "",
+        tin: "",
         password: "",
       });
 
@@ -125,44 +151,50 @@ function RegisterModal({
 
   return (
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 px-5 backdrop-blur-sm"
+      className="fixed inset-0 z-[110] flex items-end justify-center bg-black/60 px-3 py-3 backdrop-blur-sm sm:items-center sm:px-5"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
         }
       }}
     >
-      <div className="relative w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
-        {/* Close */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="register-modal-title"
+        className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[1.75rem] bg-white shadow-2xl sm:max-h-[90vh]"
+      >
+        <div className="h-1.5 bg-red-600" />
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-5 top-5 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-black"
+          aria-label="Close registration"
+          className="absolute right-4 top-5 rounded-full border border-gray-200 bg-white p-2 text-gray-500 shadow-sm transition hover:border-black hover:text-black sm:right-6"
         >
           <X size={20} />
         </button>
 
-        {/* Header */}
-        <div className="text-center">
+        <div className="px-5 pb-6 pt-7 sm:px-8 sm:pb-8 sm:pt-9">
+          <div className="flex items-center gap-3">
           <img
             src={logo}
-            alt="CANA Group"
-            className="mx-auto h-20 w-auto object-contain"
+              alt="CANAN Business Group"
+              className="h-12 w-auto object-contain sm:h-14"
           />
+            <div className="border-l border-gray-200 pl-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-600">Customer account</p>
+              <p className="mt-1 text-xs font-medium text-gray-500">CANAN Business Group</p>
+            </div>
+          </div>
 
-          <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-black">
-            Create Account
-          </h2>
+          <div className="mt-7">
+            <h2 id="register-modal-title" className="text-2xl font-extrabold tracking-tight text-black sm:text-3xl">Create your account</h2>
+            <p className="mt-2 max-w-sm text-sm leading-6 text-gray-600">Save quotations, place orders and follow your requests in one place.</p>
+          </div>
 
-          <p className="mt-2 text-sm text-gray-500">
-            Join CANA Group
-          </p>
-        </div>
-
-        {/* Form */}
         <form
           onSubmit={handleSubmit}
-          className="mt-8 space-y-4"
+            className="mt-7 space-y-4"
         >
           {/* Full Name */}
           <Input
@@ -193,6 +225,52 @@ function RegisterModal({
             type="email"
           />
 
+          <Input
+            name="address"
+            value={formData.address}
+            onChange={handleChange}
+            icon={<MapPin size={18} />}
+            placeholder="Address"
+          />
+
+          <fieldset className="rounded-xl border border-gray-200 bg-gray-50/70 p-4">
+            <legend className="px-1 text-sm font-semibold text-gray-700">Are you registering for a company?</legend>
+            <p className="mt-1 text-xs leading-5 text-gray-500">This helps CANA prepare quotations and invoices correctly.</p>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => setFormData((current) => ({ ...current, isCompanyCustomer: option.value }))}
+                  className={`rounded-lg border px-3 py-2.5 text-sm font-bold transition ${formData.isCompanyCustomer === option.value ? "border-black bg-black text-white" : "border-gray-200 bg-white text-gray-600 hover:border-black hover:text-black"}`}
+                  aria-pressed={formData.isCompanyCustomer === option.value}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          {formData.isCompanyCustomer && (
+            <div className="space-y-4 rounded-xl border border-red-100 bg-red-50/40 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-red-600">Company details</p>
+              <Input
+                name="businessName"
+                value={formData.businessName}
+                onChange={handleChange}
+                icon={<Building2 size={18} />}
+                placeholder="Company name"
+              />
+              <Input
+                name="tin"
+                value={formData.tin}
+                onChange={handleChange}
+                icon={<FileText size={18} />}
+                placeholder="TIN number"
+              />
+            </div>
+          )}
+
           {/* Password */}
           <Input
             name="password"
@@ -203,29 +281,26 @@ function RegisterModal({
             type="password"
           />
 
-          {/* Error */}
           {error && (
-            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+            <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
               <p className="text-sm font-medium text-red-600">
                 {error}
               </p>
             </div>
           )}
 
-          {/* Success */}
           {success && (
-            <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3">
+            <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
               <p className="text-sm font-medium text-green-600">
                 {success}
               </p>
             </div>
           )}
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-red-600 py-3.5 text-sm font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-xl bg-black py-3.5 text-sm font-bold text-white shadow-lg shadow-black/10 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
               ? "Creating..."
@@ -233,8 +308,9 @@ function RegisterModal({
           </button>
         </form>
 
-        {/* Login */}
-        <div className="mt-7 text-center text-sm text-gray-600">
+          <p className="mt-4 text-xs leading-5 text-gray-500">By creating an account, you can request quotations and manage your CANA orders securely.</p>
+
+          <div className="mt-5 border-t border-gray-100 pt-5 text-center text-sm text-gray-600">
           <span>
             Already have an account?
           </span>
@@ -246,6 +322,7 @@ function RegisterModal({
           >
             Login
           </button>
+        </div>
         </div>
       </div>
     </div>
@@ -271,13 +348,18 @@ function Input({
   placeholder,
   type = "text",
 }: InputProps) {
+  const label = placeholder.replace(" address", "");
+
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 transition focus-within:border-black">
+    <div>
+      <label htmlFor={`register-${name}`} className="mb-2 block text-sm font-semibold text-gray-700">{label}</label>
+      <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3.5 transition focus-within:border-black focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5">
       <span className="shrink-0 text-gray-400">
         {icon}
       </span>
 
       <input
+        id={`register-${name}`}
         name={name}
         value={value}
         onChange={onChange}
@@ -285,6 +367,7 @@ function Input({
         placeholder={placeholder}
         className="w-full bg-transparent text-sm text-black outline-none placeholder:text-gray-400"
       />
+    </div>
     </div>
   );
 }

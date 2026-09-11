@@ -108,15 +108,15 @@ export default function Contact() {
   };
 
   return (
-    <main className="bg-white text-slate-950">
+    <main className="bg-white text-black">
 
       {/* =====================================================
           HERO
       ====================================================== */}
 
-      <section className="border-b border-slate-200">
+      <section className="border-b border-black">
 
-        <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
+        <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-20">
 
           <div className="max-w-4xl">
 
@@ -124,7 +124,7 @@ export default function Contact() {
 
               <span className="h-px w-10 bg-red-600" />
 
-              <span className="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">
+              <span className="text-xs font-bold uppercase tracking-[0.25em] text-red-700">
                 Contact
               </span>
 
@@ -132,12 +132,12 @@ export default function Contact() {
 
             <h1 className="text-5xl font-semibold tracking-[-0.04em] sm:text-6xl lg:text-7xl">
               Let&apos;s talk.
-              <span className="block text-slate-400">
+              <span className="block text-neutral-400">
                 Let&apos;s build.
               </span>
             </h1>
 
-            <p className="mt-8 max-w-2xl text-lg leading-8 text-slate-600">
+            <p className="mt-7 max-w-2xl text-lg leading-8 text-neutral-600">
               Have a project, business requirement, or
               question? Get in touch with the CANA team.
             </p>
@@ -152,9 +152,9 @@ export default function Contact() {
           CONTACT AREA
       ====================================================== */}
 
-      <section className="py-20 lg:py-28">
+      <section className="py-16 lg:py-20">
 
-        <div className="mx-auto grid max-w-7xl gap-16 px-6 lg:grid-cols-[0.75fr_1.25fr] lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-10 px-6 lg:grid-cols-[0.75fr_1.25fr] lg:px-8">
 
           {/* =================================================
               CONTACT INFORMATION
@@ -162,7 +162,7 @@ export default function Contact() {
 
           <div>
 
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-700">
               Get In Touch
             </p>
 
@@ -175,7 +175,7 @@ export default function Contact() {
               We&apos;ll be happy to discuss your needs.
             </p>
 
-            <div className="mt-10 divide-y divide-slate-200 border-y border-slate-200">
+            <div className="mt-8 divide-y divide-neutral-200 border-y border-black">
 
               {/* PHONE */}
 
@@ -341,11 +341,11 @@ export default function Contact() {
               CONTACT FORM
           ================================================== */}
 
-          <div className="rounded-2xl border border-slate-200 p-7 sm:p-9 lg:p-10">
+          <div className="rounded-2xl border border-black bg-white p-6 shadow-[0_18px_42px_rgba(0,0,0,.07)] sm:p-8 lg:p-10">
 
-            <div className="border-b border-slate-200 pb-6">
+            <div className="border-b border-black pb-6">
 
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-700">
                 Send an Inquiry
               </p>
 
@@ -393,7 +393,7 @@ export default function Contact() {
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="Your full name"
-                  className="w-full border-0 border-b border-slate-300 bg-transparent px-0 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-950 focus:ring-0"
+                  className="w-full border-0 border-b border-neutral-300 bg-transparent px-0 py-3 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-0"
                 />
 
               </div>
@@ -420,7 +420,7 @@ export default function Contact() {
                     value={formData.phone}
                     onChange={handleChange}
                     placeholder="+250..."
-                    className="w-full border-0 border-b border-slate-300 bg-transparent px-0 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-950 focus:ring-0"
+                    className="w-full border-0 border-b border-neutral-300 bg-transparent px-0 py-3 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-0"
                   />
 
                 </div>
@@ -443,7 +443,7 @@ export default function Contact() {
                     value={formData.email}
                     onChange={handleChange}
                     placeholder="you@example.com"
-                    className="w-full border-0 border-b border-slate-300 bg-transparent px-0 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-950 focus:ring-0"
+                    className="w-full border-0 border-b border-neutral-300 bg-transparent px-0 py-3 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-0"
                   />
 
                 </div>
@@ -467,7 +467,7 @@ export default function Contact() {
                   required
                   value={formData.service}
                   onChange={handleChange}
-                  className="w-full border-0 border-b border-slate-300 bg-white px-0 py-3 text-sm outline-none transition focus:border-slate-950 focus:ring-0"
+                  className="w-full border-0 border-b border-neutral-300 bg-white px-0 py-3 text-sm outline-none transition focus:border-black focus:ring-0"
                 >
 
                   <option value="">
@@ -533,7 +533,7 @@ export default function Contact() {
                   value={formData.message}
                   onChange={handleChange}
                   placeholder="Tell us about your project..."
-                  className="w-full resize-none border-0 border-b border-slate-300 bg-transparent px-0 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-950 focus:ring-0"
+                  className="w-full resize-none border-0 border-b border-neutral-300 bg-transparent px-0 py-3 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-0"
                 />
 
               </div>
@@ -543,7 +543,7 @@ export default function Contact() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg bg-black px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
 
                 {isSubmitting
@@ -568,26 +568,26 @@ export default function Contact() {
           LOCATION MAP
       ====================================================== */}
 
-      <section className="border-y border-slate-200 bg-slate-50/60 py-20 lg:py-24">
+      <section className="border-y border-black bg-white py-16 lg:py-20">
 
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
 
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded-2xl border border-black bg-white">
 
             <div className="grid md:grid-cols-[0.8fr_1.2fr]">
 
               {/* LOCATION CONTENT */}
 
-              <div className="flex flex-col justify-center p-8 sm:p-10 lg:p-12">
+              <div className="flex flex-col justify-center bg-black p-8 text-white sm:p-10 lg:p-12">
 
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-950 text-white">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-700 text-white">
                   <MapPin
                     size={20}
                     strokeWidth={1.7}
                   />
                 </div>
 
-                <p className="mt-7 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+                <p className="mt-7 text-xs font-bold uppercase tracking-[0.2em] text-red-400">
                   Our Location
                 </p>
 
@@ -595,11 +595,11 @@ export default function Contact() {
                   Remera, Kwa Rwahama
                 </h2>
 
-                <p className="mt-2 text-sm font-medium text-slate-500">
+                <p className="mt-2 text-sm font-medium text-white/70">
                   Kigali, Rwanda
                 </p>
 
-                <p className="mt-5 max-w-md leading-7 text-slate-500">
+                <p className="mt-5 max-w-md leading-7 text-white/70">
                   Visit the CANA team at our location
                   in Remera, Kwa Rwahama, Kigali.
                 </p>
@@ -608,7 +608,7 @@ export default function Contact() {
                   href={googleMapsUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-7 inline-flex w-fit items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  className="mt-7 inline-flex w-fit items-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-red-700 hover:text-white"
                 >
                   Get Directions
                   <ArrowRight size={16} />
@@ -642,21 +642,21 @@ export default function Contact() {
           FINAL CTA
       ====================================================== */}
 
-      <section className="py-24 lg:py-32">
+      <section className="border-t border-black bg-black py-16 text-white lg:py-20">
 
         <div className="mx-auto max-w-4xl px-6 text-center lg:px-8">
 
           <MessageCircle
             size={25}
             strokeWidth={1.7}
-            className="mx-auto"
+            className="mx-auto text-red-500"
           />
 
           <h2 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">
             Prefer a quick conversation?
           </h2>
 
-          <p className="mx-auto mt-5 max-w-xl leading-7 text-slate-500">
+          <p className="mx-auto mt-5 max-w-xl leading-7 text-white/70">
             Reach us directly on WhatsApp and speak with
             our team.
           </p>
@@ -665,7 +665,7 @@ export default function Contact() {
             href={whatsappUrl}
             target="_blank"
             rel="noreferrer"
-            className="mt-9 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className="mt-9 inline-flex items-center gap-2 rounded-lg bg-red-700 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-red-600"
           >
             Chat on WhatsApp
             <ArrowRight size={16} />

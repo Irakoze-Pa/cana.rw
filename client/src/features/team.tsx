@@ -53,25 +53,25 @@ const principles = [
 export default function Team() {
   return (
     <main className="bg-white text-slate-950">
-      <section className="overflow-hidden border-b border-slate-200 bg-slate-950 text-white">
-        <div className="relative mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
+      <section className="overflow-hidden border-b border-black bg-black text-white">
+        <div className="relative mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-20">
           <div className="absolute -right-24 top-0 h-72 w-72 rounded-full bg-red-600/20 blur-3xl" />
           <div className="absolute bottom-0 left-1/2 h-48 w-96 -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
 
           <div className="relative max-w-4xl">
             <div className="mb-7 flex items-center gap-3">
               <span className="h-px w-10 bg-red-500" />
-              <span className="text-xs font-bold uppercase tracking-[0.25em] text-slate-400">
+              <span className="text-xs font-bold uppercase tracking-[0.25em] text-neutral-400">
                 The people behind CANA
               </span>
             </div>
 
             <h1 className="text-5xl font-semibold leading-[1.04] tracking-[-0.045em] sm:text-6xl lg:text-7xl">
               Meet our team.
-              <span className="block text-slate-400">United by practical excellence.</span>
+              <span className="block text-neutral-400">United by practical excellence.</span>
             </h1>
 
-            <p className="mt-8 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
+            <p className="mt-7 max-w-2xl text-base leading-8 text-neutral-300 sm:text-lg">
               Across CANA Paints and CANA Services, our people combine care,
               technical know-how, and a commitment to doing every job well.
             </p>
@@ -79,14 +79,14 @@ export default function Team() {
             <div className="mt-10 flex flex-wrap gap-4">
               <Link
                 to="/contact"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
+                className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3.5 text-sm font-semibold text-black transition hover:bg-neutral-200"
               >
                 Talk to our team
                 <ArrowRight size={16} />
               </Link>
               <Link
                 to="/cana-paints/products"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-6 py-3.5 text-sm font-semibold text-white transition hover:border-white hover:bg-white/10"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/25 px-6 py-3.5 text-sm font-semibold text-white transition hover:border-red-500 hover:bg-white/10"
               >
                 Explore CANA Paints
               </Link>
@@ -95,10 +95,10 @@ export default function Team() {
         </div>
       </section>
 
-      <section className="py-24 lg:py-32">
-        <div className="mx-auto grid max-w-7xl gap-14 px-6 lg:grid-cols-2 lg:items-center lg:px-8">
+      <section className="py-16 lg:py-20">
+        <div className="mx-auto grid max-w-7xl gap-10 px-6 lg:grid-cols-2 lg:items-center lg:px-8">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-red-700">
               One team, two divisions
             </p>
             <h2 className="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -118,13 +118,13 @@ export default function Team() {
             </p>
           </div>
 
-          <figure className="relative overflow-hidden rounded-2xl bg-slate-100 shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
+          <figure className="relative overflow-hidden rounded-2xl border border-black bg-black shadow-[0_24px_60px_rgba(0,0,0,0.16)]">
             <img
               src={teamPlaceholder}
               alt="Representative placeholder portrait of a CANA team"
               className="aspect-[3/2] h-full w-full object-cover"
             />
-            <figcaption className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-slate-950/90 to-transparent px-5 pb-5 pt-14 text-xs font-medium text-white/90 sm:px-6 sm:pb-6">
+            <figcaption className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/90 to-transparent px-5 pb-5 pt-14 text-xs font-medium text-white/90 sm:px-6 sm:pb-6">
               <span className="h-2 w-2 rounded-full bg-red-500" />
               Representative team image.
             </figcaption>
@@ -132,7 +132,7 @@ export default function Team() {
         </div>
       </section>
 
-      <section className="border-y border-slate-200 bg-slate-50/70 py-24 lg:py-28">
+      <section className="border-y border-black bg-white py-16 lg:py-20">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="max-w-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-red-600">
@@ -143,24 +143,24 @@ export default function Team() {
             </h2>
           </div>
 
-          <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 md:grid-cols-2">
+          <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-black bg-black md:grid-cols-2">
             {teams.map((team) => {
               const Icon = team.icon;
 
               return (
-                <article key={team.title} className="group bg-white p-8 sm:p-10">
+                <article key={team.title} className="group bg-white p-7 transition-colors duration-300 hover:bg-black sm:p-9">
                   <div className="flex items-start justify-between gap-6">
-                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600 transition group-hover:bg-red-600 group-hover:text-white">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-black text-white transition group-hover:bg-red-700">
                       <Icon size={22} strokeWidth={1.8} />
                     </span>
-                    <span className="text-xs font-bold tracking-[0.18em] text-slate-300">
+                    <span className="text-xs font-bold tracking-[0.18em] text-red-700 transition group-hover:text-red-400">
                       {team.number}
                     </span>
                   </div>
-                  <h3 className="mt-10 text-2xl font-semibold tracking-tight text-slate-950">
+                  <h3 className="mt-8 text-2xl font-semibold tracking-tight text-black transition group-hover:text-white">
                     {team.title}
                   </h3>
-                  <p className="mt-4 max-w-md leading-7 text-slate-500">
+                  <p className="mt-4 max-w-md leading-7 text-neutral-600 transition group-hover:text-neutral-300">
                     {team.description}
                   </p>
                 </article>
@@ -170,13 +170,13 @@ export default function Team() {
         </div>
       </section>
 
-      <section className="py-24 lg:py-32">
-        <div className="mx-auto grid max-w-7xl gap-14 px-6 lg:grid-cols-2 lg:px-8">
+      <section className="py-16 lg:py-20">
+        <div className="mx-auto grid max-w-7xl gap-10 px-6 lg:grid-cols-2 lg:px-8">
           <div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-950 text-white">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-black text-white">
               <HeartHandshake size={22} strokeWidth={1.8} />
             </div>
-            <p className="mt-8 text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
+            <p className="mt-8 text-xs font-bold uppercase tracking-[0.22em] text-red-700">
               Our way of working
             </p>
             <h2 className="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -189,18 +189,18 @@ export default function Team() {
             </p>
           </div>
 
-          <div className="divide-y divide-slate-200 border-y border-slate-200">
+          <div className="divide-y divide-neutral-200 border-y border-black">
             {principles.map((principle) => (
               <div key={principle} className="flex items-center gap-4 py-5">
                 <BadgeCheck size={19} className="shrink-0 text-red-600" />
-                <span className="font-medium text-slate-700">{principle}</span>
+                <span className="font-medium text-black">{principle}</span>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="border-t border-slate-200 bg-slate-950 py-20 text-white">
+      <section className="border-t border-black bg-black py-16 text-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-8 px-6 sm:flex-row sm:items-center sm:justify-between lg:px-8">
           <div>
             <div className="flex items-center gap-3 text-red-400">

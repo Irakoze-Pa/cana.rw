@@ -4,6 +4,10 @@ export interface RegisterData {
   fullName: string;
   phone: string;
   email?: string;
+  address: string;
+  isCompanyCustomer: boolean;
+  businessName?: string;
+  tin?: string;
   password: string;
 }
 
@@ -12,6 +16,10 @@ export interface AuthUser {
   fullName: string;
   phone: string;
   email?: string;
+  address?: string;
+  isCompanyCustomer?: boolean;
+  businessName?: string;
+  tin?: string;
   role: "customer" | "staff" | "admin" | "superadmin";
   company: "cana_group" | "cana_paints" | "cana_services";
   department?: "sales" | "production" | "warehouse" | "finance" | "marketing" | "hr" | "procurement" | "customer_service" | "management" | "transport";

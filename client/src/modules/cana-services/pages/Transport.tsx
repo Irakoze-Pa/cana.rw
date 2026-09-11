@@ -178,8 +178,8 @@ export default function Transport() {
       {/* =========================================================
           PAGE INTRO
       ========================================================== */}
-      <section className="border-b border-neutral-200">
-        <div className="mx-auto max-w-7xl px-6 pb-20 pt-14 sm:px-8 lg:px-12 lg:pb-24 lg:pt-20">
+      <section className="border-b border-black">
+        <div className="mx-auto max-w-7xl px-6 pb-14 pt-12 sm:px-8 lg:px-12 lg:pb-16 lg:pt-16">
           <div className="grid gap-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
             <div>
               <div className="mb-6 flex items-center gap-3">
@@ -211,7 +211,7 @@ export default function Transport() {
                   href={whatsappLink}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-xl bg-neutral-950 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-red-600"
+                  className="inline-flex items-center gap-2 rounded-lg bg-black px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-red-700"
                 >
                   Request Transport
                   <ArrowRight size={16} />
@@ -219,7 +219,7 @@ export default function Transport() {
 
                 <Link
                   to="/contact"
-                  className="inline-flex items-center gap-2 rounded-xl border border-neutral-300 px-5 py-3.5 text-sm font-semibold text-neutral-900 transition hover:border-neutral-950"
+                  className="inline-flex items-center gap-2 rounded-lg border border-black px-5 py-3.5 text-sm font-semibold text-black transition hover:border-red-700 hover:text-red-700"
                 >
                   Contact CANA
                 </Link>
@@ -233,7 +233,7 @@ export default function Transport() {
           SERVICES
       ========================================================== */}
       <section className="bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-20 sm:px-8 lg:px-12 lg:py-28">
+        <div className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-12 lg:py-20">
           <div className="mb-14 grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">
             <div>
               <span className="text-xs font-bold uppercase tracking-[0.22em] text-red-600">
@@ -264,7 +264,7 @@ export default function Transport() {
           CANA ECOSYSTEM
       ========================================================== */}
       <section className="bg-neutral-950 text-white">
-        <div className="mx-auto max-w-7xl px-6 py-20 sm:px-8 lg:px-12 lg:py-24">
+        <div className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-12 lg:py-20">
           <div className="grid gap-14 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
             <div>
               <span className="text-xs font-bold uppercase tracking-[0.22em] text-red-500">
@@ -340,8 +340,8 @@ export default function Transport() {
       {/* =========================================================
           PROCESS
       ========================================================== */}
-      <section className="bg-[#f7f7f7]">
-        <div className="mx-auto max-w-7xl px-6 py-20 sm:px-8 lg:px-12 lg:py-28">
+      <section className="border-y border-black bg-white">
+        <div className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-12 lg:py-20">
           <div className="grid gap-12 lg:grid-cols-[0.65fr_1.35fr]">
             <div>
               <span className="text-xs font-bold uppercase tracking-[0.22em] text-red-600">
@@ -371,7 +371,7 @@ export default function Transport() {
           WHY CANA
       ========================================================== */}
       <section className="bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-20 sm:px-8 lg:px-12 lg:py-28">
+        <div className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-12 lg:py-20">
           <div className="mb-14 max-w-2xl">
             <span className="text-xs font-bold uppercase tracking-[0.22em] text-red-600">
               Why CANA
@@ -416,8 +416,8 @@ export default function Transport() {
       {/* =========================================================
           DELIVERY REQUIREMENTS
       ========================================================== */}
-      <section className="border-t border-neutral-200 bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-20 sm:px-8 lg:px-12 lg:py-24">
+      <section className="border-t border-black bg-white">
+        <div className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-12 lg:py-20">
           <div className="grid gap-12 lg:grid-cols-[1fr_1fr] lg:items-center">
             <div>
               <span className="text-xs font-bold uppercase tracking-[0.22em] text-red-600">
@@ -445,7 +445,7 @@ export default function Transport() {
               </a>
             </div>
 
-            <div className="rounded-2xl bg-[#f7f7f7] p-7 sm:p-9">
+            <div className="rounded-2xl border border-black bg-white p-7 shadow-sm sm:p-9">
               <div className="flex items-start gap-4 border-b border-neutral-200 pb-6">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-red-600">
                   <MapPin size={18} />
@@ -504,7 +504,7 @@ export default function Transport() {
       {/* =========================================================
           FINAL CTA
       ========================================================== */}
-      <section className="bg-red-600">
+      <section className="bg-black">
         <div className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-12 lg:py-20">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl">
@@ -527,7 +527,7 @@ export default function Transport() {
                 href={whatsappLink}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-950 hover:text-white"
+                className="inline-flex items-center gap-2 rounded-lg bg-red-700 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-red-600"
               >
                 Request Transport
                 <ArrowRight size={16} />
@@ -535,7 +535,7 @@ export default function Transport() {
 
               <Link
                 to="/contact"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/40 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-white hover:text-neutral-950"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/40 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-white hover:text-black"
               >
                 Contact CANA
               </Link>

@@ -31,7 +31,7 @@ function ScaffoldRental() {
       {/* =========================================================
           HERO
       ========================================================== */}
-      <section className="relative min-h-[75vh] overflow-hidden">
+      <section className="relative min-h-[64vh] overflow-hidden">
 
         <img
           src={heroImage}
@@ -53,7 +53,7 @@ function ScaffoldRental() {
             z-10
             mx-auto
             flex
-            min-h-[75vh]
+            min-h-[64vh]
             max-w-7xl
             items-end
             px-5
@@ -129,17 +129,17 @@ function ScaffoldRental() {
                   items-center
                   justify-center
                   gap-2
-                  rounded-full
-                  bg-red-600
+                  rounded-lg
+                  bg-white
                   px-6
                   py-3.5
                   text-sm
                   font-semibold
-                  text-white
+                  text-black
                   transition-all
                   duration-300
-                  hover:bg-white
-                  hover:text-black
+                  hover:bg-red-700
+                  hover:text-white
                 "
               >
                 Buy Scaffolding
@@ -156,7 +156,7 @@ function ScaffoldRental() {
                   items-center
                   justify-center
                   gap-2
-                  rounded-full
+                  rounded-lg
                   border
                   border-white/35
                   px-6
@@ -184,7 +184,7 @@ function ScaffoldRental() {
       {/* =========================================================
           INTRO
       ========================================================== */}
-      <section className="py-20 lg:py-28">
+      <section className="py-16 lg:py-20">
 
         <div className="mx-auto max-w-7xl px-5 lg:px-8">
 
@@ -248,7 +248,7 @@ function ScaffoldRental() {
       {/* =========================================================
           SALE / HIRE
       ========================================================== */}
-      <section className="bg-[#f7f7f7] py-20 lg:py-28">
+      <section className="border-y border-black bg-white py-16 lg:py-20">
 
         <div className="mx-auto max-w-7xl px-5 lg:px-8">
 
@@ -490,7 +490,7 @@ function ScaffoldRental() {
       {/* =========================================================
           EQUIPMENT / PROJECTS
       ========================================================== */}
-      <section className="py-20 lg:py-28">
+      <section className="py-16 lg:py-20">
 
         <div className="mx-auto max-w-7xl px-5 lg:px-8">
 
@@ -657,7 +657,7 @@ function ScaffoldRental() {
       {/* =========================================================
           WHY CANA
       ========================================================== */}
-      <section className="bg-[#f7f7f7] py-20 lg:py-24">
+      <section className="border-y border-black bg-white py-16 lg:py-20">
 
         <div className="mx-auto max-w-7xl px-5 lg:px-8">
 
@@ -731,7 +731,7 @@ function ScaffoldRental() {
       {/* =========================================================
           DELIVERY / SUPPORT
       ========================================================== */}
-      <section className="bg-black py-20 text-white lg:py-24">
+      <section className="bg-black py-16 text-white lg:py-20">
 
         <div className="mx-auto max-w-7xl px-5 lg:px-8">
 
@@ -860,7 +860,7 @@ function ScaffoldRental() {
       {/* =========================================================
           FINAL CTA
       ========================================================== */}
-      <section className="py-20 lg:py-28">
+      <section className="py-16 lg:py-20">
 
         <div className="mx-auto max-w-5xl px-5 text-center lg:px-8">
 

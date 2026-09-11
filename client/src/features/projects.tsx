@@ -206,25 +206,25 @@ export default function Projects() {
   };
 
   return (
-    <main className="min-h-screen bg-white text-slate-950">
+    <main className="min-h-screen bg-white text-black">
 
       {/* =====================================================
           HERO
       ===================================================== */}
 
-      <section className="relative overflow-hidden border-b border-slate-200 bg-white">
+      <section className="relative overflow-hidden border-b border-black bg-white">
 
         {/* Decorative background */}
 
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -left-32 top-10 h-96 w-96 rounded-full bg-red-50 blur-3xl" />
 
-          <div className="absolute -right-40 top-0 h-[500px] w-[500px] rounded-full bg-slate-100 blur-3xl" />
+          <div className="absolute -right-40 top-0 h-[500px] w-[500px] rounded-full bg-black/[0.035] blur-3xl" />
 
           <div className="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-50/40 blur-3xl" />
         </div>
 
-        <div className="relative mx-auto max-w-7xl px-6 py-16 sm:py-20 lg:px-8 lg:py-28">
+        <div className="relative mx-auto max-w-7xl px-6 py-12 sm:py-16 lg:px-8 lg:py-20">
 
           <div className="grid items-center gap-12 lg:grid-cols-[0.82fr_1.18fr] lg:gap-16">
 
@@ -270,7 +270,7 @@ export default function Projects() {
                 <button
                   type="button"
                   onClick={scrollToProjects}
-                  className="group inline-flex items-center gap-2 rounded-xl bg-slate-950 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-slate-950/10 transition duration-300 hover:-translate-y-0.5 hover:bg-red-600"
+                  className="group inline-flex items-center gap-2 rounded-lg bg-black px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:bg-red-700"
                 >
                   View Projects
 
@@ -285,7 +285,7 @@ export default function Projects() {
                   onClick={() =>
                     selectCategory("House Painting")
                   }
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-6 py-3.5 text-sm font-semibold text-slate-700 transition duration-300 hover:border-slate-950 hover:text-slate-950"
+                  className="inline-flex items-center gap-2 rounded-lg border border-black bg-white px-6 py-3.5 text-sm font-semibold text-black transition duration-300 hover:border-red-700 hover:text-red-700"
                 >
                   <PaintRoller size={16} />
 
@@ -336,9 +336,9 @@ export default function Projects() {
 
             <div className="group relative">
 
-              <div className="absolute -inset-4 rounded-[2.5rem] bg-gradient-to-br from-red-100 via-transparent to-slate-100 opacity-80 blur-2xl" />
+              <div className="absolute -inset-4 rounded-[2.5rem] bg-gradient-to-br from-red-100 via-transparent to-black/5 opacity-80 blur-2xl" />
 
-              <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-100 shadow-2xl">
+              <div className="relative overflow-hidden rounded-[1.5rem] border border-black bg-black shadow-2xl">
 
                 {/* Featured badge */}
 
@@ -416,7 +416,7 @@ export default function Projects() {
           FILTER BAR
       ===================================================== */}
 
-      <section className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xl">
+      <section className="sticky top-0 z-30 border-b border-black bg-white/95 backdrop-blur-xl">
 
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 overflow-x-auto px-6 py-4 lg:px-8">
 
@@ -436,8 +436,8 @@ export default function Projects() {
                   }
                   className={`inline-flex whitespace-nowrap items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition duration-300 ${
                     active
-                      ? "border-slate-950 bg-slate-950 text-white shadow-sm"
-                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-400 hover:text-slate-950"
+                      ? "border-black bg-black text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-black hover:text-black"
                   }`}
                 >
                   {filter !== "All" && (
@@ -475,7 +475,7 @@ export default function Projects() {
 
       <section
         id="projects-gallery"
-        className="scroll-mt-20 py-20 lg:py-28"
+        className="scroll-mt-20 py-16 lg:py-20"
       >
 
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -532,7 +532,7 @@ export default function Projects() {
                 return (
                   <article
                     key={project.id}
-                    className={`group overflow-hidden rounded-3xl border border-slate-200 bg-white transition duration-500 hover:-translate-y-1 hover:border-slate-300 hover:shadow-2xl ${
+                    className={`group overflow-hidden rounded-2xl border border-black bg-white transition duration-500 hover:-translate-y-1 hover:border-red-700 hover:shadow-2xl ${
                       isFirst
                         ? "md:col-span-2 lg:col-span-2"
                         : ""
@@ -684,7 +684,7 @@ export default function Projects() {
 
       <section
         id="services"
-        className="scroll-mt-20 border-y border-slate-200 bg-slate-50 py-20 lg:py-28"
+        className="scroll-mt-20 border-y border-black bg-white py-16 lg:py-20"
       >
 
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -724,7 +724,7 @@ export default function Projects() {
                 PAINTING
             ================================================= */}
 
-            <article className="group overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm transition duration-500 hover:-translate-y-1 hover:shadow-2xl">
+            <article className="group overflow-hidden rounded-2xl border border-black bg-white shadow-sm transition duration-500 hover:-translate-y-1 hover:border-red-700 hover:shadow-2xl">
 
               <div className="relative overflow-hidden">
 
@@ -821,7 +821,7 @@ export default function Projects() {
                 SCAFFOLDING
             ================================================= */}
 
-            <article className="group overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm transition duration-500 hover:-translate-y-1 hover:shadow-2xl">
+            <article className="group overflow-hidden rounded-2xl border border-black bg-white shadow-sm transition duration-500 hover:-translate-y-1 hover:border-red-700 hover:shadow-2xl">
 
               <div className="relative overflow-hidden">
 
@@ -924,7 +924,7 @@ export default function Projects() {
           PORTFOLIO BREAKDOWN
       ===================================================== */}
 
-      <section className="border-b border-slate-200 bg-white py-16 lg:py-20">
+      <section className="border-b border-black bg-black py-14 text-white lg:py-16">
 
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
 
@@ -932,7 +932,7 @@ export default function Projects() {
 
             {/* TOTAL */}
 
-            <div className="group rounded-3xl border border-slate-200 bg-slate-50 p-7 transition duration-300 hover:-translate-y-1 hover:border-red-100 hover:shadow-lg">
+            <div className="group rounded-2xl border border-white/15 bg-white/[.04] p-6 transition duration-300 hover:-translate-y-1 hover:border-red-500 hover:bg-white/[.08] hover:shadow-lg">
 
               <div className="flex items-start justify-between">
 
@@ -941,7 +941,7 @@ export default function Projects() {
                     {projects.length}
                   </p>
 
-                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-white/55">
                     Featured Projects
                   </p>
                 </div>
@@ -953,7 +953,7 @@ export default function Projects() {
 
               </div>
 
-              <p className="mt-5 text-sm leading-6 text-slate-500">
+              <p className="mt-5 text-sm leading-6 text-white/70">
                 Selected examples of our current project work.
               </p>
 
@@ -961,7 +961,7 @@ export default function Projects() {
 
             {/* PAINTING */}
 
-            <div className="group rounded-3xl border border-slate-200 bg-slate-50 p-7 transition duration-300 hover:-translate-y-1 hover:border-red-100 hover:shadow-lg">
+            <div className="group rounded-2xl border border-white/15 bg-white/[.04] p-6 transition duration-300 hover:-translate-y-1 hover:border-red-500 hover:bg-white/[.08] hover:shadow-lg">
 
               <div className="flex items-start justify-between">
 
@@ -970,7 +970,7 @@ export default function Projects() {
                     {paintingProjects.length}
                   </p>
 
-                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-white/55">
                     Painting Projects
                   </p>
                 </div>
@@ -982,7 +982,7 @@ export default function Projects() {
 
               </div>
 
-              <p className="mt-5 text-sm leading-6 text-slate-500">
+              <p className="mt-5 text-sm leading-6 text-white/70">
                 Residential interior and exterior painting work.
               </p>
 
@@ -990,7 +990,7 @@ export default function Projects() {
 
             {/* SCAFFOLDING */}
 
-            <div className="group rounded-3xl border border-slate-200 bg-slate-50 p-7 transition duration-300 hover:-translate-y-1 hover:border-red-100 hover:shadow-lg">
+            <div className="group rounded-2xl border border-white/15 bg-white/[.04] p-6 transition duration-300 hover:-translate-y-1 hover:border-red-500 hover:bg-white/[.08] hover:shadow-lg">
 
               <div className="flex items-start justify-between">
 
@@ -999,7 +999,7 @@ export default function Projects() {
                     {scaffoldingProjects.length}
                   </p>
 
-                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-white/55">
                     Scaffolding Projects
                   </p>
                 </div>
@@ -1011,7 +1011,7 @@ export default function Projects() {
 
               </div>
 
-              <p className="mt-5 text-sm leading-6 text-slate-500">
+              <p className="mt-5 text-sm leading-6 text-white/70">
                 Practical access solutions for elevated exterior
                 work.
               </p>
@@ -1131,7 +1131,7 @@ export default function Projects() {
           PROCESS
       ===================================================== */}
 
-      <section className="border-y border-slate-200 bg-slate-50 py-20 lg:py-24">
+      <section className="border-y border-black bg-white py-16 lg:py-20">
 
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
 
@@ -1225,7 +1225,7 @@ export default function Projects() {
           FINAL CTA
       ===================================================== */}
 
-      <section className="relative overflow-hidden bg-slate-950 py-20 text-white lg:py-28">
+      <section className="relative overflow-hidden bg-black py-16 text-white lg:py-20">
 
         <div className="pointer-events-none absolute -right-40 -top-40 h-[500px] w-[500px] rounded-full bg-red-600/20 blur-3xl" />
 

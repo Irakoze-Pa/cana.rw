@@ -126,46 +126,51 @@ function LoginModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-5 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 px-3 py-3 backdrop-blur-sm sm:items-center sm:px-5"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
         }
       }}
     >
-      <div className="relative w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
-        {/* Close */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-modal-title"
+        className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[1.75rem] bg-white shadow-2xl sm:max-h-[90vh]"
+      >
+        <div className="h-1.5 bg-red-600" />
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-5 top-5 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-black"
+          aria-label="Close login"
+          className="absolute right-4 top-5 rounded-full border border-gray-200 bg-white p-2 text-gray-500 shadow-sm transition hover:border-black hover:text-black sm:right-6"
         >
           <X size={20} />
         </button>
 
-        {/* Logo */}
-        <div className="text-center">
+        <div className="px-5 pb-6 pt-7 sm:px-8 sm:pb-8 sm:pt-9">
+          <div className="flex items-center gap-3">
           <img
             src={logo}
-            alt="CANA Group"
-            className="mx-auto h-20 w-auto object-contain"
+              alt="CANAN Business Group"
+              className="h-12 w-auto object-contain sm:h-14"
           />
+            <div className="border-l border-gray-200 pl-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-600">Secure access</p>
+              <p className="mt-1 text-xs font-medium text-gray-500">CANAN Business Group</p>
+            </div>
+          </div>
 
-          <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-black">
-            Welcome Back
-          </h2>
+          <div className="mt-7">
+            <h2 id="login-modal-title" className="text-2xl font-extrabold tracking-tight text-black sm:text-3xl">Welcome back</h2>
+            <p className="mt-2 max-w-sm text-sm leading-6 text-gray-600">Sign in to manage orders, quotations and your CANA account.</p>
+          </div>
 
-          <p className="mt-2 text-sm text-gray-500">
-            Login to your CANA account
-          </p>
-        </div>
-
-        {/* Form */}
         <form
           onSubmit={handleSubmit}
-          className="mt-8 space-y-5"
+            className="mt-7 space-y-5"
         >
-          {/* Phone */}
           <div>
             <label
               htmlFor="phone"
@@ -174,7 +179,7 @@ function LoginModal({
               Phone Number
             </label>
 
-            <div className="flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 transition focus-within:border-black">
+            <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3.5 transition focus-within:border-black focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5">
               <Phone
                 size={18}
                 className="shrink-0 text-gray-400"
@@ -192,7 +197,6 @@ function LoginModal({
             </div>
           </div>
 
-          {/* Password */}
           <div>
             <div className="mb-2 flex items-center justify-between">
               <label
@@ -211,7 +215,7 @@ function LoginModal({
               </button>
             </div>
 
-            <div className="flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 transition focus-within:border-black">
+            <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3.5 transition focus-within:border-black focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5">
               <Lock
                 size={18}
                 className="shrink-0 text-gray-400"
@@ -229,27 +233,24 @@ function LoginModal({
             </div>
           </div>
 
-          {/* Error */}
           {error && (
-            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+            <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
               <p className="text-sm font-medium text-red-600">
                 {error}
               </p>
             </div>
           )}
 
-          {/* Login Button */}
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center rounded-xl bg-red-600 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-center rounded-xl bg-black px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-black/10 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
 
-        {/* Register */}
-        <div className="mt-7 text-center text-sm text-gray-600">
+          <div className="mt-7 border-t border-gray-100 pt-5 text-center text-sm text-gray-600">
           <span>Don't have an account?</span>
 
           <button
@@ -259,6 +260,7 @@ function LoginModal({
           >
             Create account
           </button>
+        </div>
         </div>
       </div>
     </div>

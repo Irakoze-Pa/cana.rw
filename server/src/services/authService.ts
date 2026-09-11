@@ -15,6 +15,10 @@ type RegisterInput = {
   fullName: string;
   phone: string;
   email?: string;
+  address: string;
+  isCompanyCustomer: boolean;
+  businessName?: string;
+  tin?: string;
   password: string;
 };
 
@@ -31,6 +35,10 @@ class AuthService {
     fullName,
     phone,
     email,
+    address,
+    isCompanyCustomer,
+    businessName,
+    tin,
     password,
   }: RegisterInput) {
 
@@ -55,6 +63,10 @@ class AuthService {
       fullName,
       phone: normalizedPhone,
       email: email || undefined,
+      address: address.trim(),
+      isCompanyCustomer,
+      businessName: isCompanyCustomer ? businessName?.trim() || "" : "",
+      tin: isCompanyCustomer ? tin?.trim() || "" : "",
       password: hashedPassword,
 
       role: UserRole.CUSTOMER,

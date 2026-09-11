@@ -16,22 +16,24 @@ router.use(protect);
 
 router.get("/customers", authorizeRoles(UserRole.ADMIN, UserRole.STAFF), async (_req, res, next) => {
   try {
-    const customers = await User.find({ role: UserRole.CUSTOMER, status: UserStatus.ACTIVE }).select("fullName phone email businessName address tin").sort({ fullName: 1 }).lean();
+    const customers = await User.find({ role: UserRole.CUSTOMER, status: UserStatus.ACTIVE }).select("fullName phone email isCompanyCustomer businessName address tin").sort({ fullName: 1 }).lean();
     res.json({ data: customers });
   } catch (error) { next(error); }
 });
 
 router.post("/customers", authorizeRoles(UserRole.ADMIN, UserRole.STAFF), async (req, res, next) => {
   try {
-    const { fullName, phone, email, businessName, address, tin } = req.body;
+    const { fullName, phone, email, isCompanyCustomer = false, businessName, address, tin } = req.body;
     const normalizedPhone = typeof phone === "string" ? phone.trim().replace(/[\s()-]/g, "") : "";
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
     if (typeof fullName !== "string" || fullName.trim().length < 3 || !/^\+?\d{6,15}$/.test(normalizedPhone) || (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail))) {
       return res.status(400).json({ error: { message: "Enter a name of at least 3 characters, a valid phone number, and a valid optional email." } });
     }
+    if (typeof address !== "string" || address.trim().length < 3) return res.status(400).json({ error: { message: "Enter the customer's address." } });
+    if (isCompanyCustomer && (typeof businessName !== "string" || !businessName.trim() || typeof tin !== "string" || !tin.trim())) return res.status(400).json({ error: { message: "Company name and TIN are required for a company customer." } });
     if (await User.exists({ $or: [{ phone: normalizedPhone }, ...(normalizedEmail ? [{ email: normalizedEmail }] : [])] })) return res.status(409).json({ error: { message: "An account already uses this phone number or email." } });
-    const customer = await User.create({ fullName: fullName.trim(), phone: normalizedPhone, ...(normalizedEmail ? { email: normalizedEmail } : {}), password: await hashPassword(randomBytes(32).toString("hex")), businessName: typeof businessName === "string" ? businessName.trim() : "", address: typeof address === "string" ? address.trim() : "", tin: typeof tin === "string" ? tin.trim() : "", role: UserRole.CUSTOMER, status: UserStatus.ACTIVE, permissions: [] });
-    res.status(201).json({ data: { _id: customer._id, fullName: customer.fullName, phone: customer.phone, email: customer.email, businessName: customer.businessName, address: customer.address, tin: customer.tin } });
+    const customer = await User.create({ fullName: fullName.trim(), phone: normalizedPhone, ...(normalizedEmail ? { email: normalizedEmail } : {}), password: await hashPassword(randomBytes(32).toString("hex")), isCompanyCustomer: Boolean(isCompanyCustomer), businessName: isCompanyCustomer && typeof businessName === "string" ? businessName.trim() : "", address: address.trim(), tin: isCompanyCustomer && typeof tin === "string" ? tin.trim() : "", role: UserRole.CUSTOMER, status: UserStatus.ACTIVE, permissions: [] });
+    res.status(201).json({ data: { _id: customer._id, fullName: customer.fullName, phone: customer.phone, email: customer.email, isCompanyCustomer: customer.isCompanyCustomer, businessName: customer.businessName, address: customer.address, tin: customer.tin } });
   } catch (error) {
     if ((error as { code?: number }).code === 11000) return res.status(409).json({ error: { message: "An account already uses this phone number or email." } });
     next(error);

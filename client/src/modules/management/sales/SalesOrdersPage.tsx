@@ -9,7 +9,7 @@ import { printCanaDocument } from "../utils/printCanaDocument";
 type Order = {
   _id: string;
   orderNumber: string;
-  customer?: { fullName?: string; phone?: string; email?: string };
+  customer?: { fullName?: string; phone?: string; email?: string; isCompanyCustomer?: boolean; businessName?: string; address?: string; tin?: string };
   subtotal?: number;
   tax?: number;
   total: number;
@@ -28,7 +28,7 @@ type Order = {
   }[];
   createdAt: string;
 };
-type Customer = { _id: string; fullName: string; phone: string };
+type Customer = { _id: string; fullName: string; phone: string; isCompanyCustomer?: boolean; businessName?: string; address?: string; tin?: string };
 type Product = {
   _id: string;
   name: string;
@@ -55,13 +55,15 @@ function printSalesOrder(order: Order) {
       label: "Customer",
       name: order.customer?.fullName || "Customer",
       lines: [
+        order.customer?.businessName,
         order.customer?.phone,
         order.customer?.email,
-        order.deliveryAddress,
+        order.deliveryAddress || order.customer?.address,
       ],
     },
     details: [
       { label: "Customer", value: order.customer?.fullName || "Customer" },
+      ...(order.customer?.businessName ? [{ label: "Company", value: order.customer.businessName }, { label: "TIN", value: order.customer.tin || "—" }] : []),
       { label: "Phone", value: order.customer?.phone },
       { label: "Email", value: order.customer?.email },
       {
@@ -321,7 +323,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
             <option value="">Select customer</option>
             {customers.map((customer) => (
               <option key={customer._id} value={customer._id}>
-                {customer.fullName} · {customer.phone}
+                {customer.businessName ? `${customer.businessName} · ${customer.fullName} · ${customer.phone}` : `${customer.fullName} · ${customer.phone}`}
               </option>
             ))}
           </select>
@@ -517,7 +519,8 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                       {order.orderNumber}
                     </td>
                     <td className="px-5 py-4">
-                      {order.customer?.fullName || "Customer"}
+                      <p className="font-semibold text-slate-900">{order.customer?.businessName || order.customer?.fullName || "Customer"}</p>
+                      {order.customer?.businessName && <p className="mt-1 text-xs text-slate-500">Contact: {order.customer.fullName}</p>}
                     </td>
                     <td className="px-5 py-4">
                       {order.items
