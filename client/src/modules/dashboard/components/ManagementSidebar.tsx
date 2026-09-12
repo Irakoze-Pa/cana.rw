@@ -25,6 +25,7 @@ import {
   HardHat,
   Wrench,
   ClipboardCheck,
+  MapPinned,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/authContext";
@@ -284,6 +285,13 @@ const groups: Group[] = [
         icon: Banknote,
         roles: ["admin", "superadmin"],
       },
+    ],
+  },
+  {
+    label: "Sites & field work",
+    icon: MapPinned,
+    items: [
+      { label: "Site management", to: "/management/sites", icon: MapPinned, departments: ["sales", "customer_service", "management"] },
     ],
   },
   {

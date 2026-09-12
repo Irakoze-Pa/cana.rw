@@ -31,6 +31,7 @@ import complianceRoutes from "./modules/compliance/compliance.routes";
 import supplierPaymentRoutes from "./modules/supplierPayments/supplierPayment.routes";
 import expenseRoutes from "./modules/expenses/expense.routes";
 import proformaRoutes from "./modules/proformas/proforma.routes";
+import siteRoutes from "./modules/sites/site.routes";
 
 const app = express();
 const api = Router();
@@ -100,6 +101,7 @@ api.use("/compliance", complianceRoutes);
 api.use("/supplier-payments", supplierPaymentRoutes);
 api.use("/expenses", expenseRoutes);
 api.use("/proformas", proformaRoutes);
+api.use("/sites", siteRoutes);
 
 // =====================================================
 // SUPPLIERS

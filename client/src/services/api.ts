@@ -24,6 +24,14 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  // Let the browser set the multipart boundary for FormData uploads. A forced
+  // JSON content type makes multer receive the site/product fields but not the
+  // selected image file.
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    config.headers.setContentType?.(false);
+    delete config.headers["Content-Type"];
+  }
+
   const token = localStorage.getItem("token");
 
   if (token) {

@@ -7,7 +7,8 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import api from "@/services/api";
 
 // =========================================================
 // LOCAL CANA PROJECT IMAGES
@@ -35,6 +36,23 @@ interface Project {
   image: string;
   features: string[];
 }
+
+type PublicSiteProject = {
+  _id: string;
+  name: string;
+  workType: string;
+  address: string;
+  district?: string;
+  publicSummary?: string;
+  image?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+const siteMapLink = (site: PublicSiteProject) =>
+  site.latitude != null && site.longitude != null
+    ? `https://www.google.com/maps?q=${site.latitude},${site.longitude}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(site.address)}`;
 
 // =========================================================
 // PROJECT DATA
@@ -148,6 +166,13 @@ function CategoryIcon({
 export default function Projects() {
   const [activeFilter, setActiveFilter] =
     useState<ProjectCategory>("All");
+  const [siteProjects, setSiteProjects] = useState<PublicSiteProject[]>([]);
+
+  useEffect(() => {
+    api.get<{ data: PublicSiteProject[] }>("/sites/public")
+      .then((response) => setSiteProjects((response.data.data || []).filter((site) => Boolean(site.image))))
+      .catch(() => setSiteProjects([]));
+  }, []);
 
   const filteredProjects = useMemo(() => {
     if (activeFilter === "All") {
@@ -677,6 +702,34 @@ export default function Projects() {
         </div>
 
       </section>
+
+      {siteProjects.length > 0 && (
+        <section className="border-y border-black bg-white py-16 lg:py-20">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+              <div className="max-w-3xl">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-600">CANA site portfolio</p>
+                <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Recent work, with locations.</h2>
+                <p className="mt-4 text-sm leading-7 text-slate-500 sm:text-base">Current project photos shared directly by our operations team. Open any location when you want to see where the work is happening.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Live portfolio</p><p className="mt-1 text-xl font-extrabold text-slate-950">{siteProjects.length} site{siteProjects.length === 1 ? "" : "s"}</p></div>
+            </div>
+            <div className="mt-9 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {siteProjects.map((site) => (
+                <article key={site._id} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white transition duration-300 hover:-translate-y-1 hover:border-red-300 hover:shadow-xl">
+                  <div className="relative overflow-hidden"><img src={site.image} alt={site.name} loading="lazy" className="aspect-[4/3] w-full object-cover transition duration-500 group-hover:scale-105" /><span className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.12em] text-red-700 shadow-sm">{site.workType}</span></div>
+                  <div className="p-5">
+                    <h3 className="text-lg font-extrabold text-slate-950">{site.name}</h3>
+                    <p className="mt-2 flex items-start gap-1.5 text-sm text-slate-500"><MapPin size={15} className="mt-0.5 shrink-0 text-red-600" />{site.address}{site.district ? ` · ${site.district}` : ""}</p>
+                    {site.publicSummary && <p className="mt-3 text-sm leading-6 text-slate-600">{site.publicSummary}</p>}
+                    <a href={siteMapLink(site)} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-1.5 border-t border-slate-100 pt-4 text-sm font-bold text-red-700 transition hover:text-slate-950"><MapPin size={15} />View site on map</a>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* =====================================================
           SERVICE INTRO
