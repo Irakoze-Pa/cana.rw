@@ -1,13 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  ChevronDown,
-  Construction,
-  FileText,
-  Palette,
-  Paintbrush,
-  Calculator,
-  Truck,
-} from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 type MenuType = "paints" | "services" | null;
@@ -92,14 +83,6 @@ function NavLinks() {
         >
           CANA Paints
 
-          <ChevronDown
-            size={14}
-            strokeWidth={1.8}
-            className={`transition-transform duration-300 ${
-              open === "paints" ? "rotate-180" : ""
-            }`}
-          />
-
           <NavUnderline active={open === "paints"} />
         </button>
 
@@ -115,7 +98,6 @@ function NavLinks() {
             />
 
             <DropdownItem
-              icon={<Palette size={18} strokeWidth={1.8} />}
               title="Paint Products"
               description="Interior & exterior paints"
               link="/cana-paints/products"
@@ -123,7 +105,6 @@ function NavLinks() {
             />
 
             <DropdownItem
-              icon={<Paintbrush size={18} strokeWidth={1.8} />}
               title="Painting Services"
               description="Residential & commercial"
               link="/cana-paints/painting-services"
@@ -131,13 +112,12 @@ function NavLinks() {
             />
 
             <DropdownItem
-              icon={<FileText size={18} strokeWidth={1.8} />}
               title="Request a Quote"
               description="Tell us about your project"
               link="/cana-paints/request-quote"
               onClick={() => setOpen(null)}
             />
-            <DropdownItem icon={<Calculator size={18} strokeWidth={1.8} />} title="Estimated Cost Calculator" description="Plan paint quantity and cost" link="/cana-paints/estimate-cost" onClick={() => setOpen(null)} />
+            <DropdownItem title="Estimated Cost Calculator" description="Plan paint quantity and cost" link="/cana-paints/estimate-cost" onClick={() => setOpen(null)} />
           </Dropdown>
         )}
       </div>
@@ -166,14 +146,6 @@ function NavLinks() {
         >
           CANA Services
 
-          <ChevronDown
-            size={14}
-            strokeWidth={1.8}
-            className={`transition-transform duration-300 ${
-              open === "services" ? "rotate-180" : ""
-            }`}
-          />
-
           <NavUnderline active={open === "services"} />
         </button>
 
@@ -189,7 +161,6 @@ function NavLinks() {
             />
 
             <DropdownItem
-              icon={<Construction size={18} strokeWidth={1.8} />}
               title="Scaffold Rental"
               description="Safe access solutions"
               link="/cana-services/scaffolds"
@@ -197,7 +168,6 @@ function NavLinks() {
             />
 
             <DropdownItem
-              icon={<Truck size={18} strokeWidth={1.8} />}
               title="Transport"
               description="Reliable logistics"
               link="/cana-services/transport"
@@ -361,7 +331,6 @@ function DropdownHeader({
 ========================================================= */
 
 type DropdownItemProps = {
-  icon: React.ReactNode;
   title: string;
   description: string;
   link: string;
@@ -369,7 +338,6 @@ type DropdownItemProps = {
 };
 
 function DropdownItem({
-  icon,
   title,
   description,
   link,
@@ -379,14 +347,8 @@ function DropdownItem({
     <NavLink
       to={link}
       onClick={onClick}
-      className="group flex items-center gap-4 rounded-xl p-3 transition-all duration-300 hover:bg-gray-50"
+      className="group flex items-center gap-4 rounded-xl px-4 py-3.5 transition-all duration-300 hover:bg-neutral-50"
     >
-      {/* Icon */}
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 transition-all duration-300 group-hover:bg-red-600 group-hover:text-white">
-        {icon}
-      </div>
-
-      {/* Text */}
       <div className="min-w-0 flex-1">
 
         <h4 className="text-sm font-semibold text-gray-900 transition-colors duration-300 group-hover:text-red-600">
@@ -398,11 +360,6 @@ function DropdownItem({
         </p>
 
       </div>
-
-      {/* Arrow */}
-      <span className="text-gray-300 transition-all duration-300 group-hover:translate-x-1 group-hover:text-red-600">
-        →
-      </span>
     </NavLink>
   );
 }

@@ -504,8 +504,6 @@ const router = createBrowserRouter([
       { path: "compliance/cleaning", element: <FactoryCompliancePage view="cleaning" /> },
       { path: "compliance/maintenance", element: <FactoryCompliancePage view="maintenance" /> },
       { path: "compliance/safety", element: <FactoryCompliancePage view="safety" /> },
-      { path: "compliance/equipment", element: <FactoryCompliancePage view="equipment" /> },
-      { path: "compliance/settings", element: <FactoryCompliancePage view="settings" /> },
 
       // =================================================
       // REPORTS

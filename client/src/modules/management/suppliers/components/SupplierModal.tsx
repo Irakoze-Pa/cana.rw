@@ -158,11 +158,6 @@ function SupplierModal({
                 : "Add Supplier"}
             </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
-              {isEditMode
-                ? "Update supplier information."
-                : "Add a new raw material supplier."}
-            </p>
           </div>
 
           <button
@@ -254,7 +249,7 @@ function SupplierModal({
                       e.target.value.toUpperCase()
                     )
                   }
-                  placeholder="Leave blank for automatic code (for example SUP-0001)"
+                  placeholder="Supplier code"
                   className="
                     w-full rounded-xl border
                     border-gray-200
@@ -267,7 +262,6 @@ function SupplierModal({
                     focus:ring-red-100
                   "
                 />
-                {!isEditMode && <p className="mt-1 text-xs text-gray-500">Leave blank to generate a unique CANA supplier code automatically. Enter your own code only when you need to preserve an existing supplier reference.</p>}
               </div>
 
               <div>

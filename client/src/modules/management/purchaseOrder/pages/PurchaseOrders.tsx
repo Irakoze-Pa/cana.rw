@@ -693,10 +693,6 @@ function PurchaseOrdersPage() {
                 Purchase Orders
               </h1>
 
-              <p className="mt-1 text-sm text-gray-500">
-                Manage raw material purchases
-                and supplier orders.
-              </p>
             </div>
 
           </div>
@@ -992,11 +988,6 @@ function PurchaseOrdersPage() {
                 No purchase orders found
               </h3>
 
-              <p className="mt-1 max-w-sm text-xs text-gray-500">
-                Create your first purchase
-                order or change your search
-                filters.
-              </p>
 
               <button
                 type="button"

@@ -1,6 +1,5 @@
 import {
   AlertCircle,
-  CheckCircle2,
   Loader2,
   X,
 } from "lucide-react";
@@ -245,26 +244,6 @@ export default function IssueMaterialsModal({
             </div>
           )}
 
-          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex gap-3">
-              <CheckCircle2
-                size={18}
-                className="mt-0.5 text-slate-600"
-              />
-
-              <div>
-                <p className="text-sm font-semibold text-slate-900">
-                  Material Issue
-                </p>
-
-                <p className="mt-1 text-sm text-slate-700">
-                  Enter the quantity physically issued
-                  from inventory to this production batch.
-                </p>
-              </div>
-            </div>
-          </div>
-
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full">
               <thead>
@@ -366,7 +345,7 @@ export default function IssueMaterialsModal({
                             e.target.value,
                           )
                         }
-                        placeholder="Optional"
+                        placeholder="Notes"
                         className="w-44 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
                       />
                     </td>
@@ -378,7 +357,7 @@ export default function IssueMaterialsModal({
 
           <div className="mt-5">
             <label className="mb-2 block text-sm font-semibold text-slate-700">
-              Issue Notes
+              Notes
             </label>
 
             <textarea
@@ -387,7 +366,7 @@ export default function IssueMaterialsModal({
                 setNotes(e.target.value)
               }
               rows={3}
-              placeholder="Optional notes about this material issue..."
+              placeholder="Notes"
               className="w-full resize-none rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
             />
           </div>

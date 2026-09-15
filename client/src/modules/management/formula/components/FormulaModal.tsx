@@ -739,16 +739,6 @@ export default function FormulaModal({
               </span>
             </div>
 
-            {createNewVersion && (
-              <p className="mt-1 text-xs text-gray-500">
-                Creating V{version} from V
-                {Math.max(
-                  version - 1,
-                  1
-                )}
-                . Previous version remains unchanged.
-              </p>
-            )}
           </div>
 
           <button
@@ -782,9 +772,7 @@ export default function FormulaModal({
                     className="animate-spin text-red-600"
                   />
 
-                  <p className="text-sm text-gray-500">
-                    Loading products and raw materials...
-                  </p>
+                  <p className="text-sm text-gray-500">Loading…</p>
                 </div>
               </div>
             ) : (
@@ -798,9 +786,6 @@ export default function FormulaModal({
                     Formula Information
                   </h3>
 
-                  <p className="mt-1 text-xs text-gray-500">
-                    Define the product and standard production batch.
-                  </p>
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -939,9 +924,6 @@ export default function FormulaModal({
                       readOnly
                       className="mt-1.5 h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600"
                     />
-                    <p className="mt-1 text-xs text-gray-500">
-                      Formula scaling and production output use kilograms.
-                    </p>
                   </div>
 
                   {/* STATUS */}
@@ -985,9 +967,6 @@ export default function FormulaModal({
                         Raw Materials
                       </h3>
 
-                      <p className="mt-1 text-xs text-gray-500">
-                        Define the raw materials required for this standard batch.
-                      </p>
                     </div>
 
                     <button
@@ -1008,9 +987,6 @@ export default function FormulaModal({
                             No raw materials added
                           </p>
 
-                          <p className="mt-1 text-xs text-gray-500">
-                            Click "Add Material" to start.
-                          </p>
                         </div>
                       </div>
                     ) : (

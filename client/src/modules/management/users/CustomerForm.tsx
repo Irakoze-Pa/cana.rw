@@ -13,26 +13,27 @@ export type Customer = {
 export default function CustomerForm({
   onCreated,
   onCancel,
+  customer,
 }: {
   onCreated: (customer: Customer) => void;
   onCancel: () => void;
+  customer?: Customer | null;
 }) {
-  const [form, setForm] = useState({ fullName: "", phone: "", email: "", isCompanyCustomer: false, businessName: "", address: "", tin: "" });
+  const [form, setForm] = useState(() => ({ fullName: customer?.fullName || "", phone: customer?.phone || "", email: customer?.email || "", isCompanyCustomer: Boolean(customer?.isCompanyCustomer || customer?.businessName), businessName: customer?.businessName || "", address: customer?.address || "", tin: customer?.tin || "" }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   return (
     <form
-      className="cana-panel space-y-5 p-5 sm:p-6"
+      className="cana-panel space-y-4 p-4 sm:p-5"
       onSubmit={async (event) => {
         event.preventDefault();
         if (saving) return;
         setSaving(true);
         setError("");
         try {
-          const response = await api.post<{ data: Customer }>(
-            "/users/customers",
-            form,
-          );
+          const response = customer
+            ? await api.patch<{ data: Customer }>(`/users/customers/${customer._id}`, form)
+            : await api.post<{ data: Customer }>("/users/customers", form);
           onCreated(response.data.data);
         } catch (cause) {
           setError(
@@ -45,7 +46,7 @@ export default function CustomerForm({
         }
       }}
     >
-      <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-5"><div><p className="cana-section-kicker">Customer setup</p><h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-950">Create customer profile</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Capture the contact and document details sales needs before the first quotation or order.</p></div><button type="button" onClick={onCancel} className="rounded-lg px-2 py-1 text-sm font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-950">Close</button></div>
+      <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4"><div><p className="cana-section-kicker">Customer profile</p><h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-950">{customer ? "Edit customer" : "New customer"}</h2></div><button type="button" onClick={onCancel} className="rounded-lg px-2 py-1 text-sm font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-950">Close</button></div>
       {error && (
         <p role="alert" className="text-sm text-red-700">
           {error}
@@ -87,7 +88,7 @@ export default function CustomerForm({
           disabled={saving}
           className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-600 disabled:opacity-50"
         >
-          {saving ? "Saving…" : "Save customer"}
+          {saving ? "Saving…" : customer ? "Update customer" : "Save customer"}
         </button>
         <button
           type="button"

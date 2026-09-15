@@ -5,6 +5,7 @@ import {
   PackageCheck,
   RefreshCw,
   CheckCircle2,
+  Search,
 } from "lucide-react";
 import {
   useCallback,
@@ -58,6 +59,8 @@ export default function RawMaterialConsumptionPage() {
 
   const [error, setError] =
     useState<string>("");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("All");
 
   /* ------------------------------------------------------------------------ */
   /* LOAD DATA                                                                */
@@ -251,40 +254,45 @@ export default function RawMaterialConsumptionPage() {
         label: "Total",
         value: safeNumber(stats?.total),
         icon: ClipboardList,
-        description: "All consumption records",
       },
 
       {
         label: "Draft",
         value: safeNumber(stats?.draft),
         icon: FileText,
-        description: "Waiting for issue",
       },
 
       {
         label: "Issued",
         value: safeNumber(stats?.issued),
         icon: PackageCheck,
-        description: "Materials issued",
       },
 
       {
         label: "Consumed",
         value: safeNumber(stats?.consumed),
         icon: CheckCircle2,
-        description: "Fully consumed",
       },
     ],
     [stats],
   );
+
+  const visibleConsumptions = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return consumptions.filter((item) => {
+      const matchesStatus = status === "All" || item.status === status;
+      const matchesSearch = !query || [item.consumptionNo, item.productName, item.productCode, typeof item.productionBatch === "string" ? item.productionBatch : item.productionBatch?.batchNo].filter(Boolean).some((value) => String(value).toLowerCase().includes(query));
+      return matchesStatus && matchesSearch;
+    });
+  }, [consumptions, search, status]);
 
   /* ======================================================================== */
   /* RENDER                                                                   */
   /* ======================================================================== */
 
   return (
-    <div className="min-h-full bg-slate-50 p-4 md:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="min-h-full">
+      <div className="mx-auto max-w-7xl space-y-4">
 
         {/* ================================================================== */}
         {/* HEADER                                                             */}
@@ -293,7 +301,7 @@ export default function RawMaterialConsumptionPage() {
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div>
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50">
                 <PackageCheck
                   size={21}
                   className="text-red-600"
@@ -306,10 +314,6 @@ export default function RawMaterialConsumptionPage() {
                   Raw Material Consumption
                 </h1>
 
-                <p className="mt-1 text-sm text-slate-500">
-                  Track raw material issues and production
-                  consumption.
-                </p>
               </div>
             </div>
           </div>
@@ -318,7 +322,7 @@ export default function RawMaterialConsumptionPage() {
             type="button"
             onClick={() => void loadData()}
             disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw
               size={16}
@@ -349,13 +353,7 @@ export default function RawMaterialConsumptionPage() {
             </div>
 
             <div className="min-w-0">
-              <p className="text-sm font-bold text-red-800">
-                Failed to load material consumption
-              </p>
-
-              <p className="mt-1 break-words text-sm text-red-700">
-                {error}
-              </p>
+              <p className="break-words text-sm text-red-700">{error}</p>
 
               <button
                 type="button"
@@ -375,14 +373,14 @@ export default function RawMaterialConsumptionPage() {
         {/* STATISTICS                                                         */}
         {/* ================================================================== */}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           {cards.map((card) => {
             const Icon = card.icon;
 
             return (
               <div
                 key={card.label}
-                className="cana-panel p-5 transition hover:shadow-md"
+                className="cana-panel p-3.5"
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -390,18 +388,15 @@ export default function RawMaterialConsumptionPage() {
                       {card.label}
                     </p>
 
-                    <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-950">
+                    <p className="mt-1 text-xl font-extrabold tracking-tight text-slate-950">
                       {formatNumber(
                         card.value,
                       )}
                     </p>
 
-                    <p className="mt-1 text-xs text-slate-400">
-                      {card.description}
-                    </p>
                   </div>
 
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
                     <Icon
                       size={18}
                       className="text-slate-600"
@@ -418,17 +413,9 @@ export default function RawMaterialConsumptionPage() {
         {/* ================================================================== */}
 
         <div className="cana-panel overflow-hidden">
-          <div className="border-b border-slate-200 px-5 py-5 md:px-6">
+          <div className="border-b border-slate-200 px-5 py-4 md:px-6">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-              <div>
-                <h2 className="font-bold text-slate-900">
-                  Consumption Records
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Materials issued to production batches.
-                </p>
-              </div>
+              <h2 className="font-bold text-slate-900">Consumption records</h2>
 
               {!loading && (
                 <div className="rounded-lg bg-slate-50 px-3 py-2">
@@ -446,8 +433,13 @@ export default function RawMaterialConsumptionPage() {
             </div>
           </div>
 
+          <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full sm:max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search record, batch, product" className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm outline-none focus:border-red-400 focus:bg-white" /></div>
+            <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700"><option value="All">All status</option><option value="Draft">Draft</option><option value="Issued">Issued</option><option value="Partially Consumed">Partially consumed</option><option value="Consumed">Consumed</option><option value="Cancelled">Cancelled</option></select>
+          </div>
+
           <ConsumptionTable
-            consumptions={consumptions}
+            consumptions={visibleConsumptions}
             loading={loading}
           />
         </div>

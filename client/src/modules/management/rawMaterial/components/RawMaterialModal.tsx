@@ -4,6 +4,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import type { RawMaterial } from "../types/rawMaterial.types";
 
@@ -32,10 +33,10 @@ interface FormData {
 const initialForm: FormData = {
   name: "",
   category: "",
-  unit: "",
-  quantity: "",
-  minimumStock: "",
-  costPerUnit: "",
+  unit: "kg",
+  quantity: "0",
+  minimumStock: "0",
+  costPerUnit: "0",
   status: "Active",
 };
 
@@ -53,6 +54,9 @@ function RawMaterialModal({
     useState<FormData>(initialForm);
 
   const isEditMode = Boolean(material);
+  const hasRecordedStock =
+    Number(material?.quantity ?? 0) > 0 ||
+    Number(material?.reservedQuantity ?? 0) > 0;
 
   // =====================================================
   // LOAD MATERIAL WHEN EDITING
@@ -188,14 +192,8 @@ function RawMaterialModal({
       setLoading(true);
       setError("");
 
-      /*
-       * Code:
-       * - On create, generate a temporary unique code.
-       * - On edit, preserve existing material code.
-       *
-       * The backend remains responsible for
-       * final validation.
-       */
+      // Codes are generated once and kept stable for lots, supplier offers,
+      // formulas and inventory traceability.
       const code = material?.code;
 
       const quantity = Number(
@@ -218,8 +216,7 @@ function RawMaterialModal({
         category:
           formData.category.trim(),
 
-        unit:
-          formData.unit,
+        unit: formData.unit,
 
         ...(!isEditMode ? { quantity } : {}),
 
@@ -230,11 +227,6 @@ function RawMaterialModal({
         status:
           formData.status,
       };
-
-      console.log(
-        "Sending Raw Material:",
-        payload
-      );
 
       if (
         isEditMode &&
@@ -338,9 +330,14 @@ function RawMaterialModal({
               "
             >
               {isEditMode
-                ? "Update purchasing and production master data. Stock is controlled through Inventory."
+                ? "Update master data and planning levels. Stock and lots remain controlled by Inventory."
                 : "Create the material master first. Add supplier offers and supplier-specific lots separately."}
             </p>
+            {isEditMode && material?.code && (
+              <p className="mt-2 inline-flex rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">
+                Material code: {material.code}
+              </p>
+            )}
           </div>
 
           <button
@@ -533,6 +530,10 @@ function RawMaterialModal({
                   <option value="Packaging">
                     Packaging
                   </option>
+
+                  <option value="Other">
+                    Other
+                  </option>
                 </select>
               </div>
 
@@ -551,7 +552,7 @@ function RawMaterialModal({
                     text-gray-700
                   "
                 >
-                  Unit
+                  Base Unit
                 </label>
 
                 <select
@@ -560,7 +561,7 @@ function RawMaterialModal({
                   value={formData.unit}
                   onChange={handleChange}
                   required
-                  disabled={loading}
+                  disabled={loading || hasRecordedStock}
                   className="
                     w-full
                     rounded-xl
@@ -653,11 +654,6 @@ function RawMaterialModal({
                   "
                 />
 
-                <p className="mt-1.5 text-xs text-gray-400">
-                  {isEditMode
-                    ? "Stock is controlled by Inventory. Use a goods receipt or stock adjustment to change it."
-                    : "This is posted as an opening-balance transaction in Inventory."}
-                </p>
               </div>
 
               {/* ================================================= */}
@@ -708,9 +704,6 @@ function RawMaterialModal({
                   "
                 />
 
-                <p className="mt-1.5 text-xs text-gray-400">
-                  Used to identify low-stock materials.
-                </p>
               </div>
 
               {/* ================================================= */}
@@ -728,7 +721,7 @@ function RawMaterialModal({
                     text-gray-700
                   "
                 >
-                  Opening Cost Per Unit
+                  Reference Cost per {formData.unit || "unit"}
                 </label>
 
                 <div className="relative">
@@ -778,7 +771,6 @@ function RawMaterialModal({
                     RWF
                   </span>
                 </div>
-                <p className="mt-1.5 text-xs text-gray-400">Use this only for the opening stock valuation. Supplier purchase prices are maintained separately in Supplier Material Offers and are used when creating purchase orders.</p>
               </div>
 
               {/* ================================================= */}
@@ -853,10 +845,9 @@ function RawMaterialModal({
                       Stock Information
                     </h3>
 
-                    <p className="mt-1 text-xs text-gray-500">
-                      These values are calculated by the
-                      system and are not manually edited here.
-                    </p>
+                    <Link to="/management/inventory" className="mt-2 inline-flex text-xs font-semibold text-red-600 hover:text-red-700">
+                      Open Raw-material Store →
+                    </Link>
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

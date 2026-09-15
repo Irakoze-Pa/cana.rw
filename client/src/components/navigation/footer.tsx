@@ -30,46 +30,34 @@ function Footer() {
     whatsappMessage,
   )}`;
 
-  // Replace these values with CANA's verified profile URLs when available.
-  // Environment variables keep the deployed links configurable without a code change.
   const socialLinks = [
     {
       label: "Facebook",
-      href:
-        import.meta.env.VITE_CANA_FACEBOOK_URL ||
-        "https://www.facebook.com/Cana-paints",
+      href: "https://www.facebook.com/canapaints.cbg",
       icon: FaFacebookF,
       hoverClass: "hover:border-white/60 hover:bg-white/10 hover:text-white",
     },
     {
       label: "Instagram",
-      href:
-        import.meta.env.VITE_CANA_INSTAGRAM_URL ||
-        "https://www.instagram.com/Cana_paints/",
+      href: "https://www.instagram.com/canapaints.cbg/",
       icon: FaInstagram,
       hoverClass: "hover:border-[#E4405F]/60 hover:bg-[#E4405F]/15 hover:text-[#ff6d87]",
     },
     {
       label: "X",
-      href:
-        import.meta.env.VITE_CANA_X_URL ||
-        "https://x.com/Cana_paints",
+      href: "https://x.com/canapaints_cbg",
       icon: FaXTwitter,
       hoverClass: "hover:border-white/60 hover:bg-white/10 hover:text-white",
     },
     {
       label: "LinkedIn",
-      href:
-        import.meta.env.VITE_CANA_LINKEDIN_URL ||
-        "https://www.linkedin.com/company/cana-paints/",
+      href: "https://www.linkedin.com/company/canapaints-cbg/",
       icon: FaLinkedinIn,
       hoverClass: "hover:border-white/60 hover:bg-white/10 hover:text-white",
     },
     {
       label: "YouTube",
-      href:
-        import.meta.env.VITE_CANA_YOUTUBE_URL ||
-        "https://www.youtube.com/@Cana_paints",
+      href: "https://www.youtube.com/@canapaints.cbg",
       icon: FaYoutube,
       hoverClass: "hover:border-[#FF0000]/60 hover:bg-[#FF0000]/15 hover:text-[#ff6b6b]",
     },

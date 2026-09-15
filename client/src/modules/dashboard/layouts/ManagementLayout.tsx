@@ -16,7 +16,7 @@ function ManagementLayout() {
   };
 
   return (
-    <div className="cana-operations-surface min-h-screen">
+    <div className="cana-management-shell cana-operations-surface min-h-screen">
       {mobileMenuOpen && (
         <button
           type="button"
@@ -83,7 +83,7 @@ function ManagementLayout() {
         <ManagementTopbar />
 
         {/* PAGE CONTENT */}
-        <div className="cana-page-content pb-24 md:pb-6">
+        <div className="cana-page-content pb-20 md:pb-5">
           <Outlet />
         </div>
 

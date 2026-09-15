@@ -77,16 +77,16 @@ const ProductCard = ({
         h-full
         flex-col
         overflow-hidden
-        rounded-[1.5rem]
+        rounded-xl
         border
         border-neutral-200
         bg-white
         shadow-sm
         transition-all
-        duration-500
+        duration-300
         hover:-translate-y-1
         hover:border-neutral-300
-        hover:shadow-2xl
+        hover:shadow-lg
       "
     >
       {/* =====================================================
@@ -96,12 +96,12 @@ const ProductCard = ({
       <div
         className="
           relative
-          h-56
+          h-44
           w-full
           shrink-0
           overflow-hidden
           bg-neutral-50
-          sm:h-64
+          sm:h-52
         "
       >
         {/* Background */}
@@ -124,15 +124,12 @@ const ProductCard = ({
           className="
             pointer-events-none
             absolute
-            left-1/2
-            top-1/2
-            h-[75%]
-            w-[75%]
-            -translate-x-1/2
-            -translate-y-1/2
-            rounded-full
-            bg-white
-            shadow-[0_20px_60px_rgba(0,0,0,0.05)]
+            inset-x-0
+            bottom-0
+            h-16
+            bg-gradient-to-t
+            from-black/5
+            to-transparent
           "
         />
 
@@ -150,7 +147,7 @@ const ProductCard = ({
               h-full
               w-full
               object-contain
-              p-2
+              p-1
               transition-transform
               duration-700
               ease-out
@@ -222,8 +219,8 @@ const ProductCard = ({
               border
               border-white/80
               bg-white/95
-              px-3
-              py-1.5
+              px-2.5
+              py-1
               text-[9px]
               font-bold
               uppercase
@@ -246,8 +243,8 @@ const ProductCard = ({
               items-center
               rounded-full
               border
-              px-3
-              py-1.5
+              px-2.5
+              py-1
               text-[9px]
               font-bold
               uppercase
@@ -267,7 +264,7 @@ const ProductCard = ({
           CONTENT
       ====================================================== */}
 
-      <div className="flex flex-1 flex-col p-5 sm:p-6">
+      <div className="flex flex-1 flex-col p-4 sm:p-5">
         {/* Name */}
 
         <div>
@@ -286,7 +283,7 @@ const ProductCard = ({
 
           <p
             className="
-              mt-1.5
+              mt-1
               text-[10px]
               font-semibold
               uppercase
@@ -300,7 +297,7 @@ const ProductCard = ({
 
         {/* Description */}
 
-        <div className="mt-3 min-h-[76px]">
+        <div className="mt-2 min-h-[52px]">
           <p
             className={`text-xs leading-6 text-neutral-500 ${
               descriptionExpanded ? "" : "line-clamp-2"
@@ -313,7 +310,7 @@ const ProductCard = ({
             <button
               type="button"
               onClick={() => setDescriptionExpanded((expanded) => !expanded)}
-              className="mt-1.5 text-xs font-bold text-neutral-700 transition hover:text-neutral-950"
+              className="mt-1 text-xs font-bold text-neutral-700 transition hover:text-neutral-950"
               aria-expanded={descriptionExpanded}
             >
               {descriptionExpanded ? "View less" : "View more"}
@@ -325,10 +322,10 @@ const ProductCard = ({
 
         <div
           className="
-            mt-4
+            mt-3
             border-t
             border-neutral-100
-            pt-4
+            pt-3
           "
         >
           <div className="flex items-end justify-between gap-3">
@@ -408,15 +405,15 @@ const ProductCard = ({
             onRequestQuote(product._id)
           }
           className={`
-            mt-5
+            mt-4
             flex
             w-full
             items-center
             justify-center
             gap-2
-            rounded-xl
+            rounded-lg
             px-4
-            py-3.5
+            py-3
             text-xs
             font-bold
             transition-all

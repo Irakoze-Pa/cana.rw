@@ -554,7 +554,7 @@ const ProductionBatchesPage = () => {
   // =================================================
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-6">
+    <div className="w-full min-w-0 max-w-full space-y-4">
       {/* =================================================
           HEADER
       ================================================= */}
@@ -571,10 +571,6 @@ const ProductionBatchesPage = () => {
               Production Batches
             </h1>
 
-            <p className="mt-1 text-sm text-gray-500">
-              Execute and track production
-              batches from production orders.
-            </p>
           </div>
         </div>
 
@@ -828,10 +824,7 @@ const ProductionBatchesPage = () => {
                       className="mx-auto animate-spin text-red-600"
                     />
 
-                    <p className="mt-3 text-sm text-gray-500">
-                      Loading production
-                      batches...
-                    </p>
+                    <p className="mt-3 text-sm text-gray-500">Loading…</p>
                   </td>
                 </tr>
               ) : filteredBatches.length ===
@@ -851,10 +844,6 @@ const ProductionBatchesPage = () => {
                       batches found
                     </p>
 
-                    <p className="mt-1 text-sm text-gray-500">
-                      Create a batch from
-                      a production order.
-                    </p>
 
                     {!search &&
                       statusFilter ===

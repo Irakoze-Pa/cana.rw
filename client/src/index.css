@@ -98,14 +98,76 @@ textarea:focus-visible {
   width: 100%;
   max-width: 1920px;
   margin: 0 auto;
-  padding: 1.25rem;
+  padding: 1rem;
 }
 
 .cana-panel {
   border: 1px solid var(--cana-line);
-  border-radius: 1rem;
+  border-radius: 0.875rem;
   background: var(--cana-panel);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 20px rgba(15, 23, 42, 0.018);
+}
+
+/* Compact, readable operations screens. These target the shared workspace
+   shell so inventory, production, sales, finance and compliance pages follow
+   the same rhythm without changing their business workflows. */
+.cana-page-content > .space-y-6 > :not([hidden]) ~ :not([hidden]),
+.cana-page-content > .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1rem;
+}
+
+.cana-page-content table :is(th, td) {
+  padding-top: 0.625rem !important;
+  padding-bottom: 0.625rem !important;
+}
+
+.cana-page-content :is(input, select, textarea) {
+  min-height: 2.5rem;
+}
+
+/* Management modules share a deliberate, compact density. The selectors are
+   scoped to the management shell only: public pages and the customer
+   dashboard keep their own visual rhythm. */
+.cana-management-shell .cana-page-content > [class~="space-y-6"] > :not([hidden]) ~ :not([hidden]),
+.cana-management-shell .cana-page-content > [class~="space-y-8"] > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1rem;
+}
+
+.cana-management-shell [class~="gap-6"] { gap: 1rem; }
+.cana-management-shell [class~="gap-8"] { gap: 1.25rem; }
+.cana-management-shell [class~="p-5"] { padding: 1rem; }
+.cana-management-shell [class~="p-6"] { padding: 1.25rem; }
+.cana-management-shell [class~="rounded-2xl"] { border-radius: 0.875rem; }
+.cana-management-shell [class~="rounded-3xl"] { border-radius: 1rem; }
+
+.cana-management-shell .cana-page-content > * > header {
+  margin-bottom: 0.25rem;
+}
+
+.cana-management-shell .cana-page-content :is(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+/* Operational screens prioritise actions and data. Header and modal
+   descriptions are intentionally suppressed; labels, validation and status
+   values remain visible for safe daily use. */
+.cana-management-shell .cana-page-content header :is(h1, h2) + p,
+.cana-management-shell .fixed :is(h1, h2) + p {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .cana-page-content { padding: 1.25rem; }
+}
+
+/* Public sections retain their content, while using a more focused vertical
+   rhythm throughout the catalogue, service and company pages. */
+.cana-public-surface > main > section {
+  padding-block: clamp(2.5rem, 4vw, 3.5rem) !important;
+}
+
+.cana-public-surface .cana-panel {
+  border-radius: 0.875rem;
 }
 
 .cana-page-title {
@@ -166,19 +228,23 @@ textarea:focus-visible {
 /* Public home sections share one compact rhythm. Individual components can
    still add space for content, but no longer create large empty bands. */
 .cana-home > section:not(:first-child) {
-  padding-block: 4rem;
+  padding-block: 2.75rem;
 }
 
 @media (min-width: 1024px) {
   .cana-home > section:not(:first-child) {
-    padding-block: 5rem;
+    padding-block: 3.5rem;
   }
 }
 
 @media (max-width: 640px) {
-  .cana-page-content { padding: 0.875rem 0.875rem 6.25rem; }
+  .cana-page-content { padding: 0.75rem 0.75rem 5.75rem; }
 
   .cana-panel { border-radius: 0.875rem; }
+
+  .cana-public-surface {
+    background-image: none;
+  }
 
   /* Full-width actions are easier to find and tap on narrow screens. */
   .cana-mobile-stack {

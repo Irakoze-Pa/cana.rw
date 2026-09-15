@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, PackageCheck, Plus, Printer, RefreshCw, ShoppingCart, X } from "lucide-react";
+import { Plus, Printer, RefreshCw, ShoppingCart, X } from "lucide-react";
 import CustomerForm from "../users/CustomerForm";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
@@ -45,6 +45,7 @@ const next: Record<string, string[]> = {
 };
 const money = (amount: number) =>
   Number(amount || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 });
+const statusStyle = (status: string) => status === "cancelled" ? "bg-red-50 text-red-700" : status === "delivered" ? "bg-emerald-50 text-emerald-700" : status === "ready_for_delivery" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-700";
 function printSalesOrder(order: Order) {
   printCanaDocument({
     title: "Sales order",
@@ -95,6 +96,9 @@ function printSalesOrder(order: Order) {
     notes: order.notes,
   });
 }
+function OrderActions({ order, saving, onPrint, onSetPrices, onTransition }: { order: Order; saving: boolean; onPrint: (order: Order) => void; onSetPrices: (order: Order) => void; onTransition: (id: string, status: string) => void }) {
+  return <div className="flex flex-wrap gap-1.5"><button type="button" onClick={() => onPrint(order)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700"><Printer size={13} />Print</button>{["draft", "submitted"].includes(order.status) && <button type="button" disabled={saving} onClick={() => onSetPrices(order)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700">Set prices</button>}{next[order.status]?.map((status) => <button key={status} disabled={saving} onClick={() => onTransition(order._id, status)} className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{status.replaceAll("_", " ")}</button>)}</div>;
+}
 
 export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" | "fulfilment" }) {
   const { toast } = useToast();
@@ -121,7 +125,6 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
   ]);
   const fulfilmentView = view === "fulfilment";
   const pageTitle = fulfilmentView ? "Order fulfilment" : "Sales orders";
-  const pageDescription = fulfilmentView ? "Track confirmed orders from production through dispatch and delivery." : "Create, price and confirm client orders before fulfilment.";
   const visibleOrders = useMemo(() => orders.filter((order) => {
     const orderDate = order.createdAt ? new Date(order.createdAt).toISOString().slice(0, 10) : "";
     return (!statusFilter || order.status === statusFilter) && (!fulfilmentView || ["confirmed", "in_production", "ready_for_delivery"].includes(order.status)) && (!dateFrom || orderDate >= dateFrom) && (!dateTo || orderDate <= dateTo) && `${order.orderNumber} ${order.customer?.fullName || ""}`.toLowerCase().includes(search.toLowerCase());
@@ -248,32 +251,29 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
     }
   };
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+    <div className="space-y-4">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div className="flex gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
             <ShoppingCart size={21} />
           </div>
           <div>
             <p className="cana-section-kicker">Sales workspace</p>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{pageTitle}</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              {pageDescription}
-            </p>
           </div>
         </div>
         <div className="flex gap-2">
           {!fulfilmentView && <button
             onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
           >
             <Plus size={16} />
             New sales order
           </button>}
-          {fulfilmentView && <Link to="/management/sales/orders" className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"><Plus size={16}/>New sales order</Link>}
+          {fulfilmentView && <Link to="/management/sales/orders" className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white hover:bg-slate-800"><Plus size={16}/>New sales order</Link>}
           <button
             onClick={() => void load()}
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold"
           >
             <RefreshCw size={16} />
             Refresh
@@ -296,7 +296,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
       {!fulfilmentView && creating && (
         <form
           onSubmit={create}
-          className="grid gap-3 rounded-2xl border border-red-100 bg-red-50/40 p-5 md:grid-cols-2"
+          className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-2"
         >
           <div className="flex items-center justify-between md:col-span-2">
             <h2 className="font-bold">New sales order</h2>
@@ -338,7 +338,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                     { product: "", quantity: "1", unitPrice: "" },
                   ])
                 }
-                className="text-xs font-bold text-red-600"
+                className="text-xs font-bold text-slate-700"
               >
                 + Add item
               </button>
@@ -479,12 +479,12 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
           </button>
         </form>
       )}
-      {fulfilmentView && <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-950"><span className="rounded-xl bg-white p-2 text-slate-700"><PackageCheck size={18}/></span><span><strong>Fulfilment queue:</strong> confirmed, in-production and ready-for-delivery orders only. Update each stage here so sales, production and dispatch remain aligned.</span><Link to="/management/sales/orders" className="ml-auto inline-flex items-center gap-1 font-bold text-slate-800">All orders <ArrowRight size={15}/></Link></section>}
-      <section className="cana-panel flex flex-wrap items-end gap-3 p-4"><label className="min-w-52 flex-1 text-xs font-bold uppercase tracking-wide text-slate-500">Search<input aria-label="Search orders" placeholder="Order number or customer" value={search} onChange={(event) => setSearch(event.target.value)} className="mt-1.5 block w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Order date from<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1.5 block rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Order date to<input type="date" min={dateFrom || undefined} value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1.5 block rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"/></label>
-        <label className="text-xs font-bold uppercase tracking-wide text-slate-500">Status<select aria-label="Filter order status"
+      {fulfilmentView && <div className="flex justify-end"><Link to="/management/sales/orders" className="text-sm font-bold text-slate-700 hover:text-slate-950">View all orders</Link></div>}
+      <section className="cana-panel flex flex-wrap items-end gap-3 p-3"><label className="min-w-52 flex-1 text-xs font-bold text-slate-500">Search<input aria-label="Search orders" placeholder="Order number or customer" value={search} onChange={(event) => setSearch(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-slate-900"/></label><label className="text-xs font-bold text-slate-500">From<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1 block rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-slate-900"/></label><label className="text-xs font-bold text-slate-500">To<input type="date" min={dateFrom || undefined} value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1 block rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-slate-900"/></label>
+        <label className="text-xs font-bold text-slate-500">Status<select aria-label="Filter order status"
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
-          className="mt-1.5 block rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-slate-900"
+          className="mt-1 block rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-slate-900"
         >
           <option value="">All statuses</option>
           {[...Object.keys(next), "delivered", "cancelled"].map((status) => (
@@ -493,7 +493,8 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
             </option>
           ))}
         </select></label><div className="ml-auto pb-1 text-sm text-slate-500"><strong className="text-slate-900">{visibleOrders.length}</strong> transaction{visibleOrders.length === 1 ? "" : "s"} shown</div>{(dateFrom || dateTo || search || statusFilter) && <button type="button" onClick={() => { setSearch(""); setStatusFilter(""); setDateFrom(""); setDateTo(""); }} className="pb-1 text-sm font-bold text-red-700">Clear filters</button>}</section>
-      <div className="cana-panel overflow-x-auto">
+      <section className="space-y-2 md:hidden">{loading ? <p className="cana-panel p-8 text-center text-sm text-slate-500">Loading sales orders…</p> : visibleOrders.map((order) => <article key={order._id} className="cana-panel p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-extrabold text-slate-950">{order.orderNumber}</p><p className="mt-1 text-sm font-semibold text-slate-700">{order.customer?.businessName || order.customer?.fullName || "Customer"}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}>{order.status.replaceAll("_", " ")}</span></div><p className="mt-3 text-sm text-slate-600">{order.items.map((item) => `${item.productName} · ${item.quantity} ${item.unit}`).join(", ")}</p><div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3"><strong className="text-slate-950">{money(order.total)} RWF</strong><span className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleDateString("en-RW")}</span></div><div className="mt-3"><OrderActions order={order} saving={saving} onPrint={printSalesOrder} onSetPrices={setAgreedPrices} onTransition={(id, status) => void transition(id, status)} /></div></article>)}{!loading && !visibleOrders.length && <p className="cana-panel p-8 text-center text-sm text-slate-500">No sales orders match this view.</p>}</section>
+      <div className="hidden overflow-x-auto md:block cana-panel">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
@@ -532,31 +533,11 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                     </td>
                     <td className="px-5 py-4">{money(order.total)} RWF</td>
                     <td className="px-5 py-4">
-                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}>
                         {order.status.replaceAll("_", " ")}
                       </span>
                     </td>
-                    <td className="px-5 py-4">
-                      <button
-                        type="button"
-                        onClick={() => printSalesOrder(order)}
-                        className="mr-2 inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-gray-400 hover:text-gray-950"
-                      >
-                        <Printer size={13} />
-                        Print order
-                      </button>
-                      {['draft', 'submitted'].includes(order.status) && <button type="button" disabled={saving} onClick={() => void setAgreedPrices(order)} className="mr-2 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700">Set agreed prices</button>}
-                      {next[order.status]?.map((status) => (
-                        <button
-                          key={status}
-                          disabled={saving}
-                          onClick={() => void transition(order._id, status)}
-                          className="mr-2 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-semibold text-white"
-                        >
-                          {status.replaceAll("_", " ")}
-                        </button>
-                      ))}
-                    </td>
+                    <td className="px-5 py-4"><OrderActions order={order} saving={saving} onPrint={printSalesOrder} onSetPrices={setAgreedPrices} onTransition={(id, status) => void transition(id, status)} /></td>
                   </tr>
                 ))
             )}

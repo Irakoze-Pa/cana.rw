@@ -291,7 +291,7 @@ const groups: Group[] = [
     label: "Sites & field work",
     icon: MapPinned,
     items: [
-      { label: "Site management", to: "/management/sites", icon: MapPinned, departments: ["sales", "customer_service", "management"] },
+      { label: "Site management", to: "/management/sites", icon: MapPinned, departments: ["sales", "customer_service", "marketing", "management"] },
     ],
   },
   {
@@ -303,7 +303,6 @@ const groups: Group[] = [
       { label: "Daily cleaning register", to: "/management/compliance/cleaning", icon: ClipboardCheck, departments: ["production", "management", "warehouse"] },
       { label: "Maintenance register", to: "/management/compliance/maintenance", icon: Wrench, departments: ["production", "management"] },
       { label: "Safety & HSE register", to: "/management/compliance/safety", icon: HardHat, departments: ["production", "management", "warehouse"] },
-      { label: "Equipment list", to: "/management/compliance/equipment", icon: Factory, departments: ["production", "management"] },
     ],
   },
 ];

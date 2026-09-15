@@ -405,13 +405,6 @@ export default function RawMaterialConsumptionDetailsPage() {
   const isDraft =
     consumption.status === "Draft";
 
-  const isIssued =
-    consumption.status === "Issued";
-
-  const isPartiallyConsumed =
-    consumption.status ===
-    "Partially Consumed";
-
   const canIssue = isDraft;
 
   /* ------------------------------------------------------------------------ */
@@ -419,8 +412,8 @@ export default function RawMaterialConsumptionDetailsPage() {
   /* ------------------------------------------------------------------------ */
 
   return (
-    <div className="min-h-full bg-slate-50 p-4 md:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="min-h-full">
+      <div className="mx-auto max-w-7xl space-y-4">
 
         {/* ================================================================ */}
         {/* HEADER                                                            */}
@@ -451,9 +444,6 @@ export default function RawMaterialConsumptionDetailsPage() {
                 </span>
               </div>
 
-              <p className="mt-1 text-sm text-slate-500">
-                Raw material consumption details
-              </p>
             </div>
           </div>
 
@@ -497,7 +487,7 @@ export default function RawMaterialConsumptionDetailsPage() {
         {/* INFORMATION CARDS                                                */}
         {/* ================================================================ */}
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
 
           {/* PRODUCT */}
 
@@ -585,17 +575,9 @@ export default function RawMaterialConsumptionDetailsPage() {
         {/* ================================================================ */}
 
         <div>
-          <div className="mb-3">
-            <h2 className="text-base font-bold text-slate-900">
-              Consumption Summary
-            </h2>
+          <h2 className="mb-2 text-base font-bold text-slate-900">Quantities</h2>
 
-            <p className="mt-0.5 text-sm text-slate-500">
-              Overview of material quantities for this production batch.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
             <SummaryCard
               label="Standard"
               value={totalStandard}
@@ -645,17 +627,9 @@ export default function RawMaterialConsumptionDetailsPage() {
         {/* ================================================================ */}
 
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4">
-            <h2 className="text-base font-bold text-slate-900">
-              Material Reconciliation
-            </h2>
+          <div className="border-b border-slate-100 px-5 py-3"><h2 className="text-base font-bold text-slate-900">Reconciliation</h2></div>
 
-            <p className="mt-1 text-sm text-slate-500">
-              Issued quantity should eventually be accounted for as actual usage, waste, or returned material.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 p-4 md:grid-cols-4">
             <ReconciliationCard
               label="Issued"
               value={totalIssued}
@@ -723,15 +697,7 @@ export default function RawMaterialConsumptionDetailsPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Material Items
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Raw materials used for this production batch.
-              </p>
-            </div>
+              <h2 className="text-base font-bold text-slate-900">Material items</h2>
 
             <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
               {items.length}{" "}
@@ -755,9 +721,6 @@ export default function RawMaterialConsumptionDetailsPage() {
                   No material items
                 </h3>
 
-                <p className="mt-1 text-sm text-slate-500">
-                  This consumption does not contain any material items.
-                </p>
               </div>
             </div>
           ) : (
@@ -1010,56 +973,6 @@ export default function RawMaterialConsumptionDetailsPage() {
           </div>
         </div>
 
-        {/* ================================================================ */}
-        {/* DRAFT MESSAGE                                                     */}
-        {/* ================================================================ */}
-
-        {isDraft && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-            <div className="flex gap-3">
-              <PackageCheck
-                size={20}
-                className="mt-0.5 shrink-0 text-amber-600"
-              />
-
-              <div>
-                <h3 className="text-sm font-bold text-amber-900">
-                  Materials have not been issued yet
-                </h3>
-
-                <p className="mt-1 text-sm leading-6 text-amber-800">
-                  Issue the required raw materials before production consumption can be recorded.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ================================================================ */}
-        {/* ISSUED MESSAGE                                                    */}
-        {/* ================================================================ */}
-
-        {(isIssued ||
-          isPartiallyConsumed) && (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-            <div className="flex gap-3">
-              <PackageCheck
-                size={20}
-                className="mt-0.5 shrink-0 text-slate-600"
-              />
-
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  Materials issued
-                </h3>
-
-                <p className="mt-1 text-sm leading-6 text-slate-800">
-                  Raw materials have been issued from inventory. The next step is to record actual usage, waste and returns.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ================================================================== */}
@@ -1102,10 +1015,10 @@ function InfoCard({
   subtitle: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="cana-panel p-4">
       <div className="flex items-start gap-3">
         <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconClass}`}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconClass}`}
         >
           {icon}
         </div>

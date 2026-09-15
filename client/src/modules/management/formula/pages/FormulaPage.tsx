@@ -503,13 +503,13 @@ export default function FormulasPage() {
   // =====================================================
 
   return (
-    <div className="min-h-full w-full min-w-0 overflow-x-hidden bg-gray-50 p-4 md:p-6 lg:p-8">
+    <div className="min-h-full w-full min-w-0 space-y-4 overflow-x-hidden">
 
       {/* =====================================================
           HEADER
       ===================================================== */}
 
-      <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 
         <div className="min-w-0">
 
@@ -532,15 +532,9 @@ export default function FormulasPage() {
             </div>
           </div>
 
-          <p className="mt-2 max-w-2xl text-sm text-gray-500">
-            Manage production formulas,
-            raw material requirements,
-            versions and batch costs.
-          </p>
-
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
 
           <button
             type="button"
@@ -579,7 +573,7 @@ export default function FormulasPage() {
           STATS
       ===================================================== */}
 
-      <div className="mt-7 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
 
         <StatCard
           label="Total Formulas"
@@ -622,7 +616,7 @@ export default function FormulasPage() {
           FILTERS
       ===================================================== */}
 
-      <div className="cana-panel mt-7 w-full min-w-0 p-4">
+      <div className="cana-panel w-full min-w-0 p-4">
 
         <div className="flex min-w-0 flex-col gap-3 xl:flex-row">
 
@@ -731,7 +725,7 @@ export default function FormulasPage() {
           TABLE CARD
       ===================================================== */}
 
-      <div className="cana-panel mt-5 w-full min-w-0 max-w-full overflow-hidden">
+      <div className="cana-panel w-full min-w-0 max-w-full overflow-hidden">
 
         {loading ? (
 
@@ -744,9 +738,7 @@ export default function FormulasPage() {
                 className="animate-spin text-red-600"
               />
 
-              <p className="text-sm text-gray-500">
-                Loading formulas...
-              </p>
+              <p className="text-sm text-gray-500">Loading…</p>
 
             </div>
           </div>
@@ -763,13 +755,6 @@ export default function FormulasPage() {
               No formulas found
             </h3>
 
-            <p className="mt-1 max-w-sm text-sm text-gray-500">
-              {search ||
-              statusFilter !== "All" ||
-              productFilter !== "All"
-                ? "Try changing your filters or search terms."
-                : "Create your first production formula to get started."}
-            </p>
 
             {!search &&
               statusFilter === "All" &&
@@ -1020,9 +1005,10 @@ export default function FormulasPage() {
                                 )
                               }
                               title="Edit formula"
-                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 transition hover:bg-red-50 hover:text-red-600"
+                              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-gray-500 transition hover:bg-red-50 hover:text-red-600"
                             >
                               <Pencil size={16} />
+                              <span className="hidden text-xs font-semibold xl:inline">Update</span>
                             </button>
 
                             {/* NEW VERSION */}
@@ -1227,7 +1213,7 @@ function StatCard({
   iconClass = "bg-gray-100 text-gray-600",
 }: StatCardProps) {
   return (
-    <div className="cana-panel min-w-0 p-5">
+    <div className="cana-panel min-w-0 p-4">
 
       <div className="flex items-center justify-between">
 
@@ -1239,7 +1225,7 @@ function StatCard({
 
       </div>
 
-      <p className="mt-4 text-sm text-gray-500">
+      <p className="mt-2 text-sm text-gray-500">
         {label}
       </p>
 

@@ -210,8 +210,9 @@ const InventoryPage = () => {
    */
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-[1500px] space-y-4">
       {/* Header */}
+      <header className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -221,22 +222,23 @@ const InventoryPage = () => {
 
             <div>
               <p className="cana-section-kicker">Inventory & stores</p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
-                Raw Material Inventory
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">
+                Raw-material store
               </h1>
 
-              <p className="mt-1 text-sm text-gray-500">
-                Live raw-material quantities, receipts, issues, lots, and adjustments. Material definitions are managed in Materials Setup.
-              </p>
             </div>
           </div>
         </div>
 
+        <div className="flex flex-wrap gap-2">
+        <Link to="/management/raw-materials" className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50">Materials setup</Link>
+        <Link to="/management/raw-materials/lots" className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50">Goods received & lots</Link>
+        <Link to="/management/inventory/stock" className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50">Stock movements</Link>
         <button
           type="button"
           onClick={() => void loadInventory(true)}
           disabled={refreshing}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RefreshCw
             size={17}
@@ -247,19 +249,9 @@ const InventoryPage = () => {
 
           Refresh
         </button>
-      </div>
-
-      <section className="grid gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 p-4 md:grid-cols-[1fr_auto] md:items-center">
-        <div>
-          <p className="text-sm font-semibold text-slate-900">Raw-material store workflow</p>
-          <p className="mt-1 text-sm leading-6 text-slate-600">
-            Purchase order → goods receipt → raw-material stock → production issue. Completed production moves output to the separate Finished Goods Stores.
-          </p>
         </div>
-        <Link to="/management/inventory/finished-goods" className="inline-flex items-center justify-center rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-sky-800 transition hover:bg-sky-100">
-          View finished goods stores
-        </Link>
-      </section>
+      </div>
+      </header>
 
       {/* Summary */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -272,19 +264,19 @@ const InventoryPage = () => {
         <SummaryCard
           icon={<Warehouse size={19} />}
           label="Total Quantity"
-          value={formatNumber(totalQuantity)}
+          value={`${formatNumber(totalQuantity)} kg`}
         />
 
         <SummaryCard
           icon={<PackagePlus size={19} />}
           label="Available Stock"
-          value={formatNumber(totalAvailable)}
+          value={`${formatNumber(totalAvailable)} kg`}
         />
 
         <SummaryCard
           icon={<TrendingDown size={19} />}
           label="Reserved Stock"
-          value={formatNumber(totalReserved)}
+          value={`${formatNumber(totalReserved)} kg`}
         />
 
         <SummaryCard
@@ -393,27 +385,20 @@ const SummaryCard = ({
   danger = false,
 }: SummaryCardProps) => {
   return (
-    <div className="cana-panel p-5">
-      <div className="flex items-start justify-between">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 text-gray-600">
+    <div className="cana-panel p-4">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-600">
           {icon}
         </div>
-
-        {danger && (
-          <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-600">
-            Attention
-          </span>
-        )}
-      </div>
-
-      <div className="mt-4">
-        <p className="text-sm font-medium text-gray-500">
+        <div>
+        <p className="text-[10px] font-bold uppercase tracking-[.1em] text-gray-500">
           {label}
         </p>
-
-        <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
+        <p className={`mt-0.5 text-xl font-extrabold tracking-tight ${danger ? "text-red-700" : "text-slate-950"}`}>
           {value}
         </p>
+        </div>
+        {danger && <span className="ml-auto rounded-full bg-red-50 px-2 py-1 text-[10px] font-bold text-red-700">Attention</span>}
       </div>
     </div>
   );

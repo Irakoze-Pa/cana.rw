@@ -421,11 +421,6 @@ export default function ProductionOrderModal({
               {isEdit ? "Edit Production Order" : "New Production Order"}
             </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
-              {isEdit
-                ? "Update order details."
-                : "Create a production order from a product and formula."}
-            </p>
           </div>
 
           <button
@@ -551,17 +546,6 @@ export default function ProductionOrderModal({
                   placeholder="Enter quantity"
                 />
 
-                {isEdit && editingOrder?.status === "Released" && (
-                  <p className="mt-1.5 text-xs leading-5 text-amber-700">
-                    Quantity can be amended until the first production batch is created.
-                  </p>
-                )}
-
-                {isEdit && editingOrder?.status === "In Production" && (
-                  <p className="mt-1.5 text-xs leading-5 text-amber-700">
-                    Quantity is protected while production is in progress. Create a new order for additional output.
-                  </p>
-                )}
               </div>
 
               {/* UNIT */}
@@ -579,11 +563,6 @@ export default function ProductionOrderModal({
                   placeholder="kg, L, pcs..."
                 />
 
-                {!isEdit && selectedProduct?.unit && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    From product: {selectedProduct.unit}
-                  </p>
-                )}
               </div>
 
               {/* PRIORITY */}

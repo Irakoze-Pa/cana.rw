@@ -218,11 +218,12 @@ export default function BillingPage() {
   const invoicedOrders = new Set(
     invoices.map((invoice) => invoice.salesOrder?.orderNumber),
   );
+  const matchingInvoices = invoices.filter((invoice) => `${invoice.invoiceNumber} ${invoice.customer?.fullName || ""}`.toLowerCase().includes(search.toLowerCase()));
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+    <div className="space-y-4">
+      <header className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div className="flex gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
             <ReceiptText size={21} />
           </div>
           <div>
@@ -230,15 +231,12 @@ export default function BillingPage() {
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
               Invoices & payments
             </h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Issue, print, and reconcile client invoices.
-            </p>
           </div>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setInvoiceOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
           >
             <Plus size={16} />
             New invoice
@@ -251,7 +249,7 @@ export default function BillingPage() {
           </button>
         </div>
       </header>
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-3">
         {[
           [
             "Total invoiced",
@@ -269,7 +267,7 @@ export default function BillingPage() {
         ].map(([label, amount]) => (
           <div
             key={String(label)}
-            className="cana-panel p-5"
+            className="cana-panel p-4"
           >
             <p className="text-sm text-gray-500">{label}</p>
             <p className="mt-2 text-xl font-extrabold tracking-tight text-slate-950">
@@ -281,9 +279,9 @@ export default function BillingPage() {
       {error && (
         <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
       )}
-      <section className="cana-panel p-5">
-        <label className="text-sm font-semibold text-gray-700">
-          Company shown on invoices and receipts
+      <section className="cana-panel p-4">
+        <label className="text-xs font-bold uppercase tracking-wide text-gray-500">
+          Issuing company
           <select
             value={issuer}
             onChange={(event) =>
@@ -299,7 +297,7 @@ export default function BillingPage() {
       {invoiceOpen && (
         <form
           onSubmit={createInvoice}
-          className="grid gap-3 rounded-2xl border border-red-100 bg-red-50/40 p-5 md:grid-cols-2"
+          className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-2"
         >
           <div className="flex items-center justify-between md:col-span-2">
             <h2 className="font-bold">Create client invoice</h2>
@@ -361,7 +359,8 @@ export default function BillingPage() {
         onChange={(event) => setSearch(event.target.value)}
         className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm"
       />
-      <section className="cana-panel overflow-x-auto">
+      <section className="space-y-2 md:hidden">{loading ? <p className="cana-panel p-8 text-center text-sm text-slate-500">Loading invoices…</p> : matchingInvoices.map((invoice) => <article key={invoice._id} className="cana-panel p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-extrabold text-slate-950">{invoice.invoiceNumber}</p><p className="mt-1 text-sm text-slate-600">{invoice.customer?.fullName || "Customer"}</p></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{invoice.status.replaceAll("_", " ")}</span></div><div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-xs"><span className="text-slate-500">Total<strong className="mt-1 block text-sm text-slate-950">{money(invoice.total)}</strong></span><span className="text-slate-500">Paid<strong className="mt-1 block text-sm text-emerald-700">{money(invoice.amountPaid)}</strong></span><span className="text-slate-500">Balance<strong className="mt-1 block text-sm text-slate-950">{money(invoice.balance)}</strong></span></div><button type="button" onClick={() => printInvoice(invoice)} className="mt-3 inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-bold text-slate-700"><Printer size={13} />Print invoice</button></article>)}{!loading && !matchingInvoices.length && <p className="cana-panel p-8 text-center text-sm text-slate-500">No invoices match this search.</p>}</section>
+      <section className="hidden overflow-x-auto md:block cana-panel">
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <h2 className="font-bold">Invoices</h2>
           <button
@@ -392,13 +391,7 @@ export default function BillingPage() {
                 </td>
               </tr>
             ) : (
-              invoices
-                .filter((invoice) =>
-                  `${invoice.invoiceNumber} ${invoice.customer?.fullName || ""}`
-                    .toLowerCase()
-                    .includes(search.toLowerCase()),
-                )
-                .map((invoice) => (
+              matchingInvoices.map((invoice) => (
                   <tr key={invoice._id}>
                     <td className="px-5 py-4 font-semibold">
                       {invoice.invoiceNumber}
@@ -445,7 +438,7 @@ export default function BillingPage() {
       {paymentOpen && (
         <form
           onSubmit={receivePayment}
-          className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-5 md:grid-cols-2"
+          className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-2"
         >
           <div className="flex items-center justify-between md:col-span-2">
             <h2 className="font-bold">Record payment</h2>
@@ -512,14 +505,14 @@ export default function BillingPage() {
           />
           <button
             disabled={saving}
-            className="disabled:opacity-50 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white md:col-span-2"
+            className="disabled:opacity-50 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white md:col-span-2"
           >
             Record payment
           </button>
         </form>
       )}
-      <section className="cana-panel p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold">Payment receipts</h2><p className="mt-1 text-sm text-gray-500">Every recorded payment has a unique receipt number.</p></div><div className="flex flex-wrap items-center gap-2"><input aria-label="Receipts from date" type="date" value={receiptFrom} onChange={(event) => setReceiptFrom(event.target.value)} className="rounded-lg border border-gray-200 px-2.5 py-2 text-sm"/><input aria-label="Receipts to date" type="date" value={receiptTo} onChange={(event) => setReceiptTo(event.target.value)} className="rounded-lg border border-gray-200 px-2.5 py-2 text-sm"/><button type="button" onClick={printPaymentRegister} disabled={!filteredPayments.length} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"><Printer size={15}/>Print register</button></div></div><p className="mt-3 text-sm font-semibold text-emerald-700">{filteredPayments.length} receipt{filteredPayments.length === 1 ? "" : "s"} · {money(filteredPayments.reduce((sum, payment) => sum + payment.amount, 0))} RWF received</p>
+      <section className="cana-panel p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-bold">Payment receipts</h2><div className="flex flex-wrap items-center gap-2"><input aria-label="Receipts from date" type="date" value={receiptFrom} onChange={(event) => setReceiptFrom(event.target.value)} className="rounded-lg border border-gray-200 px-2.5 py-2 text-sm"/><input aria-label="Receipts to date" type="date" value={receiptTo} onChange={(event) => setReceiptTo(event.target.value)} className="rounded-lg border border-gray-200 px-2.5 py-2 text-sm"/><button type="button" onClick={printPaymentRegister} disabled={!filteredPayments.length} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"><Printer size={15}/>Print register</button></div></div><p className="mt-2 text-sm font-semibold text-emerald-700">{filteredPayments.length} · {money(filteredPayments.reduce((sum, payment) => sum + payment.amount, 0))} RWF</p>
         <div className="mt-4 space-y-3">
           {filteredPayments.map((payment) => (
             <div

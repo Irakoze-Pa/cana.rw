@@ -1042,10 +1042,6 @@ export default function ProductionOrdersPage() {
                   Production Orders
                 </h1>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  Manage production requirements and
-                  execute them through one or multiple batches.
-                </p>
               </div>
             </div>
 
@@ -1101,15 +1097,7 @@ export default function ProductionOrdersPage() {
               className="mt-0.5 shrink-0"
             />
 
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold">
-                Something went wrong
-              </p>
-
-              <p className="mt-1 text-sm">
-                {error}
-              </p>
-            </div>
+            <p className="min-w-0 flex-1 text-sm">{error}</p>
 
             <button
               type="button"
@@ -1127,28 +1115,12 @@ export default function ProductionOrdersPage() {
         {/* STATS                                                                 */}
         {/* ==================================================================== */}
 
-        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
+        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
           {[
             ["Total", stats.total],
-            ["Draft", stats.draft],
-            ["Planned", stats.planned],
-            ["Released", stats.released],
-            [
-              "In Production",
-              stats.inProduction,
-            ],
-            [
-              "Completed",
-              stats.completed,
-            ],
-            [
-              "Cancelled",
-              stats.cancelled,
-            ],
-            [
-              "On Hold",
-              stats.onHold,
-            ],
+            ["Ready", stats.planned + stats.released],
+            ["In Production", stats.inProduction],
+            ["Completed", stats.completed],
           ].map(
             ([label, value]) => (
               <div
@@ -1159,7 +1131,7 @@ export default function ProductionOrdersPage() {
                   {label}
                 </p>
 
-                <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-950">
+                <p className="mt-1 text-xl font-extrabold tracking-tight text-slate-950">
                   {Number(value)}
                 </p>
               </div>
@@ -1304,7 +1276,7 @@ export default function ProductionOrdersPage() {
                 />
 
                 <p className="text-sm">
-                  Loading production orders...
+                  Loading…
                 </p>
               </div>
             </div>
@@ -1321,10 +1293,6 @@ export default function ProductionOrdersPage() {
                 No production orders found
               </h3>
 
-              <p className="mt-1 max-w-md text-sm text-gray-500">
-                Try changing your filters or create a
-                new production order.
-              </p>
             </div>
           ) : (
             <>
@@ -1538,11 +1506,12 @@ export default function ProductionOrdersPage() {
                                       order
                                     )
                                   }
-                                  className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30"
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30"
                                 >
                                   <Pencil
                                     size={17}
                                   />
+                                  <span className="hidden text-xs font-semibold xl:inline">Update</span>
                                 </button>
 
                                 <button

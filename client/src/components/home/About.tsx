@@ -8,13 +8,13 @@ import { Link } from "react-router-dom";
 
 function About() {
   return (
-    <section id="about" className="relative overflow-hidden bg-white py-16 lg:py-20">
+    <section id="about" className="relative overflow-hidden bg-white py-10 lg:py-12">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
 
         {/* =========================
             TOP CONTENT
         ========================== */}
-        <div className="grid gap-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
+        <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
 
           {/* Heading */}
           <div>
@@ -26,7 +26,7 @@ function About() {
               </span>
             </div>
 
-            <h2 className="mt-7 max-w-4xl text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-black sm:text-5xl lg:text-6xl">
+            <h2 className="mt-5 max-w-4xl text-3xl font-semibold leading-[1.05] tracking-[-0.04em] text-black sm:text-4xl lg:text-5xl">
               Building better spaces
               <br />
 
@@ -49,7 +49,7 @@ function About() {
         {/* =========================
             MAIN CONTENT
         ========================== */}
-        <div className="mt-12 grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
+        <div className="mt-8 grid gap-6 lg:grid-cols-[0.85fr_1.15fr] lg:gap-8">
 
           {/* =========================
               LEFT
@@ -57,8 +57,8 @@ function About() {
           <div className="relative">
 
             {/* Main Statement */}
-            <div className="border-l-2 border-red-700 pl-7">
-              <p className="text-lg font-medium leading-8 text-black sm:text-xl">
+            <div className="border-l-2 border-red-700 pl-5">
+              <p className="text-base font-medium leading-7 text-black sm:text-lg">
                 We combine quality manufacturing, skilled teams and
                 customer-focused service to help our clients build,
                 transform and maintain better spaces.
@@ -68,7 +68,7 @@ function About() {
             {/* CTA */}
             <Link
               to="/about"
-              className="group mt-10 inline-flex items-center gap-3"
+              className="group mt-6 inline-flex items-center gap-3"
             >
               <span className="border-b border-black pb-1 text-sm font-semibold text-black transition-colors duration-300 group-hover:border-neutral-500 group-hover:text-neutral-600">
                 Discover CANA Group
@@ -83,7 +83,7 @@ function About() {
             </Link>
 
             {/* Company Identity */}
-            <div className="mt-10 flex items-center gap-4">
+            <div className="mt-6 flex items-center gap-4">
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black text-white">
                 <Building2 size={18} />
               </div>
@@ -125,7 +125,7 @@ function About() {
         {/* =========================
             BOTTOM STATEMENT
         ========================== */}
-        <div className="mt-12 border-t border-gray-200 pt-6">
+        <div className="mt-8 border-t border-gray-200 pt-4">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
 
             <p className="text-xs font-medium uppercase tracking-[0.25em] text-red-700">
@@ -160,7 +160,7 @@ function InfoBlock({
   text,
 }: InfoBlockProps) {
   return (
-    <div className={`group flex gap-5 p-6 sm:gap-7 sm:p-8 ${number === "01" ? "bg-black text-white" : "border-t border-white/15 bg-black text-white"}`}>
+    <div className={`group flex gap-4 p-5 sm:gap-5 sm:p-6 ${number === "01" ? "bg-black text-white" : "border-t border-white/15 bg-black text-white"}`}>
 
       {/* Number */}
       <div className="pt-1">
@@ -179,14 +179,14 @@ function InfoBlock({
             {icon}
           </div>
 
-          <h3 className="text-xl font-semibold tracking-tight text-white">
+          <h3 className="text-lg font-semibold tracking-tight text-white">
             {title}
           </h3>
 
         </div>
 
         {/* Description */}
-        <p className="mt-4 max-w-2xl text-sm leading-7 text-neutral-300 sm:text-base">
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-300">
           {text}
         </p>
 

@@ -8,9 +8,7 @@ import type {
 // API CONFIG
 // =========================================================
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.VITE_API_URL || "/api/v1");
+const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
 
 // =========================================================
 // RESPONSE TYPE
@@ -44,6 +42,18 @@ const getErrorMessage = (
     if (typeof message === "string") {
       return message;
     }
+  }
+
+  if (
+    data &&
+    typeof data === "object" &&
+    "error" in data &&
+    (data as { error?: unknown }).error &&
+    typeof (data as { error?: unknown }).error === "object" &&
+    "message" in ((data as { error: { message?: unknown } }).error)
+  ) {
+    const message = (data as { error: { message?: unknown } }).error.message;
+    if (typeof message === "string") return message;
   }
 
   return fallback;

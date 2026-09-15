@@ -185,8 +185,8 @@ export default function FinishedGoodsPage() {
     .filter((balance) => balance.store === "sales")
     .reduce((sum, balance) => sum + balance.quantity, 0);
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-8">
-      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+    <div className="mx-auto max-w-7xl space-y-4 pb-6">
+      <header className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
         <div className="flex gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600">
             <PackageCheck size={21} />
@@ -194,17 +194,14 @@ export default function FinishedGoodsPage() {
           <div>
             <p className="cana-section-kicker">Inventory & stores</p>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
-              Finished goods stores
+              Finished-goods stores
             </h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Finished products only. Production Store holds completed output in kg; transfer to Sales Store before delivery.
-            </p>
           </div>
         </div>
         <div className="flex gap-2">
-          {isSuperAdmin && <button onClick={() => setShowAdjustment(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"><SlidersHorizontal size={16} />Adjust stock</button>}
-          <Link to="/management/products" className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"><PencilLine size={16} />Product catalogue</Link>
-          <button onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16} />Refresh</button>
+          {isSuperAdmin && <button onClick={() => setShowAdjustment(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"><SlidersHorizontal size={16} />Adjust stock</button>}
+          <Link to="/management/products" className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800"><PencilLine size={16} />Product catalogue</Link>
+          <button onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16} />Refresh</button>
         </div>
       </header>
       {showAdjustment && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"><form onSubmit={submitAdjustment} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-red-600">SuperAdmin control</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Adjust finished-goods stock</h2><p className="mt-2 text-sm leading-6 text-slate-500">Use only for a verified physical count or correction. This creates an immutable adjustment record.</p></div><button type="button" onClick={() => setShowAdjustment(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></div><div className="mt-6 space-y-4"><label className="block text-sm font-bold text-slate-700">Finished product<select required value={adjustment.product} onChange={(event) => setAdjustment({ ...adjustment, product: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Select product</option>{products.map((product) => <option key={product._id} value={product._id}>{product.name} · {product.code}</option>)}</select></label><label className="block text-sm font-bold text-slate-700">Store<select value={adjustment.store} onChange={(event) => setAdjustment({ ...adjustment, store: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="production">Production Store</option><option value="sales">Sales Store</option></select></label>{selectedAdjustmentProduct && <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">Current balance: <strong>{stockWithPacks(balanceFor(selectedAdjustmentProduct._id, adjustment.store), selectedAdjustmentProduct)}</strong></p>}<label className="block text-sm font-bold text-slate-700">Adjustment in kg<input required step="any" type="number" value={adjustment.quantityChange} onChange={(event) => setAdjustment({ ...adjustment, quantityChange: event.target.value })} placeholder="Example: 80 or -20" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/></label><label className="block text-sm font-bold text-slate-700">Reason for correction<textarea required minLength={3} value={adjustment.reason} onChange={(event) => setAdjustment({ ...adjustment, reason: event.target.value })} rows={3} placeholder="Example: Physical stock count correction" className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm"/></label></div><button disabled={busy} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:bg-slate-300"><SlidersHorizontal size={16}/>{busy ? "Recording…" : "Record adjustment"}</button></form></div>}
@@ -213,33 +210,24 @@ export default function FinishedGoodsPage() {
           {error}
         </p>
       )}
-      <section className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
-        <p className="text-sm font-semibold text-slate-900">Finished-goods store workflow</p>
-        <p className="mt-1 text-sm leading-6 text-slate-600">
-              Completed production batches add stock to Production Store. Transfer it to Sales Store before delivery; confirmed sales then reduce Sales Store only.
-        </p>
-      </section>
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-3 md:grid-cols-3">
         <Metric
           icon={<Factory size={19} />}
           label="Production Store"
           value={number(totalProduction)}
-          hint="Produced goods available for transfer"
         />
         <Metric
           icon={<Store size={19} />}
           label="Sales Store"
           value={number(totalSales)}
-          hint="Goods available for customer delivery"
         />
         <Metric
           icon={<ArrowRightLeft size={19} />}
           label="Recorded transfers"
           value={String(transfers.length)}
-          hint="Latest 100 movement records"
         />
       </section>
-      <section className="grid gap-6 xl:grid-cols-[.95fr_1.55fr]">
+      <section className="grid gap-4 xl:grid-cols-[.95fr_1.55fr]">
         <form
           onSubmit={sendTransfer}
           className="cana-panel p-5"
@@ -252,10 +240,6 @@ export default function FinishedGoodsPage() {
               <h2 className="font-bold text-slate-900">
                 Transfer finished goods
               </h2>
-              <p className="text-sm text-gray-500">
-                Move stock between the two stores without changing total
-                finished stock.
-              </p>
             </div>
           </div>
           <div className="mt-5 space-y-4">
@@ -323,7 +307,7 @@ export default function FinishedGoodsPage() {
                 </select>
               </label>
             </div>
-            <div className="rounded-2xl border border-red-100 bg-red-50/40 p-3.5"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-bold text-slate-900">Transfer quantity</p><p className="mt-0.5 text-xs text-slate-600">Use packs for normal dispatch; kilograms remain available for partial stock movements.</p></div><select value={form.quantityMode} onChange={(event) => setForm({ ...form, quantityMode: event.target.value as "packs" | "kg", quantityInput: "" })} className="h-10 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-slate-800"><option value="packs">By pack</option><option value="kg">By kg</option></select></div><label className="mt-3 block text-sm font-semibold text-gray-700">{form.quantityMode === "packs" ? `Number of packs${selected?.packSizeKg ? ` (${selected.packSizeKg} kg each)` : ""}` : "Quantity in kg"}<input required min="0.0001" step="any" type="number" disabled={form.quantityMode === "packs" && !selected?.packSizeKg} value={form.quantityInput} onChange={(event) => setForm({ ...form, quantityInput: event.target.value })} placeholder={form.quantityMode === "packs" ? "Example: 12 packs" : "Example: 240 kg"} className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm disabled:bg-slate-100"/></label>{selected && <p className="mt-2 text-xs text-slate-600">{form.quantityInput ? <><strong>{number(transferQuantityKg)} kg</strong> will be transferred{form.quantityMode === "kg" && selected.packSizeKg ? ` · equivalent to ${number(transferQuantityKg / selected.packSizeKg)} packs` : ""}.</> : <>Pack size: <strong>{selected.packSizeKg ? `${number(selected.packSizeKg)} kg per pack` : "not configured"}</strong>.</>}</p>}</div>
+            <div className="rounded-2xl border border-red-100 bg-red-50/40 p-3.5"><div className="flex items-center justify-between gap-3"><p className="text-sm font-bold text-slate-900">Transfer quantity</p><select value={form.quantityMode} onChange={(event) => setForm({ ...form, quantityMode: event.target.value as "packs" | "kg", quantityInput: "" })} className="h-10 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-slate-800"><option value="packs">By pack</option><option value="kg">By kg</option></select></div><label className="mt-3 block text-sm font-semibold text-gray-700">{form.quantityMode === "packs" ? `Number of packs${selected?.packSizeKg ? ` (${selected.packSizeKg} kg)` : ""}` : "Quantity in kg"}<input required min="0.0001" step="any" type="number" disabled={form.quantityMode === "packs" && !selected?.packSizeKg} value={form.quantityInput} onChange={(event) => setForm({ ...form, quantityInput: event.target.value })} placeholder={form.quantityMode === "packs" ? "12" : "240"} className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm disabled:bg-slate-100"/></label>{selected && form.quantityInput && <p className="mt-2 text-xs font-semibold text-slate-600">{number(transferQuantityKg)} kg</p>}</div>
             {selected && (
               <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                 Available in {storeName(form.fromStore)}:{" "}
@@ -359,9 +343,6 @@ export default function FinishedGoodsPage() {
             <h2 className="font-bold text-slate-900">
               Store balances by product
             </h2>
-            <p className="text-sm text-gray-500">
-              Total stock remains the sum of both stores.
-            </p>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -419,9 +400,6 @@ export default function FinishedGoodsPage() {
           <Truck size={19} className="text-slate-600" />
           <div>
             <h2 className="font-bold text-slate-900">Transfer history</h2>
-            <p className="text-sm text-gray-500">
-              Every movement is recorded with its reference and operator.
-            </p>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -477,21 +455,14 @@ function Metric({
   icon,
   label,
   value,
-  hint,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  hint: string;
 }) {
   return (
-    <article className="cana-panel p-5">
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-700">
-        {icon}
-      </span>
-      <p className="mt-4 text-sm text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{value}</p>
-      <p className="mt-1 text-xs text-gray-500">{hint}</p>
+    <article className="cana-panel p-4">
+      <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-700">{icon}</span><div><p className="text-[10px] font-bold uppercase tracking-[.1em] text-gray-500">{label}</p><p className="mt-0.5 text-xl font-extrabold tracking-tight text-slate-950">{value} kg</p></div></div>
     </article>
   );
 }

@@ -1,12 +1,5 @@
 import { useState } from "react";
 import {
-  ChevronDown,
-  Calculator,
-  Construction,
-  FileText,
-  Palette,
-  Paintbrush,
-  Truck,
   UserRound,
   LayoutDashboard,
   LogOut,
@@ -139,19 +132,6 @@ function MobileMenu({
             >
               <span>CANA Paints</span>
 
-              <ChevronDown
-                size={18}
-                strokeWidth={1.8}
-                className={`
-                  transition-transform
-                  duration-300
-                  ${
-                    open === "paints"
-                      ? "rotate-180 text-red-600"
-                      : "text-neutral-400"
-                  }
-                `}
-              />
             </button>
 
             {/* DROPDOWN */}
@@ -195,12 +175,6 @@ function MobileMenu({
                   {/* PRODUCTS */}
 
                   <MobileDropdownItem
-                    icon={
-                      <Palette
-                        size={18}
-                        strokeWidth={1.8}
-                      />
-                    }
                     title="Paint Products"
                     description="Interior & exterior paints"
                     to="/cana-paints/products"
@@ -210,12 +184,6 @@ function MobileMenu({
                   {/* PAINTING SERVICES */}
 
                   <MobileDropdownItem
-                    icon={
-                      <Paintbrush
-                        size={18}
-                        strokeWidth={1.8}
-                      />
-                    }
                     title="Painting Services"
                     description="Residential & commercial"
                     to="/cana-paints/painting-services"
@@ -225,18 +193,12 @@ function MobileMenu({
                   {/* REQUEST QUOTE */}
 
                   <MobileDropdownItem
-                    icon={
-                      <FileText
-                        size={18}
-                        strokeWidth={1.8}
-                      />
-                    }
                     title="Request a Quote"
                     description="Tell us about your project"
                     to="/cana-paints/request-quote"
                     onClick={closeMenu}
                   />
-                  <MobileDropdownItem icon={<Calculator size={18} strokeWidth={1.8} />} title="Estimated Cost Calculator" description="Plan paint quantity and cost" to="/cana-paints/estimate-cost" onClick={closeMenu} />
+                  <MobileDropdownItem title="Estimated Cost Calculator" description="Plan paint quantity and cost" to="/cana-paints/estimate-cost" onClick={closeMenu} />
 
                 </div>
 
@@ -279,19 +241,6 @@ function MobileMenu({
             >
               <span>CANA Services</span>
 
-              <ChevronDown
-                size={18}
-                strokeWidth={1.8}
-                className={`
-                  transition-transform
-                  duration-300
-                  ${
-                    open === "services"
-                      ? "rotate-180 text-red-600"
-                      : "text-neutral-400"
-                  }
-                `}
-              />
             </button>
 
             {/* DROPDOWN */}
@@ -335,12 +284,6 @@ function MobileMenu({
                   {/* SCAFFOLD RENTAL */}
 
                   <MobileDropdownItem
-                    icon={
-                      <Construction
-                        size={18}
-                        strokeWidth={1.8}
-                      />
-                    }
                     title="Scaffold Rental"
                     description="Safe access solutions"
                     to="/cana-services/scaffolds"
@@ -350,12 +293,6 @@ function MobileMenu({
                   {/* TRANSPORT */}
 
                   <MobileDropdownItem
-                    icon={
-                      <Truck
-                        size={18}
-                        strokeWidth={1.8}
-                      />
-                    }
                     title="Transport"
                     description="Reliable logistics"
                     to="/cana-services/transport"
@@ -479,7 +416,6 @@ function MobileMenu({
 ============================================================ */
 
 type MobileDropdownItemProps = {
-  icon: React.ReactNode;
   title: string;
   description: string;
   to: string;
@@ -487,7 +423,6 @@ type MobileDropdownItemProps = {
 };
 
 function MobileDropdownItem({
-  icon,
   title,
   description,
   to,
@@ -504,7 +439,8 @@ function MobileDropdownItem({
           items-center
           gap-3
           rounded-xl
-          p-3
+          px-3.5
+          py-3
           transition-all
           duration-200
           ${
@@ -517,31 +453,6 @@ function MobileDropdownItem({
     >
       {({ isActive }) => (
         <>
-          {/* ICON */}
-
-          <div
-            className={`
-              flex
-              h-10
-              w-10
-              shrink-0
-              items-center
-              justify-center
-              rounded-xl
-              transition-all
-              duration-200
-              ${
-                isActive
-                  ? "bg-red-600 text-white"
-                  : "bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white"
-              }
-            `}
-          >
-            {icon}
-          </div>
-
-          {/* TEXT */}
-
           <div className="min-w-0 flex-1">
 
             <h4
@@ -565,23 +476,6 @@ function MobileDropdownItem({
             </p>
 
           </div>
-
-          {/* ARROW */}
-
-          <span
-            className={`
-              text-sm
-              transition-all
-              duration-200
-              ${
-                isActive
-                  ? "translate-x-1 text-red-600"
-                  : "text-neutral-300 group-hover:translate-x-1 group-hover:text-red-600"
-              }
-            `}
-          >
-            →
-          </span>
         </>
       )}
     </NavLink>

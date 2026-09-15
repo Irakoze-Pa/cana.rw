@@ -248,11 +248,8 @@ export default function PayrollPage() {
     popup.document.close();
   };
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-8">
-      <section className="flex flex-col justify-between gap-5 rounded-3xl border border-gray-200 bg-white p-6 text-gray-900 shadow-sm md:flex-row md:items-center md:p-8">
-        <div><p className="cana-section-kicker">CANA · Finance & people</p><h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950">Payroll</h1><p className="mt-2 text-sm text-gray-500">Manage one payroll month at a time: salaries, advances, review, approval and payment.</p></div>
-        <div className="rounded-2xl bg-slate-50 px-5 py-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Selected period</p><p className="mt-1 text-lg font-extrabold text-slate-900">{periodLabel(period)}</p><p className="mt-1 text-xs font-semibold capitalize text-red-700">{currentRun ? currentRun.status : "Ready to create"}</p></div>
-      </section>
+    <div className="mx-auto max-w-7xl space-y-4 pb-8">
+      <header className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center"><div><p className="cana-section-kicker">People & payroll</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">Payroll</h1></div><div className="rounded-lg bg-slate-100 px-3 py-2 text-sm"><strong>{periodLabel(period)}</strong><span className="ml-2 capitalize text-slate-500">{currentRun?.status || "not created"}</span></div></header>
       {error && (
         <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
           {error}
@@ -271,25 +268,18 @@ export default function PayrollPage() {
         ].map(([label, value, colour]) => (
           <article
             key={label}
-            className="cana-panel p-5"
+            className="cana-panel p-4"
           >
             <p className="text-sm font-semibold text-gray-500">{label}</p>
             <p className={`mt-2 text-2xl font-extrabold ${colour}`}>{value}</p>
-            <p className="mt-2 text-xs text-gray-500">
-              {label === "Attendance today"
-                ? `${attendanceSummary.present} present · ${attendanceSummary.absent} absent`
-                : currentRun ? `${periodLabel(period)} payroll` : "Create this month’s payroll to calculate"}
-            </p>
+            <p className="mt-2 text-xs text-gray-500">{label === "Attendance today" ? `${attendanceSummary.present} present · ${attendanceSummary.absent} absent` : currentRun ? periodLabel(period) : "Not created"}</p>
           </article>
         ))}
       </section>
       <section className="cana-panel p-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="font-bold text-slate-900">Create monthly payroll</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              This creates a draft; review it before approval and payment.
-            </p>
+            <h2 className="font-bold text-slate-900">1. Create payroll draft</h2>
           </div>
           <div className="flex gap-2">
             <input
@@ -317,10 +307,7 @@ export default function PayrollPage() {
               <CalendarCheck2 size={19} />
             </span>
             <div>
-              <h2 className="font-bold text-slate-900">Daily attendance</h2>
-              <p className="text-sm text-gray-500">
-                Mark each active employee once for the selected day.
-              </p>
+              <h2 className="font-bold text-slate-900">2. Record attendance</h2>
             </div>
           </div>
           <input
@@ -375,10 +362,7 @@ export default function PayrollPage() {
       <section className="cana-panel overflow-hidden">
         <div className="flex items-center justify-between border-b border-gray-100 p-5">
           <div>
-            <h2 className="font-bold text-slate-900">Payroll runs</h2>
-            <p className="text-sm text-gray-500">
-              Print any run; its document clearly shows its current status.
-            </p>
+              <h2 className="font-bold text-slate-900">3. Review and pay payroll</h2>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
             {runs.length} runs
@@ -500,10 +484,7 @@ export default function PayrollPage() {
               <Users size={19} />
             </span>
             <div>
-              <h2 className="font-bold">Compensation profiles</h2>
-              <p className="text-sm text-gray-500">
-                Monthly base salary used when a new payroll draft is created.
-              </p>
+              <h2 className="font-bold">Monthly salaries</h2>
             </div>
           </div>
           {staff.map((person) => (
@@ -540,10 +521,7 @@ export default function PayrollPage() {
               <ShieldCheck size={19} />
             </span>
             <div>
-              <h2 className="font-bold">Advance queue</h2>
-              <p className="text-sm text-gray-500">
-                Paid advances are recovered by the next payroll.
-              </p>
+              <h2 className="font-bold">Staff advances</h2>
             </div>
           </div>
           <div className="mt-4 space-y-3">

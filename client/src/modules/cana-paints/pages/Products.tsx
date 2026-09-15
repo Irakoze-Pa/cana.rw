@@ -376,53 +376,23 @@ const Products = () => {
             bg-neutral-50
           "
         >
-          {/* Decorative background */}
-
-          <div
-            className="
-              pointer-events-none
-              absolute
-              -left-40
-              top-10
-              h-96
-              w-96
-              rounded-full
-              bg-slate-200/65
-              blur-3xl
-            "
-          />
-
-          <div
-            className="
-              pointer-events-none
-              absolute
-              -right-40
-              bottom-0
-              h-96
-              w-96
-              rounded-full
-              bg-neutral-200/70
-              blur-3xl
-            "
-          />
-
           <div
             className="
               relative
               mx-auto
               max-w-7xl
               px-5
-              py-16
+              py-10
               sm:px-8
-              sm:py-20
+              sm:py-12
               lg:px-12
-              lg:py-24
+              lg:py-14
             "
           >
             <div
               className="
                 grid
-                gap-12
+                gap-8
                 lg:grid-cols-[1.15fr_0.85fr]
                 lg:items-end
               "
@@ -430,7 +400,7 @@ const Products = () => {
               {/* LEFT */}
 
               <div>
-                <div className="mb-7 flex items-center gap-3">
+                <div className="mb-5 flex items-center gap-3">
                   <span className="h-px w-10 bg-neutral-900" />
 
                   <span
@@ -449,12 +419,12 @@ const Products = () => {
                 <h1
                   className="
                     max-w-4xl
-                    text-5xl
+                    text-4xl
                     font-semibold
                     leading-[0.94]
                     tracking-[-0.055em]
-                    sm:text-6xl
-                    lg:text-7xl
+                    sm:text-5xl
+                    lg:text-6xl
                   "
                 >
                   Quality products.
@@ -466,7 +436,7 @@ const Products = () => {
 
                 <p
                   className="
-                    mt-7
+                    mt-5
                     max-w-2xl
                     text-sm
                     leading-7
@@ -481,7 +451,7 @@ const Products = () => {
                   finishing applications.
                 </p>
 
-                <div className="mt-8 flex flex-wrap gap-3">
+                <div className="mt-6 flex flex-wrap gap-3">
                   <button
                     type="button"
                     onClick={() =>
@@ -500,8 +470,8 @@ const Products = () => {
                       gap-2
                       rounded-xl
                       bg-neutral-950
-                      px-6
-                      py-3.5
+                      px-5
+                      py-3
                       text-sm
                       font-semibold
                       text-white
@@ -537,8 +507,8 @@ const Products = () => {
                       border
                       border-neutral-300
                       bg-white
-                      px-6
-                      py-3.5
+                      px-5
+                      py-3
                       text-sm
                       font-semibold
                       text-neutral-700
@@ -558,14 +528,14 @@ const Products = () => {
                 <div
                   className="
                     overflow-hidden
-                    rounded-[2rem]
+                    rounded-2xl
                     border
                     border-neutral-200
                     bg-white
                     shadow-sm
                   "
                 >
-                  <div className="p-7 sm:p-8">
+                  <div className="p-5 sm:p-6">
                     <div className="flex items-center justify-between">
                       <div
                         className="
@@ -590,7 +560,7 @@ const Products = () => {
 
                     <p
                       className="
-                        mt-7
+                        mt-5
                         text-xs
                         font-bold
                         uppercase
@@ -601,7 +571,7 @@ const Products = () => {
                       Product Collection
                     </p>
 
-                    <div className="mt-4 grid grid-cols-3">
+                    <div className="mt-3 grid grid-cols-3">
                       <div>
                         <p className="text-2xl font-semibold">
                           {products.length}
@@ -639,9 +609,9 @@ const Products = () => {
                       border-t
                       border-neutral-100
                       bg-neutral-50
-                      px-7
-                      py-4
-                      sm:px-8
+                      px-5
+                      py-3
+                      sm:px-6
                     "
                   >
                     <div className="flex items-center gap-2">
@@ -672,11 +642,11 @@ const Products = () => {
             mx-auto
             max-w-7xl
             px-5
-            py-12
+            py-8
             sm:px-8
-            sm:py-16
+            sm:py-10
             lg:px-12
-            lg:py-20
+            lg:py-12
           "
         >
           {/* TOOLBAR */}
@@ -684,12 +654,12 @@ const Products = () => {
           {!loading &&
             !error &&
             products.length > 0 && (
-              <div className="mb-10">
+              <div className="mb-6">
                 <div
                   className="
                     flex
                     flex-col
-                    gap-6
+                    gap-4
                     lg:flex-row
                     lg:items-end
                     lg:justify-between
@@ -811,13 +781,13 @@ const Products = () => {
 
                 <div
                   className="
-                    mt-8
+                    mt-5
                     flex
                     flex-col
-                    gap-5
+                    gap-3
                     border-y
                     border-neutral-200
-                    py-5
+                    py-3
                     sm:flex-row
                     sm:items-center
                     sm:justify-between
@@ -901,7 +871,7 @@ const Products = () => {
             <div
               className="
                 grid
-                gap-6
+                gap-4
                 sm:grid-cols-2
                 lg:grid-cols-3
                 2xl:grid-cols-4
@@ -922,15 +892,15 @@ const Products = () => {
                 >
                   <div
                     className="
-                      h-[390px]
+                      h-[300px]
                       animate-pulse
                       bg-neutral-100
-                      sm:h-[430px]
-                      lg:h-[470px]
+                      sm:h-[330px]
+                      lg:h-[360px]
                     "
                   />
 
-                  <div className="space-y-4 p-6">
+                  <div className="space-y-3 p-4">
                     <div className="h-3 w-20 animate-pulse rounded bg-neutral-100" />
 
                     <div className="h-5 w-3/4 animate-pulse rounded bg-neutral-100" />
@@ -1022,7 +992,7 @@ const Products = () => {
           {!loading &&
             !error &&
             products.length === 0 && (
-              <div className="border-y border-neutral-200 py-24 text-center">
+              <div className="border-y border-neutral-200 py-16 text-center">
                 <div
                   className="
                     mx-auto
@@ -1086,7 +1056,7 @@ const Products = () => {
             !error &&
             products.length > 0 &&
             filteredProducts.length === 0 && (
-              <div className="border-y border-neutral-200 py-24 text-center">
+              <div className="border-y border-neutral-200 py-16 text-center">
                 <div
                   className="
                     mx-auto
@@ -1304,32 +1274,32 @@ const Products = () => {
               mx-auto
               max-w-7xl
               px-5
-              py-16
+              py-10
               sm:px-8
-              sm:py-20
+              sm:py-12
               lg:px-12
-              lg:py-24
+              lg:py-14
             "
           >
             <div
               className="
                 overflow-hidden
-                rounded-[2rem]
+                rounded-2xl
                 border
                 border-white/10
                 bg-white/[0.03]
-                px-7
-                py-10
-                sm:px-10
+                px-6
+                py-7
+                sm:px-8
                 lg:px-14
-                lg:py-14
+                lg:py-9
               "
             >
               <div
                 className="
                   flex
                   flex-col
-                  gap-10
+                  gap-6
                   lg:flex-row
                   lg:items-center
                   lg:justify-between

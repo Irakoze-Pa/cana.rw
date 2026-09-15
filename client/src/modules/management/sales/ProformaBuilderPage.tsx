@@ -174,8 +174,9 @@ export default function ProformaBuilderPage() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save proforma."); }
   };
   const editSaved = (proforma: SavedProforma) => { setSavedId(proforma._id); setCompany(proforma.company || "cana_paints"); setClient({ name: proforma.client?.name || "", phone: proforma.client?.phone || "", email: proforma.client?.email || "", address: proforma.client?.address || "" }); setDocumentDetails({ number: proforma.proformaNumber, issueDate: proforma.documentDetails?.issueDate || new Date().toISOString().slice(0, 10), validUntil: proforma.documentDetails?.validUntil || "", clientReference: proforma.documentDetails?.clientReference || "", paymentTerms: proforma.documentDetails?.paymentTerms || "Payment before delivery" }); setNotes(proforma.notes || ""); setLines(proforma.lines?.length ? proforma.lines : [emptyLine()]); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const newProforma = () => { setSavedId(""); setCompany("cana_paints"); setClient({ name: "", phone: "", email: "", address: "" }); setDocumentDetails({ number: `PF-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`, issueDate: new Date().toISOString().slice(0, 10), validUntil: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), clientReference: "", paymentTerms: "Payment before delivery" }); setNotes("All prices are tax-inclusive. This proforma is valid for 7 days from the issue date."); setLines([emptyLine()]); setError(""); window.scrollTo({ top: 0, behavior: "smooth" }); };
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-4">
       <Link
         to="/management/sales"
         className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-red-600"
@@ -183,21 +184,13 @@ export default function ProformaBuilderPage() {
         <ArrowLeft size={16} />
         Sales orders
       </Link>
-      <header>
-        <p className="text-sm font-medium text-red-600">Internal sales tool</p>
-        <h1 className="mt-1 text-3xl font-bold text-gray-900">
-          Create branded proforma
-        </h1>
-        <p className="mt-2 text-sm text-gray-500">
-          All entered catalogue prices are treated as tax-inclusive.
-        </p>
-      </header>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4"><div><p className="cana-section-kicker">Sales workspace</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">Proforma builder</h1></div><button type="button" onClick={newProforma} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">New proforma</button></header>
       {error && (
         <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
       )}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Saved documents</p><h2 className="mt-1 font-extrabold text-slate-950">Editable proformas</h2></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{savedProformas.length}</span></div>{savedProformas.length ? <div className="mt-4 grid gap-3 md:grid-cols-2">{savedProformas.slice(0, 6).map((proforma) => <div key={proforma._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><div className="min-w-0"><p className="font-bold text-slate-900">{proforma.proformaNumber}</p><p className="truncate text-xs text-slate-500">{proforma.client?.name || "Client"} · {money(proforma.total || 0)} RWF</p></div><button type="button" onClick={() => editSaved(proforma)} className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Edit</button></div>)}</div> : <p className="mt-3 text-sm text-slate-500">Saved proformas will appear here. Select one to edit and update it.</p>}</section>
-      <div className="grid gap-6 lg:grid-cols-[.9fr_1.3fr]">
-        <section className="space-y-5 rounded-2xl border border-gray-200 bg-white p-5">
+      <section className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center justify-between"><h2 className="font-extrabold text-slate-950">Saved proformas</h2><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{savedProformas.length}</span></div>{savedProformas.length ? <div className="mt-3 grid gap-2 md:grid-cols-2">{savedProformas.slice(0, 6).map((proforma) => <div key={proforma._id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div className="min-w-0"><p className="font-bold text-slate-900">{proforma.proformaNumber}</p><p className="truncate text-xs text-slate-500">{proforma.client?.name || "Client"} · {money(proforma.total || 0)} RWF</p></div><button type="button" onClick={() => editSaved(proforma)} className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Edit</button></div>)}</div> : null}</section>
+      <div className="grid gap-4 lg:grid-cols-[.9fr_1.3fr]">
+        <section className="space-y-4 rounded-xl border border-gray-200 bg-white p-4">
           <h2 className="font-bold">Document & client</h2>
           <label className="block text-sm font-semibold">
             Issue under
@@ -278,37 +271,17 @@ export default function ProformaBuilderPage() {
               className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
             />
           ))}
-          <div className="rounded-xl bg-slate-100 p-3 text-xs leading-5 text-slate-700">
-            <strong>CANAN BUSINESS GROUP LTD</strong><br/>Official commercial document · Kigali, Rwanda
-          </div>
-          <div className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-800">
-            Prices are tax-inclusive. No additional tax is calculated or added
-            to this proforma.
-          </div>
           <textarea
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             className="min-h-24 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
           />
-          <button type="button" onClick={() => void saveProforma()} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800">
-            {savedId ? "Update saved proforma" : "Save editable proforma"}
-          </button>
-          <button
-            type="button"
-            onClick={print}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white"
-          >
-            <Printer size={16} />
-            Print / save proforma
-          </button>
+          <div className="grid gap-2 sm:grid-cols-2"><button type="button" onClick={() => void saveProforma()} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800">{savedId ? "Update" : "Save"}</button><button type="button" onClick={print} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-sm font-semibold text-white"><Printer size={16} />Print</button></div>
         </section>
-        <section className="rounded-2xl border border-gray-200 bg-white p-5">
+        <section className="rounded-xl border border-gray-200 bg-white p-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-bold">Products & services</h2>
-              <p className="mt-1 text-xs text-gray-500">
-                Add catalogue products, non-catalogue items, or painting labour.
-              </p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <button type="button" onClick={() => setLines((current) => [...current, emptyLine("catalogue")])} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-semibold text-gray-700"><Package size={14} />Product</button>
@@ -417,6 +390,7 @@ export default function ProformaBuilderPage() {
                 {line.kind === "labour" && (
                   <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">Labour is priced separately from paint. Use m² for area-based painting work, or day for daily labour.</p>
                 )}
+                <p className="mt-2 text-right text-sm font-bold text-slate-900">Line total: {money(Number(line.quantity) * Number(line.unitPrice))} RWF</p>
               </div>
             ))}
           </div>

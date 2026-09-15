@@ -31,8 +31,10 @@ import type {
   RawMaterial,
 } from "../types/rawMaterial.types";
 import { printCanaDocument } from "../../utils/printCanaDocument";
+import { useToast } from "@/context/toastContext";
 
 function RawMaterialsPage() {
+  const { toast } = useToast();
   const [materials, setMaterials] =
     useState<RawMaterial[]>([]);
 
@@ -255,6 +257,7 @@ function RawMaterialsPage() {
       await deleteRawMaterial(id, true);
 
       await loadMaterials();
+      toast("Raw material and its unused setup records were deleted.", "success");
     } catch (error) {
       console.error(
         "Failed to delete raw material:",
@@ -275,10 +278,14 @@ function RawMaterialsPage() {
 
   const handleSuccess =
     async () => {
+      const message = selectedMaterial
+        ? `${selectedMaterial.name} was updated.`
+        : "Raw material was added to the catalogue.";
       setModalOpen(false);
       setSelectedMaterial(null);
 
       await loadMaterials();
+      toast(message, "success");
     };
 
   // =====================================================
@@ -307,17 +314,21 @@ function RawMaterialsPage() {
             <div>
               <p className="cana-section-kicker">Procurement & materials</p>
               <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
-                Materials Setup
+                Raw-material catalogue
               </h1>
 
-              <p className="mt-1 text-sm text-gray-500">
-                Define materials, units, minimum levels, costs, and supplier options. Stock is managed in Raw Material Inventory.
-              </p>
             </div>
           </div>
         </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/management/inventory"
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+            >
+              <Archive size={17} />
+              Raw-material store
+            </Link>
             <button type="button" onClick={printRegister} disabled={loading || visibleMaterials.length === 0} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"><Printer size={17} />Print list</button>
             <Link
               to="/management/supplier-materials"
@@ -513,19 +524,9 @@ function RawMaterialsPage() {
           STOCK OVERVIEW
       ================================================== */}
 
-      <div className="cana-panel p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-sm font-bold text-gray-900">
-              Stock Overview
-            </h2>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Current raw material quantities.
-              Inventory movements will be
-              managed separately.
-            </p>
-          </div>
+      <div className="cana-panel p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-sm font-bold text-gray-900">Stock overview</h2>
 
           <div className="flex flex-wrap gap-5 text-sm">
             <StockMetric

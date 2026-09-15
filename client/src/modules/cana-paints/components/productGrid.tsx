@@ -20,7 +20,7 @@ const ProductGrid = ({
       className="
         grid
         items-stretch
-        gap-6
+        gap-4
         sm:grid-cols-2
         lg:grid-cols-3
         2xl:grid-cols-4

@@ -355,17 +355,27 @@ function RawMaterialTable({
                           onEdit(material)
                         }
                         className="
+                          inline-flex
+                          items-center
+                          gap-1.5
                           rounded-lg
-                          p-2
+                          border
+                          border-gray-200
+                          bg-white
+                          px-2.5
+                          py-2
                           text-gray-500
                           transition
                           hover:bg-gray-100
                           hover:text-gray-900
                         "
-                        title="Edit material"
-                        aria-label="Edit material"
+                        title="Edit or update material setup"
+                        aria-label={`Edit or update ${material.name}`}
                       >
                         <Edit size={17} />
+                        <span className="hidden text-xs font-semibold xl:inline">
+                          Update
+                        </span>
                       </button>
 
                       <button

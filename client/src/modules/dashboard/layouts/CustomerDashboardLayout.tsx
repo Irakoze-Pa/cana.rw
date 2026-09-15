@@ -3,12 +3,10 @@ import { FileText, LayoutDashboard, Package, ShoppingCart } from "lucide-react";
 
 import CustomerSidebar from "../components/CustomerSidebar";
 import DashboardTopbar from "../components/DashboardTopbar";
-import FloatingWhatsApp from "@/components/common/FloatingWhatsApp";
 
 function CustomerDashboardLayout() {
   return (
     <div className="cana-operations-surface min-h-screen">
-      <FloatingWhatsApp />
       <div className="flex min-h-screen">
         {/* =================================================
             SIDEBAR
@@ -32,7 +30,7 @@ function CustomerDashboardLayout() {
           ================================================= */}
 
           <main className="flex-1">
-            <div className="cana-page-content"><Outlet /></div>
+            <div className="cana-page-content pb-20 md:pb-5"><Outlet /></div>
           </main>
         </div>
       </div>

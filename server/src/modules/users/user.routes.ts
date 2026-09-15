@@ -5,14 +5,45 @@ import { authorizeRoles, protect, AuthRequest } from "../../middleware/auth.midd
 import { hashPassword } from "../../utils/password";
 
 const router = Router();
-const ACCESS_AREAS = ["sales", "production", "inventory", "procurement", "finance", "staff", "reports"] as const;
+const ACCESS_AREAS = ["sales", "production", "inventory", "procurement", "finance", "staff", "reports", "sites"] as const;
 const defaultPermissions = (role: UserRole, department?: Department) => {
   if (role === UserRole.SUPERADMIN || role === UserRole.ADMIN) return [...ACCESS_AREAS];
   if (role === UserRole.CUSTOMER) return [];
-  const departmentAccess: Partial<Record<Department, string[]>> = { sales: ["sales"], production: ["production"], warehouse: ["inventory"], procurement: ["procurement"], finance: ["finance"], hr: ["staff"], management: ["reports", "sales", "production", "inventory", "procurement", "finance"] };
+  const departmentAccess: Partial<Record<Department, string[]>> = { sales: ["sales", "sites"], production: ["production"], warehouse: ["inventory"], procurement: ["procurement"], finance: ["finance"], marketing: ["sites"], hr: ["staff"], customer_service: ["sales", "sites"], management: ["reports", "sales", "production", "inventory", "procurement", "finance", "sites"] };
   return departmentAccess[department as Department] || [];
 };
 router.use(protect);
+
+router.patch("/me", async (req: AuthRequest, res, next) => {
+  try {
+    const { fullName, phone, email, jobTitle } = req.body as Record<string, unknown>;
+    const update: Record<string, unknown> = {};
+    if (fullName !== undefined) {
+      if (typeof fullName !== "string" || fullName.trim().length < 3) return res.status(400).json({ error: { code: "INVALID_NAME", message: "Full name must contain at least 3 characters." } });
+      update.fullName = fullName.trim();
+    }
+    if (phone !== undefined) {
+      if (typeof phone !== "string" || !/^\+?\d{6,15}$/.test(phone.trim().replace(/[\s()-]/g, ""))) return res.status(400).json({ error: { code: "INVALID_PHONE", message: "Enter a valid phone number." } });
+      const normalizedPhone = phone.trim().replace(/[\s()-]/g, "");
+      if (await User.exists({ phone: normalizedPhone, _id: { $ne: req.user?.id } })) return res.status(409).json({ error: { code: "USER_EXISTS", message: "Another account already uses this phone number." } });
+      update.phone = normalizedPhone;
+    }
+    if (email !== undefined) {
+      if (email !== null && typeof email !== "string") return res.status(400).json({ error: { code: "INVALID_EMAIL", message: "Enter a valid email address." } });
+      const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+      if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return res.status(400).json({ error: { code: "INVALID_EMAIL", message: "Enter a valid email address." } });
+      if (normalizedEmail && await User.exists({ email: normalizedEmail, _id: { $ne: req.user?.id } })) return res.status(409).json({ error: { code: "USER_EXISTS", message: "Another account already uses this email address." } });
+      update.email = normalizedEmail || undefined;
+    }
+    if (jobTitle !== undefined) {
+      if (typeof jobTitle !== "string") return res.status(400).json({ error: { code: "INVALID_JOB_TITLE", message: "Enter a valid job title." } });
+      update.jobTitle = jobTitle.trim();
+    }
+    const user = await User.findByIdAndUpdate(req.user?.id, { $set: update }, { new: true, runValidators: true }).select("-password");
+    if (!user) return res.status(404).json({ error: { code: "USER_NOT_FOUND", message: "User not found." } });
+    res.json({ data: user });
+  } catch (error) { next(error); }
+});
 
 router.get("/customers", authorizeRoles(UserRole.ADMIN, UserRole.STAFF), async (_req, res, next) => {
   try {
@@ -38,6 +69,22 @@ router.post("/customers", authorizeRoles(UserRole.ADMIN, UserRole.STAFF), async 
     if ((error as { code?: number }).code === 11000) return res.status(409).json({ error: { message: "An account already uses this phone number or email." } });
     next(error);
   }
+});
+
+router.patch("/customers/:id", authorizeRoles(UserRole.ADMIN, UserRole.STAFF), async (req, res, next) => {
+  try {
+    const { fullName, phone, email, isCompanyCustomer = false, businessName, address, tin } = req.body;
+    const normalizedPhone = typeof phone === "string" ? phone.trim().replace(/[\s()-]/g, "") : "";
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    if (typeof fullName !== "string" || fullName.trim().length < 3 || !/^\+?\d{6,15}$/.test(normalizedPhone) || (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail))) return res.status(400).json({ error: { message: "Enter a name of at least 3 characters, a valid phone number, and a valid optional email." } });
+    if (typeof address !== "string" || address.trim().length < 3) return res.status(400).json({ error: { message: "Enter the customer's address." } });
+    if (isCompanyCustomer && (typeof businessName !== "string" || !businessName.trim() || typeof tin !== "string" || !tin.trim())) return res.status(400).json({ error: { message: "Company name and TIN are required for a company customer." } });
+    const duplicate = await User.exists({ _id: { $ne: req.params.id }, $or: [{ phone: normalizedPhone }, ...(normalizedEmail ? [{ email: normalizedEmail }] : [])] });
+    if (duplicate) return res.status(409).json({ error: { message: "Another account already uses this phone number or email." } });
+    const customer = await User.findOneAndUpdate({ _id: req.params.id, role: UserRole.CUSTOMER, status: UserStatus.ACTIVE }, { $set: { fullName: fullName.trim(), phone: normalizedPhone, email: normalizedEmail || undefined, isCompanyCustomer: Boolean(isCompanyCustomer), businessName: isCompanyCustomer ? businessName.trim() : "", address: address.trim(), tin: isCompanyCustomer ? tin.trim() : "" } }, { new: true, runValidators: true }).select("fullName phone email isCompanyCustomer businessName address tin");
+    if (!customer) return res.status(404).json({ error: { message: "Customer not found." } });
+    res.json({ data: customer });
+  } catch (error) { next(error); }
 });
 
 // Administrators retain all operational modules; only SuperAdmin manages accounts.

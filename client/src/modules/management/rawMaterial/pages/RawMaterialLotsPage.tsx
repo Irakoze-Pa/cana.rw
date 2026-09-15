@@ -157,9 +157,6 @@ export default function RawMaterialLotsPage() {
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
               Raw-material lots
             </h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Receive raw materials using an official GRN. Each note links the supplier, supplier batch, cost, quality status, and production consumption.
-            </p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -180,7 +177,7 @@ export default function RawMaterialLotsPage() {
           </button>
         </div>
       </header>
-      <div className="cana-panel p-5">
+      <div className="cana-panel p-4">
         <label className="text-sm font-semibold text-gray-800">
           Raw material
         </label>
@@ -200,7 +197,7 @@ export default function RawMaterialLotsPage() {
       {error && (
         <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
       )}
-      {materialId && <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Available stock in lots</p><p className="mt-2 text-xl font-extrabold text-slate-950">{summary.available.toLocaleString()} {materials.find((item) => item._id === materialId)?.unit || ""}</p><p className="mt-1 text-xs text-slate-500">Ready for production issue</p></div><div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-amber-700">Quality hold</p><p className="mt-2 text-xl font-extrabold text-amber-950">{summary.quarantined}</p><p className="mt-1 text-xs text-amber-700">Lot(s) waiting for release</p></div><div className="rounded-2xl border border-orange-200 bg-orange-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-orange-700">Expiring in 30 days</p><p className="mt-2 text-xl font-extrabold text-orange-950">{summary.expiring}</p><p className="mt-1 text-xs text-orange-700">Use these lots first</p></div><div className="rounded-2xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-red-700">Expired</p><p className="mt-2 text-xl font-extrabold text-red-950">{summary.expired}</p><p className="mt-1 text-xs text-red-700">Blocked from production</p></div></section>}
+      {materialId && <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="cana-panel p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Available in lots</p><p className="mt-1 text-xl font-extrabold text-slate-950">{summary.available.toLocaleString()} {materials.find((item) => item._id === materialId)?.unit || ""}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-amber-700">Quality hold</p><p className="mt-1 text-xl font-extrabold text-amber-950">{summary.quarantined}</p></div><div className="rounded-xl border border-orange-200 bg-orange-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-orange-700">Expiring · 30 days</p><p className="mt-1 text-xl font-extrabold text-orange-950">{summary.expiring}</p></div><div className="rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-red-700">Expired</p><p className="mt-1 text-xl font-extrabold text-red-950">{summary.expired}</p></div></section>}
       {open && (
         <form
           onSubmit={create}
@@ -209,10 +206,6 @@ export default function RawMaterialLotsPage() {
           <div className="flex items-center justify-between md:col-span-2">
             <div>
               <h2 className="font-bold">Receive raw-material lot</h2>
-              <p className="mt-1 text-xs text-gray-500">
-                Available lots are posted to Inventory as a traceable stock
-                receipt.
-              </p>
             </div>
             <button type="button" onClick={() => setOpen(false)}>
               <X size={18} />
@@ -243,7 +236,6 @@ export default function RawMaterialLotsPage() {
               placeholder="Example: 10000"
               className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
             />
-            <span className="mt-1 block text-xs font-normal text-gray-500">Enter the delivered weight only. Example: 10000 means 10,000 kg (10 tonnes).</span>
           </label>
           <select
             value={form.status}

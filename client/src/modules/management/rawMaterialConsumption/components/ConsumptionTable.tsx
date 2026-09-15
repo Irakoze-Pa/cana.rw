@@ -54,10 +54,6 @@ export default function ConsumptionTable({
           No material consumptions found
         </h3>
 
-        <p className="mt-1 max-w-md text-sm text-slate-500">
-          Material consumptions will appear here once
-          they are created.
-        </p>
       </div>
     );
   }
@@ -193,7 +189,7 @@ export default function ConsumptionTable({
                   className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 >
                   <Eye size={16} />
-                  View
+                  Open
                 </button>
               </td>
             </tr>

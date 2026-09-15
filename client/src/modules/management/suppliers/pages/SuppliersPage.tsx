@@ -16,8 +16,10 @@ import {
 } from "../services/supplierService";
 
 import type { Supplier } from "../types/supplier.types";
+import { useToast } from "@/context/toastContext";
 
 function SuppliersPage() {
+  const { toast } = useToast();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -130,20 +132,6 @@ function SuppliersPage() {
   };
 
   /*
-   * VIEW SUPPLIER
-   */
-
-  const handleViewSupplier = (
-    supplier: Supplier
-  ) => {
-    alert(
-      `Supplier: ${supplier.name}\nCode: ${supplier.code}\nContact: ${
-        supplier.contactPerson || "N/A"
-      }`
-    );
-  };
-
-  /*
    * DELETE SUPPLIER
    */
 
@@ -168,6 +156,7 @@ function SuppliersPage() {
           (item) => item._id !== supplier._id
         )
       );
+      toast(`${supplier.name} was deleted.`, "success");
     } catch (error: any) {
       setError(
         error?.response?.data?.message ||
@@ -199,6 +188,7 @@ function SuppliersPage() {
 
       return [supplier, ...current];
     });
+    toast(`${supplier.name} was saved.`, "success");
   };
 
   /*
@@ -216,10 +206,10 @@ function SuppliersPage() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
+    <div className="space-y-4">
       {/* HEADER */}
 
-      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50">
@@ -235,15 +225,11 @@ function SuppliersPage() {
                 Suppliers
               </h1>
 
-              <p className="mt-1 text-sm text-gray-500">
-                Manage raw material suppliers and
-                supplier information.
-              </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => loadSuppliers(true)}
@@ -305,8 +291,8 @@ function SuppliersPage() {
 
       {/* STATISTICS */}
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="cana-panel p-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="cana-panel p-4">
           <p className="text-sm text-gray-500">
             Total Suppliers
           </p>
@@ -316,7 +302,7 @@ function SuppliersPage() {
           </p>
         </div>
 
-        <div className="cana-panel p-5">
+        <div className="cana-panel p-4">
           <p className="text-sm text-gray-500">
             Active Suppliers
           </p>
@@ -326,7 +312,7 @@ function SuppliersPage() {
           </p>
         </div>
 
-        <div className="cana-panel p-5">
+        <div className="cana-panel p-4">
           <p className="text-sm text-gray-500">
             Inactive Suppliers
           </p>
@@ -342,7 +328,6 @@ function SuppliersPage() {
       {error && (
         <div
           className="
-            mb-6
             flex
             items-start
             gap-3
@@ -361,21 +346,13 @@ function SuppliersPage() {
             className="mt-0.5 shrink-0"
           />
 
-          <div>
-            <p className="font-semibold">
-              Something went wrong
-            </p>
-
-            <p className="mt-1">
-              {error}
-            </p>
-          </div>
+          <p>{error}</p>
         </div>
       )}
 
       {/* FILTERS */}
 
-      <div className="cana-panel mb-6 p-4">
+      <div className="cana-panel p-4">
         <div className="flex flex-col gap-3 md:flex-row">
           {/* SEARCH */}
 
@@ -477,7 +454,6 @@ function SuppliersPage() {
           suppliers={filteredSuppliers}
           onEdit={handleEditSupplier}
           onDelete={handleDeleteSupplier}
-          onView={handleViewSupplier}
         />
       )}
 

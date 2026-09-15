@@ -1,7 +1,6 @@
 import {
   Edit,
   Trash2,
-  Eye,
   MoreHorizontal,
 } from "lucide-react";
 
@@ -11,14 +10,12 @@ interface SupplierTableProps {
   suppliers: Supplier[];
   onEdit: (supplier: Supplier) => void;
   onDelete: (supplier: Supplier) => void;
-  onView: (supplier: Supplier) => void;
 }
 
 function SupplierTable({
   suppliers,
   onEdit,
   onDelete,
-  onView,
 }: SupplierTableProps) {
   if (suppliers.length === 0) {
     return (
@@ -31,9 +28,6 @@ function SupplierTable({
           No suppliers found
         </h3>
 
-        <p className="mt-1 text-sm text-gray-500">
-          Add your first supplier to get started.
-        </p>
       </div>
     );
   }
@@ -158,27 +152,18 @@ function SupplierTable({
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
-                      onClick={() => onView(supplier)}
-                      title="View supplier"
-                      className="
-                        rounded-lg
-                        p-2
-                        text-gray-500
-                        transition
-                        hover:bg-gray-100
-                        hover:text-gray-900
-                      "
-                    >
-                      <Eye size={17} />
-                    </button>
-
-                    <button
-                      type="button"
                       onClick={() => onEdit(supplier)}
                       title="Edit supplier"
                       className="
+                        inline-flex
+                        items-center
+                        gap-1.5
                         rounded-lg
-                        p-2
+                        border
+                        border-gray-200
+                        bg-white
+                        px-2.5
+                        py-2
                         text-gray-500
                         transition
                         hover:bg-gray-100
@@ -186,6 +171,7 @@ function SupplierTable({
                       "
                     >
                       <Edit size={17} />
+                      <span className="hidden text-xs font-semibold xl:inline">Update</span>
                     </button>
 
                     <button
