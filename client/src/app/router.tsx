@@ -256,6 +256,14 @@ const router = createBrowserRouter([
             path: "orders/new",
             element: <CustomerOrderRequestPage />,
           },
+          {
+            path: "products",
+            element: <Products />,
+          },
+          {
+            path: "request-quote",
+            element: <RequestQuote />,
+          },
         ],
       },
 

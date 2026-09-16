@@ -277,10 +277,10 @@ function Navbar() {
           <div
             className="
               flex
-              h-[72px]
+              h-[64px]
               items-center
               justify-between
-              lg:h-[80px]
+              lg:h-[68px]
             "
           >
             {/* ==================================================
@@ -306,15 +306,15 @@ function Navbar() {
                 src={logo}
                 alt="CANA"
                 className="
-                  h-[44px]
+                  h-[38px]
                   w-auto
                   object-contain
                   transition-transform
                   duration-300
                   group-hover:scale-[1.025]
-                  sm:h-[50px]
-                  lg:h-[56px]
-                  xl:h-[60px]
+                  sm:h-[42px]
+                  lg:h-[46px]
+                  xl:h-[48px]
                 "
               />
 
@@ -329,13 +329,13 @@ function Navbar() {
               >
                 <span
                   className="
-                    text-[24px]
+                    text-[21px]
                     font-extrabold
                     leading-none
                     tracking-[-0.065em]
                     text-neutral-950
-                    sm:text-[26px]
-                    lg:text-[28px]
+                    sm:text-[22px]
+                    lg:text-[23px]
                   "
                 >
                   CANA
@@ -343,14 +343,14 @@ function Navbar() {
 
                 <span
                   className="
-                    mt-1.5
+                    mt-1
                     whitespace-nowrap
-                    text-[7px]
+                    text-[6px]
                     font-bold
                     uppercase
                     tracking-[0.22em]
                     text-neutral-500
-                    sm:text-[8px]
+                    sm:text-[7px]
                   "
                 >
                   Paints • Services
@@ -652,19 +652,15 @@ function Navbar() {
                     items-center
                     gap-2
                     rounded-lg
-                    border
-                    border-neutral-200
-                    bg-white
-                    px-5
+                    bg-neutral-950
+                    px-4
                     py-2.5
                     text-xs
                     font-semibold
-                    text-neutral-800
+                    text-white
                     transition-all
                     duration-200
-                    hover:border-red-500
-                    hover:bg-red-50
-                    hover:text-red-600
+                    hover:bg-red-700
                     active:scale-[0.98]
                   "
                 >
@@ -672,10 +668,10 @@ function Navbar() {
                     size={15}
                     strokeWidth={1.8}
                     className="
-                      text-neutral-500
+                      text-white
                       transition-colors
                       duration-200
-                      group-hover:text-red-600
+                      group-hover:text-white
                     "
                   />
 

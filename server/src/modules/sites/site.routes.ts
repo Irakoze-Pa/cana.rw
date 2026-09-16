@@ -2,6 +2,8 @@ import { Router } from "express";
 import mongoose from "mongoose";
 import Site, { siteStatuses, siteWorkTypes } from "./site.model";
 import User, { UserRole, UserStatus } from "../../models/users";
+import { hashPassword } from "../../utils/password";
+import { randomBytes } from "node:crypto";
 import { authorizeRoles, protect, type AuthRequest } from "../../middleware/auth.middleware";
 import upload from "../product/product.upload";
 import cloudinary from "../../config/cloudinary";
@@ -35,7 +37,20 @@ const parseSite = (input: Record<string, unknown>) => {
   if ((latitude === null) !== (longitude === null)) throw new Error("Enter both latitude and longitude, or leave both blank.");
   if (input.customer && !isId(input.customer)) throw new Error("Select a valid customer.");
   if (input.responsible && !isId(input.responsible)) throw new Error("Select a valid responsible staff member.");
-  return { name, address, workType: input.workType, status: input.status, latitude, longitude, customer: input.customer || null, responsible: input.responsible || null, district: typeof input.district === "string" ? input.district.trim() : "", plannedStartDate: input.plannedStartDate || null, plannedEndDate: input.plannedEndDate || null, notes: typeof input.notes === "string" ? input.notes.trim() : "", publicVisible: input.publicVisible === true || input.publicVisible === "true", publicSummary: typeof input.publicSummary === "string" ? input.publicSummary.trim() : "" };
+  return { name, address, workType: input.workType, status: input.status, latitude, longitude, customer: input.customer || null, responsible: input.responsible || null, district: typeof input.district === "string" ? input.district.trim() : "", plannedStartDate: input.plannedStartDate || null, plannedEndDate: input.plannedEndDate || null, notes: typeof input.notes === "string" ? input.notes.trim() : "", followUpContactName: typeof input.followUpContactName === "string" ? input.followUpContactName.trim() : "", followUpContactPhone: typeof input.followUpContactPhone === "string" ? input.followUpContactPhone.trim().replace(/[\s()-]/g, "") : "", followUpContactEmail: typeof input.followUpContactEmail === "string" ? input.followUpContactEmail.trim().toLowerCase() : "", publicVisible: input.publicVisible === true || input.publicVisible === "true", publicSummary: typeof input.publicSummary === "string" ? input.publicSummary.trim() : "" };
+};
+
+const createCustomerFromSite = async (input: Record<string, unknown>, address: string) => {
+  if (input.createCustomer !== true && input.createCustomer !== "true") return null;
+  const fullName = typeof input.newCustomerName === "string" ? input.newCustomerName.trim() : "";
+  const phone = typeof input.newCustomerPhone === "string" ? input.newCustomerPhone.trim().replace(/[\s()-]/g, "") : "";
+  const email = typeof input.newCustomerEmail === "string" ? input.newCustomerEmail.trim().toLowerCase() : "";
+  const businessName = typeof input.newCustomerBusinessName === "string" ? input.newCustomerBusinessName.trim() : "";
+  if (fullName.length < 3 || !/^\+?\d{6,15}$/.test(phone)) throw new Error("Enter the new customer's name and valid phone number.");
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid customer email address.");
+  if (await User.exists({ $or: [{ phone }, ...(email ? [{ email }] : [])] })) throw new Error("A customer already uses this phone number or email. Select the existing customer instead.");
+  const customer = await User.create({ fullName, phone, ...(email ? { email } : {}), password: await hashPassword(randomBytes(32).toString("hex")), role: UserRole.CUSTOMER, status: UserStatus.ACTIVE, isCompanyCustomer: Boolean(businessName), businessName, address, permissions: [] });
+  return customer._id;
 };
 
 router.get("/public", async (_req, res, next) => {
@@ -60,6 +75,8 @@ router.get("/", async (_req, res, next) => {
 router.post("/", upload.single("image"), async (req: AuthRequest, res, next) => {
   try {
     const data = parseSite(req.body || {});
+    const customerId = await createCustomerFromSite(req.body || {}, data.address);
+    if (customerId) data.customer = customerId;
     const siteCode = `SITE-${new Date().getFullYear()}-${String((await Site.countDocuments()) + 1).padStart(4, "0")}`;
     const created = await Site.create({ ...data, ...(req.file ? { image: await uploadSiteImage(req.file) } : {}), siteCode, createdBy: req.user!.id });
     await created.populate("customer", profile);

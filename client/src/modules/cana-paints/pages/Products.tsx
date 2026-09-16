@@ -15,7 +15,7 @@ import {
   useState,
 } from "react";
 
-import { useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import LoginModal from "@/components/auth/loginModal";
 import RegisterModal from "@/components/auth/registerModal";
@@ -60,6 +60,8 @@ interface ProductsResponse {
 
 const Products = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const quoteRoute = location.pathname.startsWith("/dashboard") ? "/dashboard/request-quote" : "/cana-paints/request-quote";
 
   const { user } = useAuth();
 
@@ -255,7 +257,7 @@ const Products = () => {
 
     if (user) {
       navigate(
-        `/cana-paints/request-quote?product=${productId}`
+        `${quoteRoute}?product=${productId}`
       );
 
       setSelectedProductId(null);
@@ -285,12 +287,13 @@ const Products = () => {
     setSelectedProductId(null);
 
     navigate(
-      `/cana-paints/request-quote?product=${productId}`
+      `${quoteRoute}?product=${productId}`
     );
   }, [
     user,
     selectedProductId,
     navigate,
+    quoteRoute,
   ]);
 
   /* ==========================================================
@@ -330,7 +333,7 @@ const Products = () => {
   const handleGeneralQuote = () => {
     if (user) {
       navigate(
-        "/cana-paints/request-quote"
+        quoteRoute
       );
 
       return;
@@ -354,6 +357,10 @@ const Products = () => {
   const hasActiveFilters =
     search.trim().length > 0 ||
     selectedCategory !== "All";
+
+  if (user?.role === "customer" && !location.pathname.startsWith("/dashboard")) {
+    return <Navigate to="/dashboard/products" replace />;
+  }
 
   /* ==========================================================
      RENDER

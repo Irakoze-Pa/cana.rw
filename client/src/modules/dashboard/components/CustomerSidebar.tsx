@@ -151,7 +151,7 @@ function CustomerSidebar() {
         {/* Products */}
 
         <NavLink
-          to="/cana-paints/products"
+          to="/dashboard/products"
           className={mainLinkClass}
           title={!sidebarOpen ? "Products" : undefined}
         >
@@ -182,7 +182,7 @@ function CustomerSidebar() {
         </NavLink>
 
         <NavLink
-          to="/cana-paints/request-quote"
+          to="/dashboard/request-quote"
           className={mainLinkClass}
           title={!sidebarOpen ? "Request a quote" : undefined}
         >

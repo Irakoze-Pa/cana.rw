@@ -55,7 +55,7 @@ function MobileMenu({
   }) =>
     `
       flex
-      min-h-[58px]
+      min-h-[52px]
       items-center
       border-b
       border-neutral-100
@@ -73,7 +73,7 @@ function MobileMenu({
 
   return (
     <div className="bg-white lg:hidden">
-      <div className="px-5 pb-6 pt-2 sm:px-8">
+      <div className="px-5 pb-5 pt-1 sm:px-8">
 
         {/* ======================================================
             NAVIGATION
@@ -113,7 +113,7 @@ function MobileMenu({
               className={`
                 group
                 flex
-                min-h-[58px]
+                min-h-[52px]
                 w-full
                 items-center
                 justify-between
@@ -165,10 +165,6 @@ function MobileMenu({
                     <h3 className="mt-1.5 text-base font-bold tracking-tight text-neutral-950">
                       Paint solutions
                     </h3>
-
-                    <p className="mt-1 text-xs leading-5 text-neutral-500">
-                      Quality finishes for modern spaces.
-                    </p>
 
                   </div>
 
@@ -222,7 +218,7 @@ function MobileMenu({
               className={`
                 group
                 flex
-                min-h-[58px]
+                min-h-[52px]
                 w-full
                 items-center
                 justify-between
@@ -274,10 +270,6 @@ function MobileMenu({
                     <h3 className="mt-1.5 text-base font-bold tracking-tight text-neutral-950">
                       Professional solutions
                     </h3>
-
-                    <p className="mt-1 text-xs leading-5 text-neutral-500">
-                      Practical support for your projects.
-                    </p>
 
                   </div>
 
@@ -471,9 +463,6 @@ function MobileDropdownItem({
               {title}
             </h4>
 
-            <p className="mt-0.5 text-[10px] leading-4 text-neutral-400">
-              {description}
-            </p>
 
           </div>
         </>

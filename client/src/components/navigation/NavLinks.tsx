@@ -48,7 +48,7 @@ function NavLinks() {
 
   return (
     <nav
-      className="flex items-center gap-5 xl:gap-8"
+      className="flex items-center gap-5 xl:gap-7"
       aria-label="Main navigation"
     >
 
@@ -74,7 +74,7 @@ function NavLinks() {
               current === "paints" ? null : "paints",
             )
           }
-          className={`group relative flex items-center gap-1.5 py-7 text-[13px] font-semibold transition-colors duration-300 ${
+          className={`group relative flex items-center gap-1.5 py-6 text-[13px] font-bold transition-colors duration-300 ${
             open === "paints"
               ? "text-red-600"
               : "text-gray-700 hover:text-red-600"
@@ -137,7 +137,7 @@ function NavLinks() {
               current === "services" ? null : "services",
             )
           }
-          className={`group relative flex items-center gap-1.5 py-7 text-[13px] font-semibold transition-colors duration-300 ${
+          className={`group relative flex items-center gap-1.5 py-6 text-[13px] font-bold transition-colors duration-300 ${
             open === "services"
               ? "text-red-600"
               : "text-gray-700 hover:text-red-600"
@@ -224,7 +224,7 @@ function NavItem({
       to={to}
       end={to === "/"}
       className={({ isActive }) =>
-        `group relative flex items-center py-7 text-[13px] font-semibold transition-colors duration-300 ${
+        `group relative flex items-center py-6 text-[13px] font-bold transition-colors duration-300 ${
           isActive
             ? "text-red-600"
             : "text-gray-700 hover:text-red-600"
@@ -253,7 +253,7 @@ function NavUnderline({
 }) {
   return (
     <span
-      className={`absolute bottom-5 left-0 h-[2px] bg-red-600 transition-all duration-300 ${
+      className={`absolute bottom-[14px] left-0 h-[2px] bg-red-600 transition-all duration-300 ${
         active
           ? "w-full"
           : "w-0 group-hover:w-full"
@@ -281,9 +281,9 @@ function Dropdown({
     <div
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="absolute left-1/2 top-[67px] z-[100] w-[330px] -translate-x-1/2 pt-3"
+      className="absolute left-1/2 top-[60px] z-[100] w-[310px] -translate-x-1/2 pt-3"
     >
-      <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white p-2 shadow-[0_20px_60px_rgba(0,0,0,0.12)]">
+      <div className="overflow-hidden rounded-xl border border-black/[0.08] bg-white p-2 shadow-[0_20px_50px_rgba(0,0,0,0.12)]">
 
         {children}
 
@@ -318,10 +318,6 @@ function DropdownHeader({
         {title}
       </h3>
 
-      <p className="mt-1 text-xs leading-5 text-gray-500">
-        {description}
-      </p>
-
     </div>
   );
 }
@@ -354,10 +350,6 @@ function DropdownItem({
         <h4 className="text-sm font-semibold text-gray-900 transition-colors duration-300 group-hover:text-red-600">
           {title}
         </h4>
-
-        <p className="mt-0.5 text-xs leading-5 text-gray-500">
-          {description}
-        </p>
 
       </div>
     </NavLink>
