@@ -8,7 +8,7 @@ export interface Product {
 
   price: number;
   stock: number;
-  baseUnit?: "kg";
+  baseUnit?: "kg" | "pcs";
   packSizeKg?: number;
   densityKgPerL?: number;
   pricePerKg?: number | null;

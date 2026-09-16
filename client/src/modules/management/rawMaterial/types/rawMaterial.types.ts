@@ -103,9 +103,8 @@ export interface CreateRawMaterialData {
 
   minimumStock?: number;
 
-  costPerUnit: number;
-
-  supplier?: string;
+  /** Set from supplier offers or a goods-received note, not material setup. */
+  costPerUnit?: number;
 
   status?: "Active" | "Inactive";
 }
@@ -142,9 +141,8 @@ export interface UpdateRawMaterialData {
 
   minimumStock?: number;
 
+  /** Set from supplier offers or a goods-received note, not material setup. */
   costPerUnit?: number;
-
-  supplier?: string;
 
   status?: "Active" | "Inactive";
 }

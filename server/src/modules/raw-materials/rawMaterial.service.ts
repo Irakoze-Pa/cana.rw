@@ -19,7 +19,7 @@ export interface CreateRawMaterialData {
 
   minimumStock?: number;
 
-  costPerUnit: number;
+  costPerUnit?: number;
 
   supplier?: string;
 
@@ -185,7 +185,7 @@ export const createRawMaterial = async (
         ),
 
       costPerUnit:
-        Number(data.costPerUnit),
+        Number(data.costPerUnit ?? 0),
 
       ...(data.supplier ? { supplier: data.supplier } : {}),
 
@@ -199,7 +199,7 @@ export const createRawMaterial = async (
   await createInventory({
     rawMaterial: rawMaterial._id.toString(),
     openingQuantity: quantity,
-    openingCostPerUnit: Number(data.costPerUnit),
+    openingCostPerUnit: Number(data.costPerUnit ?? 0),
     notes: "Opening balance created with raw material master data.",
   });
 

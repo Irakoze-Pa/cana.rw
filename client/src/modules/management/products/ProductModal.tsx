@@ -142,14 +142,17 @@ function ProductModal({
       e.target;
 
     setFormData((prev) => {
-      const isWallMaster = (name === "category" ? value === "Wall Master" : prev.category === "Wall Master") || /wall\s*master/i.test(name === "name" ? value : prev.name);
+      const nextName = name === "name" ? value : prev.name;
+      const nextCategory = name === "category" ? value : prev.category;
+      const isWallMaster = nextCategory === "Wall Master" || /wall\s*master/i.test(nextName);
+      const isScaffolding = nextCategory === "Scaffolding" || /scaffold/i.test(nextName);
       if (name === "category" || name === "name") {
         return {
           ...prev,
           [name]: value,
-          unit: isWallMaster ? "30kg" : prev.unit === "30kg" ? "4L" : prev.unit,
-          packSizeKg: isWallMaster ? "30" : prev.packSizeKg,
-          densityKgPerL: isWallMaster ? "" : prev.densityKgPerL,
+          unit: isWallMaster ? "30kg" : isScaffolding ? "pcs" : prev.unit === "30kg" || prev.unit === "pcs" ? "4L" : prev.unit,
+          packSizeKg: isWallMaster ? "30" : isScaffolding ? "" : prev.packSizeKg,
+          densityKgPerL: isWallMaster || isScaffolding ? "" : prev.densityKgPerL,
         };
       }
 
@@ -160,6 +163,8 @@ function ProductModal({
   };
 
   const isWallMasterProduct = formData.category === "Wall Master" || /wall\s*master/i.test(formData.name);
+  const isScaffoldingProduct = formData.category === "Scaffolding" || /scaffold/i.test(formData.name);
+  const isPieceProduct = formData.unit.trim().toLowerCase() === "pcs";
 
   // =========================
   // IMAGE CHANGE
@@ -257,7 +262,17 @@ function ProductModal({
     }
 
     if (
+      isPieceProduct &&
+      !isScaffoldingProduct &&
+      (!formData.packSizeKg || Number(formData.packSizeKg) <= 0)
+    ) {
+      return "Enter the net weight in kg for one piece.";
+    }
+
+    if (
       !isWallMasterProduct &&
+      !isScaffoldingProduct &&
+      !isPieceProduct &&
       (!formData.densityKgPerL || Number(formData.densityKgPerL) <= 0)
     ) {
       return "Enter the paint density in kg/L to calculate pack weight.";
@@ -856,9 +871,13 @@ function ProductModal({
                   Undercoat
                 </option>
 
-                <option value="Wall Master">
-                  Wall Master / Putty
-                </option>
+                  <option value="Wall Master">
+                    Wall Master / Putty
+                  </option>
+
+                  <option value="Scaffolding">
+                    Scaffolding
+                  </option>
 
                 <option value="Other">
                   Other
@@ -908,10 +927,13 @@ function ProductModal({
 
                 {isWallMasterProduct ? (
                   <option value="30kg">30 kg bag</option>
+                ) : isScaffoldingProduct ? (
+                  <option value="pcs">Pieces (pcs)</option>
                 ) : (
                   <>
                     <option value="4L">4 L bucket</option>
                     <option value="20L">20 L bucket</option>
+                    <option value="pcs">Pieces (pcs)</option>
                   </>
                 )}
               </select>
@@ -928,20 +950,24 @@ function ProductModal({
               >
                 {isWallMasterProduct
                   ? "Net weight per bag"
-                  : "Paint density (kg/L) *"}
+                  : isScaffoldingProduct
+                    ? "Piece-based product"
+                  : isPieceProduct
+                    ? "Net weight per piece (kg) *"
+                    : "Paint density (kg/L) *"}
               </label>
 
               <input
-                id={isWallMasterProduct ? "packSizeKg" : "densityKgPerL"}
-                name={isWallMasterProduct ? "packSizeKg" : "densityKgPerL"}
+                id={isWallMasterProduct || isPieceProduct ? "packSizeKg" : "densityKgPerL"}
+                name={isWallMasterProduct || isPieceProduct ? "packSizeKg" : "densityKgPerL"}
                 type="number"
                 min="0.001"
                 step="0.001"
-                required={!isWallMasterProduct}
-                value={isWallMasterProduct ? "30" : formData.densityKgPerL}
+                required={!isWallMasterProduct && !isScaffoldingProduct}
+                value={isWallMasterProduct ? "30" : isScaffoldingProduct ? "Counted in pieces" : isPieceProduct ? formData.packSizeKg : formData.densityKgPerL}
                 onChange={handleChange}
-                disabled={loading || isWallMasterProduct}
-                placeholder="Example: 1.35"
+                disabled={loading || isWallMasterProduct || isScaffoldingProduct}
+                placeholder={isPieceProduct ? "Example: 2.5" : "Example: 1.35"}
                 aria-describedby="density-help"
                 className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-100"
               />
@@ -949,7 +975,11 @@ function ProductModal({
               <p id="density-help" className="mt-2 text-xs leading-5 text-gray-500">
                 {isWallMasterProduct
                   ? "Wall Master is fixed at 30 kg per bag."
-                  : "Required for 4 L and 20 L paint. Example: 1.35 means 4 L = 5.4 kg and 20 L = 27 kg."}
+                  : isScaffoldingProduct
+                    ? "Scaffolding stock and sales are counted in individual pieces (pcs)."
+                  : isPieceProduct
+                    ? "CANA records finished-goods stock in kg. Enter the net weight of one piece."
+                    : "Required for 4 L and 20 L paint. Example: 1.35 means 4 L = 5.4 kg and 20 L = 27 kg."}
               </p>
             </div>
             </div>
@@ -1022,10 +1052,10 @@ function ProductModal({
                 </span>
               </div>
 
-              {(isWallMasterProduct || Number(formData.densityKgPerL) > 0) &&
+              {!isScaffoldingProduct && (isWallMasterProduct || isPieceProduct || Number(formData.densityKgPerL) > 0) &&
                 Number(formData.price) >= 0 && (
                   <p className="mt-2 text-xs font-semibold text-emerald-700">
-                    Calculated price: {Math.round((Number(formData.price) / (isWallMasterProduct ? 30 : Number(formData.unit.replace("L", "")) * Number(formData.densityKgPerL))) * 100) / 100} RWF per kg
+                    Calculated price: {Math.round((Number(formData.price) / (isWallMasterProduct ? 30 : isPieceProduct ? Number(formData.packSizeKg) : Number(formData.unit.replace("L", "")) * Number(formData.densityKgPerL))) * 100) / 100} RWF per kg
                   </p>
                 )}
             </div>

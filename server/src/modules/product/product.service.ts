@@ -36,10 +36,19 @@ function getPackagingData(data: {
   name?: string;
   category?: string;
   unit?: string;
+  packSizeKg?: number;
   densityKgPerL?: number;
 }) {
   const category = String(data.category || "").trim();
   const normalizedUnit = String(data.unit || "").trim().toLowerCase();
+  const isScaffolding = category === "Scaffolding" || /scaffold/i.test(String(data.name || ""));
+
+  if (isScaffolding) {
+    if (normalizedUnit !== "pcs") {
+      throw new Error("Scaffolding products must use pcs as their unit.");
+    }
+    return { packSizeKg: undefined, densityKgPerL: undefined };
+  }
 
   const isWallMaster = category === "Wall Master" || /wall\s*master/i.test(String(data.name || ""));
   if (isWallMaster) {
@@ -47,6 +56,17 @@ function getPackagingData(data: {
       throw new Error("Wall Master must be packed as 30kg.");
     }
     return { packSizeKg: 30, densityKgPerL: undefined };
+  }
+
+  // Pieces are a sales format, not a production unit. CANA still records
+  // production and finished-goods stock in kg, so each piece must have a
+  // known net weight to keep stock and price-per-kg calculations reliable.
+  if (normalizedUnit === "pcs") {
+    const packSizeKg = Number(data.packSizeKg);
+    if (!Number.isFinite(packSizeKg) || packSizeKg <= 0) {
+      throw new Error("Enter the net weight in kg for one piece.");
+    }
+    return { packSizeKg, densityKgPerL: undefined };
   }
 
   const litres = normalizedUnit === "4l" ? 4 : normalizedUnit === "20l" ? 20 : 0;
@@ -134,7 +154,7 @@ export const createProduct = async (
 
     price: Number(data.price),
     stock: Number(data.stock ?? 0),
-    baseUnit: "kg",
+    baseUnit: String(data.category || "").trim() === "Scaffolding" || /scaffold/i.test(data.name) ? "pcs" : "kg",
     packSizeKg: packaging.packSizeKg,
     densityKgPerL: packaging.densityKgPerL,
 
@@ -226,6 +246,7 @@ export const updateProduct = async (
       name: data.name ?? existing.name,
       category: data.category ?? existing.category,
       unit: data.unit ?? existing.unit,
+      packSizeKg: data.packSizeKg ?? existing.packSizeKg,
       densityKgPerL: data.densityKgPerL ?? existing.densityKgPerL,
     });
 

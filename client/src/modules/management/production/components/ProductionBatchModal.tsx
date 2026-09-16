@@ -1055,13 +1055,13 @@ export default function ProductionBatchModal({
         }
       }}
     >
-      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+      <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
 
         {/* ================================================================ */}
         {/* HEADER                                                           */}
         {/* ================================================================ */}
 
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-5">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900">
               {isEdit
@@ -1069,11 +1069,6 @@ export default function ProductionBatchModal({
                 : "Create Production Batch"}
             </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
-              {isEdit
-                ? "Update the batch according to its current production status."
-                : "Create a production run from a released production order."}
-            </p>
           </div>
 
           <button
@@ -1094,7 +1089,7 @@ export default function ProductionBatchModal({
           onSubmit={handleSubmit}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <div className="overflow-y-auto px-6 py-6">
+          <div className="overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
 
             {/* ERROR */}
             {error && (
@@ -1270,7 +1265,7 @@ export default function ProductionBatchModal({
             {/* ============================================================ */}
 
             {selectedOrder && (
-              <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-5">
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
                   <div>
@@ -1452,11 +1447,7 @@ export default function ProductionBatchModal({
                   )}
               </div>
 
-              <p className="mt-1.5 text-xs text-gray-500">
-                {plannedQuantityLocked
-                  ? "Locked because production has already started."
-                  : "This is the planned output for this specific production batch."}
-              </p>
+              {plannedQuantityLocked && <p className="mt-1.5 text-xs font-medium text-slate-500">Locked after production starts.</p>}
             </div>
 
             {/* ============================================================ */}
@@ -1464,7 +1455,7 @@ export default function ProductionBatchModal({
             {/* ============================================================ */}
 
             {!isEdit && (
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-900">
                   Automatic batch values
                 </p>
@@ -1503,17 +1494,6 @@ export default function ProductionBatchModal({
 
                 </div>
 
-                <p className="mt-4 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-800">
-                  The batch stays <span className="font-semibold">Planned</span> until the production team marks it Ready and then In Progress. Finished-product stock is posted only when a batch is completed with an actual output quantity.
-                </p>
-
-                {selectedOrder &&
-                  (selectedOrder.status === "Draft" ||
-                    selectedOrder.status === "Planned") && (
-                    <p className="mt-3 text-xs leading-5 text-slate-800">
-                      Creating this first batch will release the production order after its material requirements are verified.
-                    </p>
-                  )}
               </div>
             )}
 

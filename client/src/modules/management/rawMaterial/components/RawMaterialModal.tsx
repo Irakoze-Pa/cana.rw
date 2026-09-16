@@ -26,7 +26,6 @@ interface FormData {
   unit: string;
   quantity: string;
   minimumStock: string;
-  costPerUnit: string;
   status: "Active" | "Inactive";
 }
 
@@ -36,7 +35,6 @@ const initialForm: FormData = {
   unit: "kg",
   quantity: "0",
   minimumStock: "0",
-  costPerUnit: "0",
   status: "Active",
 };
 
@@ -83,11 +81,6 @@ function RawMaterialModal({
         minimumStock:
           material.minimumStock !== undefined
             ? String(material.minimumStock)
-            : "",
-
-        costPerUnit:
-          material.costPerUnit !== undefined
-            ? String(material.costPerUnit)
             : "",
 
         status:
@@ -144,10 +137,6 @@ function RawMaterialModal({
       formData.minimumStock || 0
     );
 
-    const costPerUnit = Number(
-      formData.costPerUnit || 0
-    );
-
     if (
       !Number.isFinite(quantity) ||
       quantity < 0
@@ -160,13 +149,6 @@ function RawMaterialModal({
       minimumStock < 0
     ) {
       return "Minimum stock must be a valid number greater than or equal to 0.";
-    }
-
-    if (
-      !Number.isFinite(costPerUnit) ||
-      costPerUnit < 0
-    ) {
-      return "Cost per unit must be a valid number greater than or equal to 0.";
     }
 
     return null;
@@ -204,10 +186,6 @@ function RawMaterialModal({
         formData.minimumStock || 0
       );
 
-      const costPerUnit = Number(
-        formData.costPerUnit || 0
-      );
-
       const payload = {
         name: formData.name.trim(),
 
@@ -222,7 +200,9 @@ function RawMaterialModal({
 
         minimumStock,
 
-        costPerUnit,
+        // Price is set when a supplier offer is selected or a goods-received
+        // note is posted. A material master does not own supplier pricing.
+        ...(!isEditMode ? { costPerUnit: 0 } : {}),
 
         status:
           formData.status,
@@ -331,7 +311,7 @@ function RawMaterialModal({
             >
               {isEditMode
                 ? "Update master data and planning levels. Stock and lots remain controlled by Inventory."
-                : "Create the material master first. Add supplier offers and supplier-specific lots separately."}
+                : "Create the material master. Supplier pricing is recorded separately when materials are sourced or received."}
             </p>
             {isEditMode && material?.code && (
               <p className="mt-2 inline-flex rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">
@@ -704,73 +684,6 @@ function RawMaterialModal({
                   "
                 />
 
-              </div>
-
-              {/* ================================================= */}
-              {/* COST PER UNIT */}
-              {/* ================================================= */}
-
-              <div>
-                <label
-                  htmlFor="costPerUnit"
-                  className="
-                    mb-2
-                    block
-                    text-sm
-                    font-semibold
-                    text-gray-700
-                  "
-                >
-                  Reference Cost per {formData.unit || "unit"}
-                </label>
-
-                <div className="relative">
-                  <input
-                    id="costPerUnit"
-                    name="costPerUnit"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.costPerUnit}
-                    onChange={handleChange}
-                    placeholder="0"
-                    required
-                    disabled={loading}
-                    className="
-                      w-full
-                      rounded-xl
-                      border
-                      border-gray-200
-                      px-4
-                      py-3
-                      pr-16
-                      text-sm
-                      text-gray-900
-                      outline-none
-                      transition
-                      placeholder:text-gray-400
-                      focus:border-red-500
-                      focus:ring-2
-                      focus:ring-red-100
-                      disabled:bg-gray-50
-                    "
-                  />
-
-                  <span
-                    className="
-                      pointer-events-none
-                      absolute
-                      right-4
-                      top-1/2
-                      -translate-y-1/2
-                      text-xs
-                      font-semibold
-                      text-gray-400
-                    "
-                  >
-                    RWF
-                  </span>
-                </div>
               </div>
 
               {/* ================================================= */}

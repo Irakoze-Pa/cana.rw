@@ -54,6 +54,7 @@ const number = (value: number) => Number(value || 0).toLocaleString("en-RW");
 const storeName = (store: string) =>
   store === "production" ? "Production Store" : "Sales Store";
 const packs = (quantity: number, product?: Product | null) => {
+  if (product?.baseUnit === "pcs") return null;
   const packSizeKg = Number(product?.packSizeKg || 0);
   if (!Number.isFinite(packSizeKg) || packSizeKg <= 0) return null;
   const packCount = quantity / packSizeKg;

@@ -10,8 +10,8 @@ export interface IProduct extends Document {
 
   price: number;
   stock: number;
-  /** Finished-goods stock and production quantities are always kilograms. */
-  baseUnit: "kg";
+  /** Paint is tracked in kg; scaffolding is counted by individual pieces. */
+  baseUnit: "kg" | "pcs";
   /** Net product weight contained in one customer sales pack. */
   packSizeKg?: number;
   /** Paint density used to convert a 4L or 20L pack to kilograms. */
@@ -71,7 +71,7 @@ const productSchema = new Schema<IProduct>(
     // Production, finished-goods inventory and formula scaling use kg.
     baseUnit: {
       type: String,
-      enum: ["kg"],
+      enum: ["kg", "pcs"],
       default: "kg",
       immutable: true,
     },
