@@ -137,9 +137,9 @@ function LoginModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="login-modal-title"
-        className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[1.75rem] bg-white shadow-2xl sm:max-h-[90vh]"
+        className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl sm:max-h-[90vh]"
       >
-        <div className="h-1.5 bg-red-600" />
+        <div className="h-1 bg-red-700" />
         <button
           type="button"
           onClick={onClose}
@@ -149,7 +149,7 @@ function LoginModal({
           <X size={20} />
         </button>
 
-        <div className="px-5 pb-6 pt-7 sm:px-8 sm:pb-8 sm:pt-9">
+        <div className="px-5 pb-6 pt-6 sm:px-7 sm:pb-7 sm:pt-7">
           <div className="flex items-center gap-3">
           <img
             src={logo}
@@ -162,14 +162,13 @@ function LoginModal({
             </div>
           </div>
 
-          <div className="mt-7">
+          <div className="mt-6">
             <h2 id="login-modal-title" className="text-2xl font-extrabold tracking-tight text-black sm:text-3xl">Welcome back</h2>
-            <p className="mt-2 max-w-sm text-sm leading-6 text-gray-600">Sign in to manage orders, quotations and your CANA account.</p>
           </div>
 
         <form
           onSubmit={handleSubmit}
-            className="mt-7 space-y-5"
+            className="mt-6 space-y-4"
         >
           <div>
             <label
@@ -250,7 +249,7 @@ function LoginModal({
           </button>
         </form>
 
-          <div className="mt-7 border-t border-gray-100 pt-5 text-center text-sm text-gray-600">
+          <div className="mt-6 border-t border-gray-100 pt-4 text-center text-sm text-gray-600">
           <span>Don't have an account?</span>
 
           <button

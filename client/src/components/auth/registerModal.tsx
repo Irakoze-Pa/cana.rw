@@ -108,11 +108,6 @@ function RegisterModal({
 
       const response = await registerUser(formData);
 
-      console.log(
-        "Registration response:",
-        response
-      );
-
       setSuccess(
         "Account created successfully."
       );
@@ -162,9 +157,9 @@ function RegisterModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="register-modal-title"
-        className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[1.75rem] bg-white shadow-2xl sm:max-h-[90vh]"
+        className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl sm:max-h-[90vh]"
       >
-        <div className="h-1.5 bg-red-600" />
+        <div className="h-1 bg-red-700" />
         <button
           type="button"
           onClick={onClose}
@@ -174,7 +169,7 @@ function RegisterModal({
           <X size={20} />
         </button>
 
-        <div className="px-5 pb-6 pt-7 sm:px-8 sm:pb-8 sm:pt-9">
+        <div className="px-5 pb-6 pt-6 sm:px-7 sm:pb-7 sm:pt-7">
           <div className="flex items-center gap-3">
           <img
             src={logo}
@@ -187,14 +182,13 @@ function RegisterModal({
             </div>
           </div>
 
-          <div className="mt-7">
+          <div className="mt-6">
             <h2 id="register-modal-title" className="text-2xl font-extrabold tracking-tight text-black sm:text-3xl">Create your account</h2>
-            <p className="mt-2 max-w-sm text-sm leading-6 text-gray-600">Save quotations, place orders and follow your requests in one place.</p>
           </div>
 
         <form
           onSubmit={handleSubmit}
-            className="mt-7 space-y-4"
+            className="mt-6 space-y-3.5"
         >
           {/* Full Name */}
           <Input
@@ -235,7 +229,6 @@ function RegisterModal({
 
           <fieldset className="rounded-xl border border-gray-200 bg-gray-50/70 p-4">
             <legend className="px-1 text-sm font-semibold text-gray-700">Are you registering for a company?</legend>
-            <p className="mt-1 text-xs leading-5 text-gray-500">This helps CANA prepare quotations and invoices correctly.</p>
             <div className="mt-3 grid grid-cols-2 gap-3">
               {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option) => (
                 <button
@@ -308,9 +301,7 @@ function RegisterModal({
           </button>
         </form>
 
-          <p className="mt-4 text-xs leading-5 text-gray-500">By creating an account, you can request quotations and manage your CANA orders securely.</p>
-
-          <div className="mt-5 border-t border-gray-100 pt-5 text-center text-sm text-gray-600">
+          <div className="mt-5 border-t border-gray-100 pt-4 text-center text-sm text-gray-600">
           <span>
             Already have an account?
           </span>
