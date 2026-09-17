@@ -85,6 +85,9 @@ function getPackagingData(data: {
   };
 }
 
+const isScaffoldingProduct = (data: { name?: string; category?: string }) =>
+  String(data.category || "").trim() === "Scaffolding" || /scaffold/i.test(String(data.name || ""));
+
 /* =========================================================
    UPLOAD IMAGE TO CLOUDINARY
 ========================================================= */
@@ -147,6 +150,8 @@ export const createProduct = async (
     imageUrl = await uploadImageToCloudinary(file);
   }
 
+  const isScaffolding = isScaffoldingProduct(data);
+
   const product = await Product.create({
     ...data,
 
@@ -154,9 +159,10 @@ export const createProduct = async (
 
     price: Number(data.price),
     stock: Number(data.stock ?? 0),
-    baseUnit: String(data.category || "").trim() === "Scaffolding" || /scaffold/i.test(data.name) ? "pcs" : "kg",
+    baseUnit: isScaffolding ? "pcs" : "kg",
     packSizeKg: packaging.packSizeKg,
     densityKgPerL: packaging.densityKgPerL,
+    trackBatch: isScaffolding ? false : data.trackBatch ?? true,
 
     image: imageUrl,
   });

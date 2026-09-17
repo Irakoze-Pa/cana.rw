@@ -715,7 +715,11 @@ function ProductModal({
           <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-4">
               <p className="text-xs font-bold uppercase tracking-[.14em] text-red-700">Pack &amp; weight</p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">Stock is held in kilograms. Select the customer pack, then enter density so the system can calculate net pack weight and price per kg.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                {isScaffoldingProduct
+                  ? "Scaffolding is counted and sold as individual pieces."
+                  : "Stock is held in kilograms. Select the customer pack, then enter density so the system can calculate net pack weight and price per kg."}
+              </p>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
@@ -939,7 +943,9 @@ function ProductModal({
               </select>
 
               <p className="mt-2 text-xs text-gray-500">
-                Customer-facing pack label only. Production and stock are always measured in kilograms.
+                {isScaffoldingProduct
+                  ? "Scaffolding is counted in pieces across stock, sales and transfers."
+                  : "Customer-facing pack label only. Production and stock are measured in kilograms."}
               </p>
             </div>
 
@@ -957,20 +963,26 @@ function ProductModal({
                     : "Paint density (kg/L) *"}
               </label>
 
-              <input
-                id={isWallMasterProduct || isPieceProduct ? "packSizeKg" : "densityKgPerL"}
-                name={isWallMasterProduct || isPieceProduct ? "packSizeKg" : "densityKgPerL"}
-                type="number"
-                min="0.001"
-                step="0.001"
-                required={!isWallMasterProduct && !isScaffoldingProduct}
-                value={isWallMasterProduct ? "30" : isScaffoldingProduct ? "Counted in pieces" : isPieceProduct ? formData.packSizeKg : formData.densityKgPerL}
-                onChange={handleChange}
-                disabled={loading || isWallMasterProduct || isScaffoldingProduct}
-                placeholder={isPieceProduct ? "Example: 2.5" : "Example: 1.35"}
-                aria-describedby="density-help"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-100"
-              />
+              {isScaffoldingProduct ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                  Counted in pieces (pcs)
+                </div>
+              ) : (
+                <input
+                  id={isWallMasterProduct || isPieceProduct ? "packSizeKg" : "densityKgPerL"}
+                  name={isWallMasterProduct || isPieceProduct ? "packSizeKg" : "densityKgPerL"}
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  required={!isWallMasterProduct}
+                  value={isWallMasterProduct ? "30" : isPieceProduct ? formData.packSizeKg : formData.densityKgPerL}
+                  onChange={handleChange}
+                  disabled={loading || isWallMasterProduct}
+                  placeholder={isPieceProduct ? "Example: 2.5" : "Example: 1.35"}
+                  aria-describedby="density-help"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-100"
+                />
+              )}
 
               <p id="density-help" className="mt-2 text-xs leading-5 text-gray-500">
                 {isWallMasterProduct
