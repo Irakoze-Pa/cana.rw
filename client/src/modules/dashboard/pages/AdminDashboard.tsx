@@ -7,6 +7,8 @@ import {
   ClipboardList,
   Factory,
   FileText,
+  MapPinned,
+  Megaphone,
   Package,
   RefreshCw,
   ShieldCheck,
@@ -15,6 +17,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { useAuth } from "@/context/authContext";
 import api from "@/services/api";
 
 type Person = { fullName?: string };
@@ -58,6 +61,7 @@ const date = (value?: string) => value ? new Date(value).toLocaleDateString("en-
 const status = (value: string) => value.replaceAll("_", " ");
 
 export default function AdminDashboard() {
+  const { user } = useAuth();
   const [data, setData] = useState<Summary>(empty);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -76,6 +80,11 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => { void load(); }, []);
+
+  const isMarketing = user?.role === "staff" && user.department === "marketing";
+  if (isMarketing) {
+    return <MarketingOverview data={data} loading={loading} error={error} onRefresh={load} />;
+  }
 
   const metrics = [
     { label: "Quotation requests", value: data.pendingQuotations, note: "Waiting for review", to: "/management/quotations", icon: <FileText size={17} /> },
@@ -173,6 +182,39 @@ export default function AdminDashboard() {
           <Workspace to="/management/purchase-orders" title="Procurement" detail={`${data.purchaseOrders} open purchase orders`} />
           <Workspace to="/management/compliance" title="Factory compliance" detail={data.overdueCompliance ? `${data.overdueCompliance} overdue actions` : `${data.openCompliance} open actions`} />
         </div>
+      </section>
+    </div>
+  );
+}
+
+function MarketingOverview({ data, loading, error, onRefresh }: { data: Summary; loading: boolean; error: string; onRefresh: () => void }) {
+  const cards = [
+    { label: "Quotation requests", value: data.pendingQuotations, note: "Need first response", to: "/management/quotations", icon: FileText },
+    { label: "Active customer orders", value: data.openSales, note: "Pipeline to follow", to: "/management/quotations", icon: Megaphone },
+    { label: "Active products", value: data.products, note: "Reference products in quotations", to: "/management/quotations", icon: Package },
+  ];
+  return (
+    <div className="mx-auto max-w-[1200px] space-y-4">
+      <header className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <p className="cana-section-kicker text-red-700">Marketing workspace</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Leads, quotations and site follow-up</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Manage customer enquiries, keep project sites current and monitor the commercial pipeline.</p>
+          </div>
+          <button type="button" onClick={onRefresh} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"><RefreshCw size={16} className={loading ? "animate-spin" : ""} />Refresh</button>
+        </div>
+      </header>
+      {error && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      <section className="grid gap-3 sm:grid-cols-3">
+        {cards.map(({ label, value, note, to, icon: Icon }) => <Link key={label} to={to} className="group rounded-xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-sm"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-700 transition group-hover:bg-red-50 group-hover:text-red-700"><Icon size={17} /></span><p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-2xl font-extrabold text-slate-950">{loading ? "—" : value}</p><p className="mt-1 text-xs text-slate-500">{note}</p></Link>)}
+      </section>
+      <section className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
+        <Panel title="Recent quotation requests" description="Start with new customer enquiries." action="Open queue" to="/management/quotations" icon={<FileText size={17} />}>
+          {data.recentQuotations.map((quote) => <Link to="/management/quotations" key={quote._id} className="flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-slate-50"><div><p className="text-sm font-bold text-slate-900">{quote.customer?.fullName || "Customer enquiry"}</p><p className="mt-0.5 text-xs text-slate-500">Received {date(quote.createdAt)}</p></div><ArrowRight size={16} className="text-slate-400" /></Link>)}
+          {!loading && !data.recentQuotations.length && <Empty text="No pending quotation requests right now." />}
+        </Panel>
+        <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5"><div className="flex items-start gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-50 text-red-700"><MapPinned size={18} /></span><div><p className="text-sm font-extrabold text-slate-950">Field follow-up</p><p className="mt-1 text-xs leading-5 text-slate-500">Keep customer sites, contacts and project progress up to date.</p></div></div><div className="mt-5 space-y-2"><Workspace to="/management/customers" title="Customers" detail="Create and maintain customer contacts" /><Workspace to="/management/sites" title="Site management" detail="Manage locations and field follow-up" /><Workspace to="/management/reports" title="Performance report" detail="Review commercial activity" /></div></section>
       </section>
     </div>
   );

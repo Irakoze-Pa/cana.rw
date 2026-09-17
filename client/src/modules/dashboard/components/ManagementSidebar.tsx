@@ -223,13 +223,13 @@ const groups: Group[] = [
         label: "Customers",
         to: "/management/customers",
         icon: UserCog,
-        departments: ["sales", "customer_service", "management"],
+        departments: ["sales", "customer_service", "marketing", "management"],
       },
       {
         label: "Quotation queue",
         to: "/management/quotations",
         icon: FileText,
-        departments: ["sales", "customer_service", "management"],
+        departments: ["sales", "customer_service", "marketing", "management"],
       },
       {
         label: "Sales workspace",
@@ -253,7 +253,7 @@ const groups: Group[] = [
         label: "Sales & production report",
         to: "/management/reports",
         icon: FileBarChart,
-        departments: ["sales", "finance", "production", "management"],
+        departments: ["sales", "finance", "marketing", "production", "management"],
       },
       {
         label: "Proforma builder",

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Boxes, LayoutDashboard, Menu, Package, ShoppingCart, X } from "lucide-react";
+import { Boxes, FileText, LayoutDashboard, Menu, Package, ShoppingCart, X } from "lucide-react";
 
 import ManagementSidebar from "@/modules/dashboard/components/ManagementSidebar";
 import ManagementTopbar from "@/modules/dashboard/components/DashboardTopbar";
@@ -98,6 +98,11 @@ export default ManagementLayout;
 
 function ManagementMobileNav({ onOpenMenu, role, department }: { onOpenMenu: () => void; role?: string; department?: string }) {
   const elevated = role === "admin" || role === "superadmin";
-  const links = [{ to: "/management", label: "Overview", icon: LayoutDashboard, show: true }, { to: "/management/sales", label: "Sales", icon: ShoppingCart, show: elevated || ["sales", "customer_service", "finance", "management"].includes(department || "") }, { to: "/management/inventory", label: "Inventory", icon: Boxes, show: elevated || ["warehouse", "procurement", "production", "management"].includes(department || "") }].filter((item) => item.show);
+  const links = [
+    { to: "/management", label: "Overview", icon: LayoutDashboard, show: true },
+    { to: "/management/quotations", label: "Quotes", icon: FileText, show: department === "marketing" },
+    { to: "/management/sales", label: "Sales", icon: ShoppingCart, show: elevated || ["sales", "customer_service", "finance", "management"].includes(department || "") },
+    { to: "/management/inventory", label: "Inventory", icon: Boxes, show: elevated || ["warehouse", "procurement", "production", "management"].includes(department || "") },
+  ].filter((item) => item.show);
   return <nav aria-label="Management navigation" className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white/95 px-2 py-2 pb-[calc(.5rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,.08)] backdrop-blur lg:hidden">{links.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} end={to === "/management"} className={({ isActive }) => `flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-bold ${isActive ? "bg-red-50 text-red-700" : "text-slate-500"}`}><Icon size={19}/><span>{label}</span></NavLink>)}<button type="button" onClick={onOpenMenu} className="flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-bold text-slate-500"><Package size={19}/><span>More</span></button></nav>;
 }

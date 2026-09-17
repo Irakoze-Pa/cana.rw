@@ -8,6 +8,7 @@ const access: Record<string, string[]> = {
   sales: ["/management", "/management/products", "/management/quotations", "/management/sales", "/management/billing", "/management/inventory/finished-goods", "/management/customers", "/management/sites"],
   customer_service: ["/management", "/management/quotations", "/management/sales", "/management/customers", "/management/sites"],
   finance: ["/management", "/management/sales", "/management/billing", "/management/purchase-orders", "/management/supplier-payments", "/management/expenses", "/management/reports", "/management/general-report"],
+  marketing: ["/management", "/management/quotations", "/management/customers", "/management/sites", "/management/reports"],
   management: ["/management", "/management/sites"],
 };
 

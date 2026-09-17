@@ -9,7 +9,7 @@ const ACCESS_AREAS = ["sales", "production", "inventory", "procurement", "financ
 const defaultPermissions = (role: UserRole, department?: Department) => {
   if (role === UserRole.SUPERADMIN || role === UserRole.ADMIN) return [...ACCESS_AREAS];
   if (role === UserRole.CUSTOMER) return [];
-  const departmentAccess: Partial<Record<Department, string[]>> = { sales: ["sales", "sites"], production: ["production"], warehouse: ["inventory"], procurement: ["procurement"], finance: ["finance"], marketing: ["sites"], hr: ["staff"], customer_service: ["sales", "sites"], management: ["reports", "sales", "production", "inventory", "procurement", "finance", "sites"] };
+  const departmentAccess: Partial<Record<Department, string[]>> = { sales: ["sales", "sites"], production: ["production"], warehouse: ["inventory"], procurement: ["procurement"], finance: ["finance"], marketing: ["sales", "reports", "sites"], hr: ["staff"], customer_service: ["sales", "sites"], management: ["reports", "sales", "production", "inventory", "procurement", "finance", "sites"] };
   return departmentAccess[department as Department] || [];
 };
 router.use(protect);
