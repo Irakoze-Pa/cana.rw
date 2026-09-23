@@ -62,11 +62,13 @@ const packs = (quantity: number, product?: Product | null) => {
 };
 const stockWithPacks = (quantity: number, product?: Product | null) =>
   `${number(quantity)} ${product?.baseUnit || "kg"}${packs(quantity, product) ? ` · ${packs(quantity, product)}` : ""}`;
+const isScaffolding = (product?: Product | null) => product?.category === "Scaffolding" || /scaffold/i.test(product?.name || "");
 
 export default function FinishedGoodsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [balances, setBalances] = useState<Balance[]>([]);
+  const [catalogue, setCatalogue] = useState<"paint" | "scaffold">("paint");
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [showAdjustment, setShowAdjustment] = useState(false);
@@ -76,7 +78,7 @@ export default function FinishedGoodsPage() {
     fromStore: "production",
     toStore: "sales",
     quantityInput: "",
-    quantityMode: "packs" as "packs" | "kg",
+    quantityMode: "packs" as "packs" | "kg" | "pcs",
     notes: "",
   });
   const [busy, setBusy] = useState(false);
@@ -129,7 +131,7 @@ export default function FinishedGoodsPage() {
       );
     };
   }, [load]);
-  const products = useMemo(() => {
+  const allProducts = useMemo(() => {
     const seen = new Map<string, Product>();
     balances.forEach(
       (balance) =>
@@ -137,6 +139,7 @@ export default function FinishedGoodsPage() {
     );
     return [...seen.values()];
   }, [balances]);
+  const products = useMemo(() => allProducts.filter((product) => catalogue === "scaffold" ? isScaffolding(product) : !isScaffolding(product)), [allProducts, catalogue]);
   const balanceFor = (productId: string, store: string) =>
     Number(
       balances.find(
@@ -146,19 +149,20 @@ export default function FinishedGoodsPage() {
     );
   const selected = products.find((product) => product._id === form.product);
   const selectedAdjustmentProduct = products.find((product) => product._id === adjustment.product);
-  const transferQuantityKg = Number(form.quantityInput) * (form.quantityMode === "packs" ? Number(selected?.packSizeKg || 0) : 1);
+  const isPieceProduct = selected?.baseUnit === "pcs" || isScaffolding(selected);
+  const transferQuantity = Number(form.quantityInput) * (form.quantityMode === "packs" ? Number(selected?.packSizeKg || 0) : 1);
   const sendTransfer = async (event: React.FormEvent) => {
     event.preventDefault();
     if (form.fromStore === form.toStore)
       return setError("Select two different stores.");
     if (!selected) return setError("Select a finished product to transfer.");
-    if (!Number.isFinite(transferQuantityKg) || transferQuantityKg <= 0) return setError(form.quantityMode === "packs" ? "Enter a valid number of packs. This product must have a pack size before packs can be transferred." : "Enter a valid quantity in kg.");
+    if (!Number.isFinite(transferQuantity) || transferQuantity <= 0) return setError(form.quantityMode === "packs" ? "Enter a valid number of packs. This product must have a pack size before packs can be transferred." : `Enter a valid quantity in ${isPieceProduct ? "pieces" : "kg"}.`);
     try {
       setBusy(true);
       setError("");
       await api.post("/finished-goods/transfers", {
         ...form,
-        quantity: transferQuantityKg,
+        quantity: transferQuantity,
       });
       toast("Store transfer recorded.", "success");
       setForm({
@@ -166,7 +170,7 @@ export default function FinishedGoodsPage() {
         fromStore: "production",
         toStore: "sales",
         quantityInput: "",
-        quantityMode: "packs",
+        quantityMode: catalogue === "scaffold" ? "pcs" : "packs",
         notes: "",
       });
       await load();
@@ -178,11 +182,13 @@ export default function FinishedGoodsPage() {
       setBusy(false);
     }
   };
-  const submitAdjustment = async (event: React.FormEvent) => { event.preventDefault(); const change = Number(adjustment.quantityChange); if (!Number.isFinite(change) || change === 0) return setError("Enter a non-zero adjustment in kg. Use a positive value to add stock or a negative value to remove stock."); try { setBusy(true); setError(""); await api.post("/finished-goods/adjustments", { ...adjustment, quantityChange: change }); toast("Finished-goods adjustment recorded with an audit reference.", "success"); setAdjustment({ product: "", store: "production", quantityChange: "", reason: "" }); setShowAdjustment(false); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to record finished-goods adjustment."); } finally { setBusy(false); } };
-  const totalProduction = balances
+  const submitAdjustment = async (event: React.FormEvent) => { event.preventDefault(); const change = Number(adjustment.quantityChange); const unit = selectedAdjustmentProduct?.baseUnit === "pcs" || isScaffolding(selectedAdjustmentProduct) ? "pieces" : "kg"; if (!Number.isFinite(change) || change === 0) return setError(`Enter a non-zero adjustment in ${unit}. Use a positive value to add stock or a negative value to remove stock.`); try { setBusy(true); setError(""); await api.post("/finished-goods/adjustments", { ...adjustment, quantityChange: change }); toast("Stock adjustment recorded with an audit reference.", "success"); setAdjustment({ product: "", store: "production", quantityChange: "", reason: "" }); setShowAdjustment(false); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to record stock adjustment."); } finally { setBusy(false); } };
+  const scopedBalances = balances.filter((balance) => balance.product && products.some((product) => product._id === balance.product?._id));
+  const scopedTransfers = transfers.filter((transfer) => transfer.product && (catalogue === "scaffold" ? isScaffolding(transfer.product) : !isScaffolding(transfer.product)));
+  const totalProduction = scopedBalances
     .filter((balance) => balance.store === "production")
     .reduce((sum, balance) => sum + balance.quantity, 0);
-  const totalSales = balances
+  const totalSales = scopedBalances
     .filter((balance) => balance.store === "sales")
     .reduce((sum, balance) => sum + balance.quantity, 0);
   return (
@@ -195,7 +201,7 @@ export default function FinishedGoodsPage() {
           <div>
             <p className="cana-section-kicker">Inventory & stores</p>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
-              Finished-goods stores
+              {catalogue === "scaffold" ? "Scaffolding equipment stores" : "Finished-goods stores"}
             </h1>
           </div>
         </div>
@@ -205,6 +211,10 @@ export default function FinishedGoodsPage() {
           <button onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16} />Refresh</button>
         </div>
       </header>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => { setCatalogue("paint"); setForm((current) => ({ ...current, product: "", quantityInput: "", quantityMode: "packs" })); }} className={`rounded-lg px-4 py-2 text-sm font-bold transition ${catalogue === "paint" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>Paint finished goods</button>
+        <button type="button" onClick={() => { setCatalogue("scaffold"); setForm((current) => ({ ...current, product: "", quantityInput: "", quantityMode: "pcs" })); }} className={`rounded-lg px-4 py-2 text-sm font-bold transition ${catalogue === "scaffold" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>Scaffolding equipment</button>
+      </div>
       {showAdjustment && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"><form onSubmit={submitAdjustment} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-red-600">SuperAdmin control</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Adjust finished-goods stock</h2><p className="mt-2 text-sm leading-6 text-slate-500">Use only for a verified physical count or correction. This creates an immutable adjustment record.</p></div><button type="button" onClick={() => setShowAdjustment(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></div><div className="mt-6 space-y-4"><label className="block text-sm font-bold text-slate-700">Finished product<select required value={adjustment.product} onChange={(event) => setAdjustment({ ...adjustment, product: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Select product</option>{products.map((product) => <option key={product._id} value={product._id}>{product.name} · {product.code}</option>)}</select></label><label className="block text-sm font-bold text-slate-700">Store<select value={adjustment.store} onChange={(event) => setAdjustment({ ...adjustment, store: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="production">Production Store</option><option value="sales">Sales Store</option></select></label>{selectedAdjustmentProduct && <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">Current balance: <strong>{stockWithPacks(balanceFor(selectedAdjustmentProduct._id, adjustment.store), selectedAdjustmentProduct)}</strong></p>}<label className="block text-sm font-bold text-slate-700">Adjustment in kg<input required step="any" type="number" value={adjustment.quantityChange} onChange={(event) => setAdjustment({ ...adjustment, quantityChange: event.target.value })} placeholder="Example: 80 or -20" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/></label><label className="block text-sm font-bold text-slate-700">Reason for correction<textarea required minLength={3} value={adjustment.reason} onChange={(event) => setAdjustment({ ...adjustment, reason: event.target.value })} rows={3} placeholder="Example: Physical stock count correction" className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm"/></label></div><button disabled={busy} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:bg-slate-300"><SlidersHorizontal size={16}/>{busy ? "Recording…" : "Record adjustment"}</button></form></div>}
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -216,16 +226,19 @@ export default function FinishedGoodsPage() {
           icon={<Factory size={19} />}
           label="Production Store"
           value={number(totalProduction)}
+          unit={catalogue === "scaffold" ? "pcs" : "kg"}
         />
         <Metric
           icon={<Store size={19} />}
           label="Sales Store"
           value={number(totalSales)}
+          unit={catalogue === "scaffold" ? "pcs" : "kg"}
         />
         <Metric
           icon={<ArrowRightLeft size={19} />}
           label="Recorded transfers"
-          value={String(transfers.length)}
+          value={String(scopedTransfers.length)}
+          unit=""
         />
       </section>
       <section className="grid gap-4 xl:grid-cols-[.95fr_1.55fr]">
@@ -239,7 +252,7 @@ export default function FinishedGoodsPage() {
             </span>
             <div>
               <h2 className="font-bold text-slate-900">
-                Transfer finished goods
+                {catalogue === "scaffold" ? "Transfer scaffolding equipment" : "Transfer finished goods"}
               </h2>
             </div>
           </div>
@@ -254,7 +267,7 @@ export default function FinishedGoodsPage() {
                 }
                 className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 px-3 text-sm"
               >
-                <option value="">Select finished product</option>
+                <option value="">Select {catalogue === "scaffold" ? "scaffolding equipment" : "finished product"}</option>
                 {products.map((product) => (
                   <option key={product._id} value={product._id}>
                     {product.name} ({product.code})
@@ -308,7 +321,7 @@ export default function FinishedGoodsPage() {
                 </select>
               </label>
             </div>
-            <div className="rounded-2xl border border-red-100 bg-red-50/40 p-3.5"><div className="flex items-center justify-between gap-3"><p className="text-sm font-bold text-slate-900">Transfer quantity</p><select value={form.quantityMode} onChange={(event) => setForm({ ...form, quantityMode: event.target.value as "packs" | "kg", quantityInput: "" })} className="h-10 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-slate-800"><option value="packs">By pack</option><option value="kg">By kg</option></select></div><label className="mt-3 block text-sm font-semibold text-gray-700">{form.quantityMode === "packs" ? `Number of packs${selected?.packSizeKg ? ` (${selected.packSizeKg} kg)` : ""}` : "Quantity in kg"}<input required min="0.0001" step="any" type="number" disabled={form.quantityMode === "packs" && !selected?.packSizeKg} value={form.quantityInput} onChange={(event) => setForm({ ...form, quantityInput: event.target.value })} placeholder={form.quantityMode === "packs" ? "12" : "240"} className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm disabled:bg-slate-100"/></label>{selected && form.quantityInput && <p className="mt-2 text-xs font-semibold text-slate-600">{number(transferQuantityKg)} kg</p>}</div>
+            <div className="rounded-2xl border border-red-100 bg-red-50/40 p-3.5"><div className="flex items-center justify-between gap-3"><p className="text-sm font-bold text-slate-900">Transfer quantity</p>{isPieceProduct ? <span className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800">By piece</span> : <select value={form.quantityMode} onChange={(event) => setForm({ ...form, quantityMode: event.target.value as "packs" | "kg", quantityInput: "" })} className="h-10 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-slate-800"><option value="packs">By pack</option><option value="kg">By kg</option></select>}</div><label className="mt-3 block text-sm font-semibold text-gray-700">{isPieceProduct ? "Number of pieces" : form.quantityMode === "packs" ? `Number of packs${selected?.packSizeKg ? ` (${selected.packSizeKg} kg)` : ""}` : "Quantity in kg"}<input required min="0.0001" step="any" type="number" disabled={form.quantityMode === "packs" && !selected?.packSizeKg} value={form.quantityInput} onChange={(event) => setForm({ ...form, quantityMode: isPieceProduct ? "pcs" : form.quantityMode, quantityInput: event.target.value })} placeholder={isPieceProduct ? "10" : form.quantityMode === "packs" ? "12" : "240"} className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm disabled:bg-slate-100"/></label>{selected && form.quantityInput && <p className="mt-2 text-xs font-semibold text-slate-600">{number(transferQuantity)} {isPieceProduct ? "pcs" : "kg"}</p>}</div>
             {selected && (
               <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                 Available in {storeName(form.fromStore)}:{" "}
@@ -366,20 +379,20 @@ export default function FinishedGoodsPage() {
                           {product.name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {product.code} · {product.unit} pack · {number(product.packSizeKg || 0)} kg per pack
+                          {isScaffolding(product) ? `${product.code} · Equipment · counted in pieces` : `${product.code} · ${product.unit} pack · ${number(product.packSizeKg || 0)} kg per pack`}
                         </p>
                       </td>
                       <td className="px-5 py-4 text-right font-semibold">
-                        <span>{number(production)} kg</span>
-                        <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(production, product) || "Pack size not set"}</p>
+                        <span>{number(production)} {isScaffolding(product) ? "pcs" : "kg"}</span>
+                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(production, product) || "Pack size not set"}</p>}
                       </td>
                       <td className="px-5 py-4 text-right font-semibold">
-                        <span>{number(sales)} kg</span>
-                        <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(sales, product) || "Pack size not set"}</p>
+                        <span>{number(sales)} {isScaffolding(product) ? "pcs" : "kg"}</span>
+                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(sales, product) || "Pack size not set"}</p>}
                       </td>
                       <td className="px-5 py-4 text-right font-bold text-slate-900">
-                        {number(production + sales)} kg
-                        <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(production + sales, product) || "Pack size not set"}</p>
+                        {number(production + sales)} {isScaffolding(product) ? "pcs" : "kg"}
+                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(production + sales, product) || "Pack size not set"}</p>}
                       </td>
                     </tr>
                   );
@@ -387,7 +400,7 @@ export default function FinishedGoodsPage() {
                 {products.length === 0 && (
                   <tr>
                     <td colSpan={4} className="p-10 text-center text-gray-500">
-                      No finished products are available yet.
+                      No {catalogue === "scaffold" ? "scaffolding equipment" : "finished paint products"} are available yet.
                     </td>
                   </tr>
                 )}
@@ -415,7 +428,7 @@ export default function FinishedGoodsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {transfers.map((transfer) => (
+              {scopedTransfers.map((transfer) => (
                 <tr key={transfer._id}>
                   <td className="px-5 py-4 font-semibold">
                     {transfer.reference}
@@ -438,7 +451,7 @@ export default function FinishedGoodsPage() {
                   </td>
                 </tr>
               ))}
-              {transfers.length === 0 && (
+              {scopedTransfers.length === 0 && (
                 <tr>
                   <td colSpan={5} className="p-10 text-center text-gray-500">
                     No store transfers recorded yet.
@@ -456,14 +469,16 @@ function Metric({
   icon,
   label,
   value,
+  unit = "kg",
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  unit?: string;
 }) {
   return (
     <article className="cana-panel p-4">
-      <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-700">{icon}</span><div><p className="text-[10px] font-bold uppercase tracking-[.1em] text-gray-500">{label}</p><p className="mt-0.5 text-xl font-extrabold tracking-tight text-slate-950">{value} kg</p></div></div>
+      <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-700">{icon}</span><div><p className="text-[10px] font-bold uppercase tracking-[.1em] text-gray-500">{label}</p><p className="mt-0.5 text-xl font-extrabold tracking-tight text-slate-950">{value}{unit ? ` ${unit}` : ""}</p></div></div>
     </article>
   );
 }

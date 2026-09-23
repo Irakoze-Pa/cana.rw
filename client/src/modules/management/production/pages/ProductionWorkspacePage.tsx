@@ -110,8 +110,8 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
     [batches],
   );
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+    <div className="mx-auto max-w-7xl space-y-4 pb-6">
+      <header className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
         <div className="flex gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600">
             <Icon size={21} />
@@ -122,7 +122,7 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
             <p className="mt-1 text-sm text-gray-500">{meta.description}</p>
           </div>
         </div>
-        <div className="flex gap-2"><Link to="/management/reports" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">Period report</Link><button
+        <div className="flex flex-wrap gap-2"><Link to="/management/production/orders" className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-800">Production orders</Link><Link to="/management/production/batches" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">Production batches</Link><Link to="/management/reports" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">Period report</Link><button
           onClick={() => void load()}
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 disabled:opacity-60"
@@ -131,6 +131,7 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
           Refresh
         </button></div>
       </header>
+      <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-sm sm:grid-cols-4"><WorkflowStep number="1" label="Create production order" /><WorkflowStep number="2" label="Create batch" /><WorkflowStep number="3" label="Issue lots to batch" /><WorkflowStep number="4" label="Complete & post output" /></div>
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
@@ -285,4 +286,8 @@ function Metric({
       <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{value}</p>
     </article>
   );
+}
+
+function WorkflowStep({ number, label }: { number: string; label: string }) {
+  return <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5"><span className="grid h-6 w-6 place-items-center rounded-full bg-slate-900 text-xs font-extrabold text-white">{number}</span><span className="text-xs font-bold text-slate-700">{label}</span></div>;
 }

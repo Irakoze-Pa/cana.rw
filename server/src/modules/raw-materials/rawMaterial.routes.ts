@@ -24,6 +24,7 @@ router.get(
 );
 
 router.get("/lots", lotController.list);
+router.get("/lots/:lotId/trace", lotController.trace);
 
 router.get(
   "/:id/lots",

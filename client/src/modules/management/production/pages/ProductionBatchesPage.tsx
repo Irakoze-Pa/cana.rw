@@ -120,6 +120,10 @@ function formatNumber(
   );
 }
 
+function formatMoney(value?: number): string {
+  return `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 })} RWF`;
+}
+
 // =====================================================
 // CAN EDIT
 // =====================================================
@@ -163,6 +167,9 @@ function printBatchRecord(batch: ProductionBatch) {
       { label: "Completion date", value: formatDate(batch.endDate) },
       { label: "Supervisor", value: batch.supervisorName },
       { label: "Finished goods posted", value: batch.finishedGoodsPostedAt ? formatDate(batch.finishedGoodsPostedAt) : "Not posted" },
+      { label: "Actual batch cost", value: batch.costedAt ? formatMoney(batch.totalActualCost) : "Pending completion" },
+      { label: "Actual cost per kg", value: batch.costedAt ? `${formatMoney(batch.costPerKg)} / kg` : "Pending completion" },
+      ...(Number(batch.costPerPack || 0) > 0 ? [{ label: "Actual cost per pack", value: formatMoney(batch.costPerPack) }] : []),
     ],
     notes: batch.notes,
   });

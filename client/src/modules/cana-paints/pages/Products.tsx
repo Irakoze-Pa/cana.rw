@@ -15,7 +15,7 @@ import {
   useState,
 } from "react";
 
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import LoginModal from "@/components/auth/loginModal";
 import RegisterModal from "@/components/auth/registerModal";
@@ -53,6 +53,9 @@ interface ProductsResponse {
   success: boolean;
   data: Product[];
 }
+
+const isScaffoldingProduct = (product: Product) =>
+  product.category?.trim() === "Scaffolding" || /scaffold/i.test(product.name || "");
 
 /* ============================================================
    PRODUCTS PAGE
@@ -137,12 +140,9 @@ const Products = () => {
         );
       }
 
-      const activeProducts =
-        result.data.filter(
-          (product) =>
-            !product.status ||
-            product.status === "Active"
-        );
+      const activeProducts = result.data.filter(
+        (product) => (!product.status || product.status === "Active") && !isScaffoldingProduct(product)
+      );
 
       setProducts(activeProducts);
     } catch (err) {
@@ -526,6 +526,9 @@ const Products = () => {
                   >
                     Request Quote
                   </button>
+                  <Link to="/cana-services/scaffolds" className="inline-flex items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold text-neutral-600 transition hover:text-red-700">
+                    Need scaffolding? <ArrowRight size={15} />
+                  </Link>
                 </div>
               </div>
 

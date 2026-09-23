@@ -299,7 +299,7 @@ const InventoryTable = ({
                       {/* Add */}
                       <button
                         type="button"
-                        title="Add Stock"
+                        title="Record a supplier delivery"
                         onClick={() =>
                           onAddStock(item)
                         }
@@ -308,14 +308,14 @@ const InventoryTable = ({
                         <ArrowDownToLine className="h-4 w-4" />
 
                         <span className="hidden xl:inline">
-                          Add
+                          Receive
                         </span>
                       </button>
 
                       {/* Remove */}
                       <button
                         type="button"
-                        title="Remove Stock"
+                        title="Issue through a production batch"
                         onClick={() =>
                           onRemoveStock(item)
                         }
@@ -327,7 +327,7 @@ const InventoryTable = ({
                         <ArrowUpFromLine className="h-4 w-4" />
 
                         <span className="hidden xl:inline">
-                          Remove
+                          Issue
                         </span>
                       </button>
 

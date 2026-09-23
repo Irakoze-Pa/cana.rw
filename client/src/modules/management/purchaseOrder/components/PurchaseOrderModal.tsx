@@ -250,24 +250,6 @@ function PurchaseOrderModal({
   }, [isOpen]);
 
   // ===================================================
-  // GET SUPPLIER ID FROM RAW MATERIAL
-  // ===================================================
-
-  const getRawMaterialSupplierId = (
-    material: RawMaterial
-  ): string => {
-    if (!material.supplier) {
-      return "";
-    }
-
-    if (typeof material.supplier === "string") {
-      return material.supplier;
-    }
-
-    return material.supplier._id;
-  };
-
-  // ===================================================
   // AVAILABLE RAW MATERIALS
   // ===================================================
 
@@ -276,10 +258,11 @@ function PurchaseOrderModal({
       return [];
     }
 
-    // Raw materials are independent master data. A supplier offer improves
-    // price reference data but must not prevent procurement from ordering a
-    // material from a new or alternative supplier.
-    return rawMaterials.filter((material) => material.status !== "Inactive");
+    const offeredMaterialIds = new Set(offers.filter((offer) => {
+      const offerSupplier = typeof offer.supplier === "string" ? offer.supplier : offer.supplier._id;
+      return offerSupplier === supplier && offer.status !== "Inactive";
+    }).map((offer) => typeof offer.rawMaterial === "string" ? offer.rawMaterial : offer.rawMaterial._id));
+    return rawMaterials.filter((material) => material.status !== "Inactive" && offeredMaterialIds.has(material._id));
   }, [rawMaterials, supplier, offers]);
 
   // ===================================================
@@ -1013,7 +996,7 @@ function PurchaseOrderModal({
                 </h3>
 
                 <p className="mt-0.5 text-xs text-gray-500">
-                  Select materials and quantities. Supplier prices are applied automatically when available.
+                  Only active materials configured for this supplier are available. Their supplier prices are applied automatically.
                 </p>
               </div>
 
@@ -1140,11 +1123,11 @@ function PurchaseOrderModal({
                   />
 
                   <p className="mt-2 text-sm font-medium text-gray-700">
-                    No raw materials found
+                    No active supplier materials configured
                   </p>
 
                   <p className="mt-1 text-xs text-gray-500">
-                    Add active raw materials first, then return to create this order.
+                    Add active material offers for this supplier in Supplier material offers, then return to create this order.
                   </p>
                 </div>
               )}

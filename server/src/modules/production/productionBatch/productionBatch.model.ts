@@ -115,6 +115,16 @@ export interface IProductionBatch
 
   finishedGoodsPostedAt?: Date;
 
+  /** Immutable actual-cost snapshot created when the batch is completed. */
+  actualMaterialCost: number;
+  allocatedLaborCost: number;
+  allocatedEnergyCost: number;
+  allocatedOtherCost: number;
+  totalActualCost: number;
+  costPerKg: number;
+  costPerPack: number;
+  costedAt?: Date;
+
   // ---------------------------------------------------
   // TIMESTAMPS
   // ---------------------------------------------------
@@ -316,6 +326,15 @@ const productionBatchSchema =
       finishedGoodsPostedAt: {
         type: Date,
       },
+
+      actualMaterialCost: { type: Number, default: 0, min: 0 },
+      allocatedLaborCost: { type: Number, default: 0, min: 0 },
+      allocatedEnergyCost: { type: Number, default: 0, min: 0 },
+      allocatedOtherCost: { type: Number, default: 0, min: 0 },
+      totalActualCost: { type: Number, default: 0, min: 0 },
+      costPerKg: { type: Number, default: 0, min: 0 },
+      costPerPack: { type: Number, default: 0, min: 0 },
+      costedAt: { type: Date },
     },
     {
       timestamps: true,

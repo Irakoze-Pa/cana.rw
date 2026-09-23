@@ -649,6 +649,10 @@ export const addStock =
       "Stock quantity"
     );
 
+    if (data.type === "Purchase" && !data.lotNumber?.trim()) {
+      throw new Error("Record supplier deliveries through Goods received & lots so every purchase has a GRN and traceable lot.");
+    }
+
     const rawMaterial =
       await getRawMaterialOrThrow(
         data.rawMaterial
@@ -900,6 +904,10 @@ export const removeStock =
       data.quantity,
       "Stock quantity"
     );
+
+    if ((data.type ?? "Production Issue") === "Production Issue" && (!data.lotNumber?.trim() || !data.productionBatch)) {
+      throw new Error("Issue production material through the batch material-consumption workflow so the supplier lot and production batch are recorded.");
+    }
 
     const rawMaterial =
       await getRawMaterialOrThrow(

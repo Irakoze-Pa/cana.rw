@@ -110,6 +110,15 @@ export interface ProductionBatch {
   /** Timestamp at which this batch's finished output was posted to product stock. */
   finishedGoodsPostedAt?: string;
 
+  actualMaterialCost?: number;
+  allocatedLaborCost?: number;
+  allocatedEnergyCost?: number;
+  allocatedOtherCost?: number;
+  totalActualCost?: number;
+  costPerKg?: number;
+  costPerPack?: number;
+  costedAt?: string;
+
   createdAt: string;
   updatedAt: string;
 }

@@ -4,6 +4,7 @@ import ProductionBatch from "./productionBatch.model";
 import ProductionOrder from "../productionOrder/productionOrder.model";
 import Product from "../../product/product.model";
 import FinishedGoodsStoreBalance from "../../finishedGoods/storeBalance.model";
+import InventoryTransaction from "../../inventory/inventoryTransaction.model";
 import RawMaterialConsumption from "../materialConsumption/materialConsumption.model";
 import {
   completeMaterialConsumption,
@@ -80,6 +81,35 @@ export class ProductionBatchServiceError extends Error {
     this.statusCode =
       statusCode;
   }
+}
+
+async function snapshotCompletedBatchCost(batch: any, productionOrder: any) {
+  if (batch.costedAt) return;
+
+  const [transactions, product] = await Promise.all([
+    InventoryTransaction.find({ productionBatch: batch._id, type: { $in: ["Production Issue", "Production Return"] } }).select("type totalCost").lean(),
+    Product.findById(batch.product).select("packSizeKg baseUnit").lean(),
+  ]);
+  const materialCost = transactions.reduce((total, transaction) => total + (transaction.type === "Production Return" ? -1 : 1) * Number(transaction.totalCost || 0), 0);
+  const orderQuantity = Number(productionOrder.quantity || 0);
+  const allocation = orderQuantity > 0 ? Number(batch.plannedQuantity || 0) / orderQuantity : 1;
+  const labor = Number(productionOrder.laborCost || 0) * allocation;
+  const energy = Number(productionOrder.energyCost || 0) * allocation;
+  const other = Number(productionOrder.otherCost || 0) * allocation;
+  const total = Math.max(0, materialCost + labor + energy + other);
+  const output = Number(batch.actualQuantity || 0);
+  const perKg = output > 0 ? total / output : 0;
+  const packSizeKg = product?.baseUnit === "kg" ? Number(product.packSizeKg || 0) : 0;
+
+  batch.actualMaterialCost = roundNumber(Math.max(0, materialCost));
+  batch.allocatedLaborCost = roundNumber(labor);
+  batch.allocatedEnergyCost = roundNumber(energy);
+  batch.allocatedOtherCost = roundNumber(other);
+  batch.totalActualCost = roundNumber(total);
+  batch.costPerKg = roundNumber(perKg);
+  batch.costPerPack = roundNumber(packSizeKg > 0 ? perKg * packSizeKg : 0);
+  batch.costedAt = new Date();
+  await batch.save();
 }
 
 // =====================================================
@@ -1266,6 +1296,10 @@ export async function updateProductionBatch(
     await FinishedGoodsStoreBalance.findOneAndUpdate({ product: product._id, store: "production" }, { $inc: { quantity: Number(batch.actualQuantity) } }, { upsert: true, new: true, setDefaultsOnInsert: true });
     batch.finishedGoodsPostedAt = new Date();
     await batch.save();
+  }
+
+  if (batch.status === "Completed" && !wasCompleted) {
+    await snapshotCompletedBatchCost(batch, productionOrder);
   }
 
   // ---------------------------------------------------

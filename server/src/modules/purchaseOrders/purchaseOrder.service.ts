@@ -34,11 +34,13 @@ export const createPurchaseOrder = async (
         status: "Active",
       }).lean();
 
+      if (!offer) {
+        throw new Error(`Raw material "${material.name}" is not an active offer for the selected supplier.`);
+      }
+
       // Prices are procurement reference data, not a required PO entry. Use
       // the supplier offer first, then the material's last known cost.
-      const unitPrice = Number(
-        offer?.unitPrice ?? material.costPerUnit ?? 0,
-      );
+      const unitPrice = Number(offer.unitPrice ?? material.costPerUnit ?? 0);
 
       return {
         rawMaterial: material._id,
@@ -108,6 +110,9 @@ export const updatePurchaseOrderStatus = async (
   id: string,
   status: string
 ) => {
+  if (status === "received") {
+    throw new Error("Record the physical delivery as a Goods Received Note so stock is posted with a traceable supplier lot.");
+  }
   // ===================================================
   // VALID STATUSES
   // ===================================================

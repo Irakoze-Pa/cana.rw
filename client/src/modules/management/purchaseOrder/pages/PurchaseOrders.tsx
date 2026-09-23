@@ -47,6 +47,15 @@ type PurchaseOrderStatus =
   | "received"
   | "cancelled";
 
+const statusOptions = (status: PurchaseOrderStatus): PurchaseOrderStatus[] => ({
+  draft: ["draft", "pending_approval", "cancelled"],
+  pending_approval: ["pending_approval", "draft", "approved", "cancelled"],
+  approved: ["approved", "cancelled"],
+  partially_received: ["partially_received", "cancelled"],
+  received: ["received"],
+  cancelled: ["cancelled"],
+} as Record<PurchaseOrderStatus, PurchaseOrderStatus[]>)[status];
+
 const formatQuantity = (quantity: number, unit: string) => {
   const value = Number(quantity || 0);
   if (unit.trim().toLowerCase() !== "kg") return `${value} ${unit}`;
@@ -312,6 +321,11 @@ function PurchaseOrdersPage() {
       return;
     }
 
+    if (status === "received") {
+      window.location.assign(`/management/raw-materials/lots?purchaseOrder=${currentOrder._id}`);
+      return;
+    }
+
     // =================================================
     // RECEIVED IS FINAL
     // =================================================
@@ -504,11 +518,14 @@ function PurchaseOrdersPage() {
           order.status === "received"
       ).length;
 
+    const openDeliveries = purchaseOrders.filter((order) => ["approved", "partially_received"].includes(order.status)).length;
+
     return {
       total,
       draft,
       pending,
       approved,
+      openDeliveries,
       received,
     };
   }, [purchaseOrders]);
@@ -667,18 +684,22 @@ function PurchaseOrdersPage() {
     setSelectedOrder(null);
   };
 
+  const recordDelivery = (order: PurchaseOrder) => {
+    window.location.assign(`/management/raw-materials/lots?purchaseOrder=${order._id}`);
+  };
+
   // ===================================================
   // RENDER
   // ===================================================
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-4 pb-6">
 
       {/* =================================================
           PAGE HEADER
       ================================================= */}
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
 
         <div>
           <div className="flex items-center gap-3">
@@ -715,14 +736,14 @@ function PurchaseOrdersPage() {
           STAT CARDS
       ================================================= */}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
 
         {/* TOTAL */}
 
-        <div className="cana-panel p-5">
+        <div className="cana-panel p-4">
           <div className="flex items-center justify-between">
 
-            <p className="text-sm font-medium text-gray-500">
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
               Total Orders
             </p>
 
@@ -740,10 +761,10 @@ function PurchaseOrdersPage() {
 
         {/* DRAFT */}
 
-        <div className="cana-panel p-5">
+        <div className="cana-panel p-4">
           <div className="flex items-center justify-between">
 
-            <p className="text-sm font-medium text-gray-500">
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
               Draft
             </p>
 
@@ -761,10 +782,10 @@ function PurchaseOrdersPage() {
 
         {/* PENDING */}
 
-        <div className="cana-panel p-5">
+        <div className="cana-panel p-4">
           <div className="flex items-center justify-between">
 
-            <p className="text-sm font-medium text-gray-500">
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
               Pending
             </p>
 
@@ -782,11 +803,11 @@ function PurchaseOrdersPage() {
 
         {/* APPROVED */}
 
-        <div className="cana-panel p-5">
+        <div className="cana-panel p-4">
           <div className="flex items-center justify-between">
 
-            <p className="text-sm font-medium text-gray-500">
-              Approved
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+              Open deliveries
             </p>
 
             <Truck
@@ -797,16 +818,16 @@ function PurchaseOrdersPage() {
           </div>
 
           <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
-            {stats.approved}
+            {stats.openDeliveries}
           </p>
         </div>
 
         {/* RECEIVED */}
 
-        <div className="cana-panel p-5">
+        <div className="cana-panel p-4">
           <div className="flex items-center justify-between">
 
-            <p className="text-sm font-medium text-gray-500">
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
               Received
             </p>
 
@@ -828,7 +849,7 @@ function PurchaseOrdersPage() {
           FILTER BAR
       ================================================= */}
 
-      <div className="cana-panel p-4">
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
 
@@ -926,7 +947,7 @@ function PurchaseOrdersPage() {
           TABLE
       ================================================= */}
 
-      <div className="cana-panel overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
         {/* TABLE HEADER */}
 
@@ -1184,29 +1205,7 @@ function PurchaseOrdersPage() {
                             }`}
                           >
 
-                            <option value="draft">
-                              Draft
-                            </option>
-
-                            <option value="pending_approval">
-                              Pending Approval
-                            </option>
-
-                            <option value="approved">
-                              Approved
-                            </option>
-
-                            <option value="partially_received">
-                              Partially Received
-                            </option>
-
-                            <option value="received">
-                              Received
-                            </option>
-
-                            <option value="cancelled">
-                              Cancelled
-                            </option>
+                            {statusOptions(order.status).map((status) => <option key={status} value={status}>{getStatusLabel(status)}</option>)}
 
                           </select>
 
@@ -1232,6 +1231,8 @@ function PurchaseOrdersPage() {
                                 size={17}
                               />
                             </button>
+
+                            {["approved", "partially_received"].includes(order.status) && <button type="button" onClick={() => recordDelivery(order)} title="Record physical delivery" className="rounded-lg bg-slate-900 px-2.5 py-2 text-xs font-bold text-white hover:bg-slate-700">Receive</button>}
 
                             <button
                               type="button"
@@ -1414,31 +1415,11 @@ function PurchaseOrdersPage() {
                         }`}
                       >
 
-                        <option value="draft">
-                          Draft
-                        </option>
-
-                        <option value="pending_approval">
-                          Pending Approval
-                        </option>
-
-                        <option value="approved">
-                          Approved
-                        </option>
-
-                        <option value="partially_received">
-                          Partially Received
-                        </option>
-
-                        <option value="received">
-                          Received
-                        </option>
-
-                        <option value="cancelled">
-                          Cancelled
-                        </option>
+                        {statusOptions(order.status).map((status) => <option key={status} value={status}>{getStatusLabel(status)}</option>)}
 
                       </select>
+
+                      {["approved", "partially_received"].includes(order.status) && <button type="button" onClick={() => recordDelivery(order)} className="h-9 rounded-lg bg-slate-900 px-3 text-xs font-bold text-white">Receive</button>}
 
                       <button
                         type="button"
@@ -1906,6 +1887,8 @@ function PurchaseOrdersPage() {
               <div className="flex shrink-0 justify-end gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4">
 
                 <button type="button" onClick={() => printPurchaseOrder(selectedOrder)} className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"><Printer size={16} />Print purchase order</button>
+
+                {["approved", "partially_received"].includes(selectedOrder.status) && <button type="button" onClick={() => recordDelivery(selectedOrder)} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700"><Truck size={16} />Record delivery</button>}
 
                 {selectedOrder.status === "received" && <Link to="/management/supplier-payments" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">Record supplier payment</Link>}
 

@@ -65,6 +65,8 @@ function formatDateTime(
   );
 }
 
+const money = (value?: number) => `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 })} RWF`;
+
 function getStatusClass(
   status: ProductionBatch["status"]
 ) {
@@ -132,6 +134,14 @@ export default function ProductionBatchDetailsModal({
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-600 text-white">
               <Factory size={23} />
             </div>
+
+            {batch.costedAt && (
+              <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-red-700">Completed batch cost</p><h3 className="mt-1 text-lg font-extrabold text-slate-950">{money(batch.totalActualCost)}</h3></div><p className="text-xs text-slate-500">Frozen {formatDateTime(batch.costedAt)}</p></div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3"><CostItem label="Issued materials" value={money(batch.actualMaterialCost)} /><CostItem label="Labour & energy" value={money(Number(batch.allocatedLaborCost || 0) + Number(batch.allocatedEnergyCost || 0))} /><CostItem label="Other cost" value={money(batch.allocatedOtherCost)} /></div>
+                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-200 pt-3 text-sm"><span><strong>{money(batch.costPerKg)}</strong> / kg</span>{Number(batch.costPerPack || 0) > 0 && <span><strong>{money(batch.costPerPack)}</strong> / pack</span>}</div>
+              </section>
+            )}
 
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -404,4 +414,8 @@ export default function ProductionBatchDetailsModal({
       </div>
     </div>
   );
+}
+
+function CostItem({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs font-semibold text-slate-500">{label}</p><p className="mt-1 font-extrabold text-slate-900">{value}</p></div>;
 }

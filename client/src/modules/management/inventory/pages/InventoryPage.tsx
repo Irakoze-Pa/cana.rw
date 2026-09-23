@@ -166,11 +166,12 @@ const InventoryPage = () => {
   };
 
   const handleAddStock = (item: Inventory) => {
-    openStockModal(item, "add");
+    const rawMaterialId = typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial?._id;
+    window.location.assign(`/management/raw-materials/lots${rawMaterialId ? `?material=${rawMaterialId}` : ""}`);
   };
 
   const handleRemoveStock = (item: Inventory) => {
-    openStockModal(item, "remove");
+    window.location.assign("/management/production/orders");
   };
 
   const handleAdjustStock = (item: Inventory) => {
