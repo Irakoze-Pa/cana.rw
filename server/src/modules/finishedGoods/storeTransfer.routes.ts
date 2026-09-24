@@ -22,6 +22,19 @@ router.get("/balances", async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
+router.patch("/balances/minimum", authorizeRoles(UserRole.SUPERADMIN, UserRole.ADMIN), async (req, res, next) => {
+  try {
+    const { product, store, minimumQuantity } = req.body || {};
+    const minimum = Number(minimumQuantity);
+    if (typeof product !== "string" || !["production", "sales"].includes(store) || !Number.isFinite(minimum) || minimum < 0) {
+      return res.status(400).json({ error: { message: "Select a product and store, then enter a valid minimum quantity." } });
+    }
+    await ensureProductionBalances();
+    const balance = await Balance.findOneAndUpdate({ product, store }, { $set: { minimumQuantity: minimum } }, { upsert: true, new: true, setDefaultsOnInsert: true }).populate("product", "name code unit baseUnit packSizeKg category status");
+    res.json({ data: balance });
+  } catch (error) { next(error); }
+});
+
 router.get("/transfers", async (_req, res, next) => {
   try { res.json({ data: await Transfer.find().populate("product", "name code unit baseUnit packSizeKg").populate("performedBy", "fullName").sort({ createdAt: -1 }).limit(100) }); }
   catch (error) { next(error); }

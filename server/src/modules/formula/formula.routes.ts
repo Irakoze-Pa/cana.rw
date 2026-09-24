@@ -37,6 +37,12 @@ router.post(
   createNewFormulaVersionController
 );
 
+// Backwards-compatible alias for clients that used the early route name.
+router.post(
+  "/:id/version",
+  createNewFormulaVersionController
+);
+
 // =====================================================
 // GET ALL
 // =====================================================
@@ -78,6 +84,12 @@ router.get(
 // =====================================================
 
 router.put(
+  "/:id",
+  updateFormulaController
+);
+
+// Keep PATCH available for older clients while PUT remains the canonical update route.
+router.patch(
   "/:id",
   updateFormulaController
 );

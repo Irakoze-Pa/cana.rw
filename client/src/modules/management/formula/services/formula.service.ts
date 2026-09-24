@@ -115,7 +115,7 @@ export async function createNewFormulaVersion(
   data: Partial<CreateFormulaData> = {}
 ): Promise<Formula> {
   const response = await api.post(
-    `${API_URL}/${id}/version`,
+    `${API_URL}/${id}/new-version`,
     data
   );
 
@@ -141,7 +141,7 @@ export async function updateFormula(
   id: string,
   data: Partial<CreateFormulaData>
 ): Promise<Formula> {
-  const response = await api.patch(
+  const response = await api.put(
     `${API_URL}/${id}`,
     data
   );

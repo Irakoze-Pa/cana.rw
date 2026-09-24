@@ -20,6 +20,8 @@ interface ProductionOrderModalProps {
   onUpdate: (data: UpdateProductionOrderData) => Promise<void>;
 
   editingOrder?: ProductionOrder | null;
+  initialProductId?: string;
+  initialQuantity?: number | null;
 }
 
 interface ProductOption {
@@ -114,6 +116,8 @@ export default function ProductionOrderModal({
   onCreate,
   onUpdate,
   editingOrder = null,
+  initialProductId = "",
+  initialQuantity = null,
 }: ProductionOrderModalProps) {
   const isEdit = Boolean(editingOrder);
 
@@ -238,9 +242,11 @@ export default function ProductionOrderModal({
 
       setNotes(editingOrder.notes || "");
     } else {
-      setProductId("");
+      setProductId(initialProductId);
       setFormulaId("");
-      setQuantity("");
+      setQuantity(
+        initialQuantity && initialQuantity > 0 ? String(initialQuantity) : "",
+      );
       setUnit("");
       setPriority("Normal");
       setStatus("Draft");
@@ -250,7 +256,7 @@ export default function ProductionOrderModal({
     }
 
     void loadOptions();
-  }, [isOpen, editingOrder]);
+  }, [isOpen, editingOrder, initialProductId, initialQuantity]);
 
   /* ------------------------------------------------------------------------ */
   /* PRODUCT → UNIT                                                           */

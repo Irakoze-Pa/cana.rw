@@ -4,6 +4,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import {
   AlertCircle,
@@ -321,6 +322,9 @@ function printProductionOrder(order: ProductionOrder) {
 /* ========================================================================== */
 
 export default function ProductionOrdersPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const replenishmentProductId = searchParams.get("replenish") || "";
+  const replenishmentQuantity = Number(searchParams.get("quantity") || 0);
   /* ------------------------------------------------------------------------ */
   /* DATA                                                                      */
   /* ------------------------------------------------------------------------ */
@@ -382,6 +386,12 @@ export default function ProductionOrdersPage() {
     isCreateModalOpen,
     setIsCreateModalOpen,
   ] = useState(false);
+
+  useEffect(() => {
+    if (replenishmentProductId) {
+      setIsCreateModalOpen(true);
+    }
+  }, [replenishmentProductId]);
 
   const [
     isEditModalOpen,
@@ -683,6 +693,10 @@ export default function ProductionOrdersPage() {
       setIsCreateModalOpen(
         false
       );
+
+      if (replenishmentProductId) {
+        setSearchParams({});
+      }
 
       await loadData(false);
     } catch (err) {
@@ -1673,14 +1687,17 @@ export default function ProductionOrdersPage() {
 
       <ProductionOrderModal
         isOpen={isCreateModalOpen}
-        onClose={() =>
-          setIsCreateModalOpen(false)
-        }
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          if (replenishmentProductId) setSearchParams({});
+        }}
         onCreate={handleCreate}
         onUpdate={async () =>
           undefined
         }
         editingOrder={null}
+        initialProductId={replenishmentProductId}
+        initialQuantity={Number.isFinite(replenishmentQuantity) ? replenishmentQuantity : null}
       />
 
       {/* ==================================================================== */}

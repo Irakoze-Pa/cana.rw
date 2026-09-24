@@ -36,6 +36,7 @@ type Balance = {
   product: Product | null;
   store: "production" | "sales";
   quantity: number;
+  minimumQuantity?: number;
 };
 type Transfer = {
   _id: string;
@@ -72,7 +73,9 @@ export default function FinishedGoodsPage() {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [showAdjustment, setShowAdjustment] = useState(false);
+  const [showMinimum, setShowMinimum] = useState(false);
   const [adjustment, setAdjustment] = useState({ product: "", store: "production", quantityChange: "", reason: "" });
+  const [minimumForm, setMinimumForm] = useState({ product: "", store: "sales", minimumQuantity: "" });
   const [form, setForm] = useState({
     product: "",
     fromStore: "production",
@@ -84,6 +87,7 @@ export default function FinishedGoodsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const isSuperAdmin = user?.role === "superadmin";
+  const canManageMinimums = user?.role === "superadmin" || user?.role === "admin";
   const load = useCallback(async () => {
     try {
       setError("");
@@ -183,6 +187,7 @@ export default function FinishedGoodsPage() {
     }
   };
   const submitAdjustment = async (event: React.FormEvent) => { event.preventDefault(); const change = Number(adjustment.quantityChange); const unit = selectedAdjustmentProduct?.baseUnit === "pcs" || isScaffolding(selectedAdjustmentProduct) ? "pieces" : "kg"; if (!Number.isFinite(change) || change === 0) return setError(`Enter a non-zero adjustment in ${unit}. Use a positive value to add stock or a negative value to remove stock.`); try { setBusy(true); setError(""); await api.post("/finished-goods/adjustments", { ...adjustment, quantityChange: change }); toast("Stock adjustment recorded with an audit reference.", "success"); setAdjustment({ product: "", store: "production", quantityChange: "", reason: "" }); setShowAdjustment(false); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to record stock adjustment."); } finally { setBusy(false); } };
+  const saveMinimum = async (event: React.FormEvent) => { event.preventDefault(); const minimumQuantity = Number(minimumForm.minimumQuantity); if (!minimumForm.product || !Number.isFinite(minimumQuantity) || minimumQuantity < 0) return setError("Select a product and enter a zero or positive minimum balance."); try { setBusy(true); setError(""); await api.patch("/finished-goods/balances/minimum", { ...minimumForm, minimumQuantity }); toast("Finished-goods minimum balance saved.", "success"); setShowMinimum(false); setMinimumForm({ product: "", store: "sales", minimumQuantity: "" }); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save the minimum balance."); } finally { setBusy(false); } };
   const scopedBalances = balances.filter((balance) => balance.product && products.some((product) => product._id === balance.product?._id));
   const scopedTransfers = transfers.filter((transfer) => transfer.product && (catalogue === "scaffold" ? isScaffolding(transfer.product) : !isScaffolding(transfer.product)));
   const totalProduction = scopedBalances
@@ -191,6 +196,7 @@ export default function FinishedGoodsPage() {
   const totalSales = scopedBalances
     .filter((balance) => balance.store === "sales")
     .reduce((sum, balance) => sum + balance.quantity, 0);
+  const lowBalances = scopedBalances.filter((balance) => Number(balance.minimumQuantity || 0) > 0 && Number(balance.quantity || 0) <= Number(balance.minimumQuantity || 0));
   return (
     <div className="mx-auto max-w-7xl space-y-4 pb-6">
       <header className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
@@ -206,6 +212,7 @@ export default function FinishedGoodsPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {canManageMinimums && <button onClick={() => setShowMinimum(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"><SlidersHorizontal size={16} />Minimum balances</button>}
           {isSuperAdmin && <button onClick={() => setShowAdjustment(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"><SlidersHorizontal size={16} />Adjust stock</button>}
           <Link to="/management/products" className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800"><PencilLine size={16} />Product catalogue</Link>
           <button onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16} />Refresh</button>
@@ -216,6 +223,7 @@ export default function FinishedGoodsPage() {
         <button type="button" onClick={() => { setCatalogue("scaffold"); setForm((current) => ({ ...current, product: "", quantityInput: "", quantityMode: "pcs" })); }} className={`rounded-lg px-4 py-2 text-sm font-bold transition ${catalogue === "scaffold" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>Scaffolding equipment</button>
       </div>
       {showAdjustment && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"><form onSubmit={submitAdjustment} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-red-600">SuperAdmin control</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Adjust finished-goods stock</h2><p className="mt-2 text-sm leading-6 text-slate-500">Use only for a verified physical count or correction. This creates an immutable adjustment record.</p></div><button type="button" onClick={() => setShowAdjustment(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></div><div className="mt-6 space-y-4"><label className="block text-sm font-bold text-slate-700">Finished product<select required value={adjustment.product} onChange={(event) => setAdjustment({ ...adjustment, product: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Select product</option>{products.map((product) => <option key={product._id} value={product._id}>{product.name} · {product.code}</option>)}</select></label><label className="block text-sm font-bold text-slate-700">Store<select value={adjustment.store} onChange={(event) => setAdjustment({ ...adjustment, store: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="production">Production Store</option><option value="sales">Sales Store</option></select></label>{selectedAdjustmentProduct && <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">Current balance: <strong>{stockWithPacks(balanceFor(selectedAdjustmentProduct._id, adjustment.store), selectedAdjustmentProduct)}</strong></p>}<label className="block text-sm font-bold text-slate-700">Adjustment in kg<input required step="any" type="number" value={adjustment.quantityChange} onChange={(event) => setAdjustment({ ...adjustment, quantityChange: event.target.value })} placeholder="Example: 80 or -20" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/></label><label className="block text-sm font-bold text-slate-700">Reason for correction<textarea required minLength={3} value={adjustment.reason} onChange={(event) => setAdjustment({ ...adjustment, reason: event.target.value })} rows={3} placeholder="Example: Physical stock count correction" className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm"/></label></div><button disabled={busy} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:bg-slate-300"><SlidersHorizontal size={16}/>{busy ? "Recording…" : "Record adjustment"}</button></form></div>}
+      {showMinimum && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"><form onSubmit={saveMinimum} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-red-600">SuperAdmin control</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Set minimum balance</h2><p className="mt-2 text-sm leading-6 text-slate-500">The store is marked low when its balance reaches this quantity.</p></div><button type="button" onClick={() => setShowMinimum(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></div><div className="mt-6 space-y-4"><label className="block text-sm font-bold text-slate-700">Finished product<select required value={minimumForm.product} onChange={(event) => { const product = event.target.value; const existing = balances.find((balance) => balance.product?._id === product && balance.store === minimumForm.store); setMinimumForm({ ...minimumForm, product, minimumQuantity: existing ? String(existing.minimumQuantity || "") : "" }); }} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Select product</option>{products.map((product) => <option key={product._id} value={product._id}>{product.name} · {product.code}</option>)}</select></label><label className="block text-sm font-bold text-slate-700">Store<select value={minimumForm.store} onChange={(event) => setMinimumForm({ ...minimumForm, store: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="sales">Sales Store</option><option value="production">Production Store</option></select></label><label className="block text-sm font-bold text-slate-700">Minimum balance<input required min="0" step="any" type="number" value={minimumForm.minimumQuantity} onChange={(event) => setMinimumForm({ ...minimumForm, minimumQuantity: event.target.value })} placeholder="Example: 100" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/></label></div><button disabled={busy} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:bg-slate-300">{busy ? "Saving…" : "Save minimum balance"}</button></form></div>}
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
@@ -240,6 +248,7 @@ export default function FinishedGoodsPage() {
           value={String(scopedTransfers.length)}
           unit=""
         />
+        <Metric icon={<PackageCheck size={19} />} label="Low balance alerts" value={String(lowBalances.length)} unit="stores" />
       </section>
       <section className="grid gap-4 xl:grid-cols-[.95fr_1.55fr]">
         <form
@@ -372,8 +381,12 @@ export default function FinishedGoodsPage() {
                 {products.map((product) => {
                   const production = balanceFor(product._id, "production"),
                     sales = balanceFor(product._id, "sales");
+                  const productionMinimum = Number(balances.find((balance) => balance.product?._id === product._id && balance.store === "production")?.minimumQuantity || 0);
+                  const salesMinimum = Number(balances.find((balance) => balance.product?._id === product._id && balance.store === "sales")?.minimumQuantity || 0);
+                  const productionLow = productionMinimum > 0 && production <= productionMinimum;
+                  const salesLow = salesMinimum > 0 && sales <= salesMinimum;
                   return (
-                    <tr key={product._id}>
+                    <tr key={product._id} className={productionLow || salesLow ? "bg-red-50/40" : ""}>
                       <td className="px-5 py-4">
                         <p className="font-semibold text-gray-900">
                           {product.name}
@@ -382,13 +395,15 @@ export default function FinishedGoodsPage() {
                           {isScaffolding(product) ? `${product.code} · Equipment · counted in pieces` : `${product.code} · ${product.unit} pack · ${number(product.packSizeKg || 0)} kg per pack`}
                         </p>
                       </td>
-                      <td className="px-5 py-4 text-right font-semibold">
+                      <td className={`px-5 py-4 text-right font-semibold ${productionLow ? "text-red-700" : ""}`}>
                         <span>{number(production)} {isScaffolding(product) ? "pcs" : "kg"}</span>
                         {!isScaffolding(product) && <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(production, product) || "Pack size not set"}</p>}
+                        {productionMinimum > 0 && <p className={`mt-1 text-xs font-bold ${productionLow ? "text-red-700" : "text-slate-500"}`}>Min. {number(productionMinimum)} {isScaffolding(product) ? "pcs" : "kg"}{productionLow ? " · Low" : ""}</p>}
                       </td>
-                      <td className="px-5 py-4 text-right font-semibold">
+                      <td className={`px-5 py-4 text-right font-semibold ${salesLow ? "text-red-700" : ""}`}>
                         <span>{number(sales)} {isScaffolding(product) ? "pcs" : "kg"}</span>
                         {!isScaffolding(product) && <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(sales, product) || "Pack size not set"}</p>}
+                        {salesMinimum > 0 && <p className={`mt-1 text-xs font-bold ${salesLow ? "text-red-700" : "text-slate-500"}`}>Min. {number(salesMinimum)} {isScaffolding(product) ? "pcs" : "kg"}{salesLow ? " · Low" : ""}</p>}
                       </td>
                       <td className="px-5 py-4 text-right font-bold text-slate-900">
                         {number(production + sales)} {isScaffolding(product) ? "pcs" : "kg"}

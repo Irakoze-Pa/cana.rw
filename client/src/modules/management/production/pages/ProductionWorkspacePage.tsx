@@ -23,6 +23,13 @@ type Batch = {
   updatedAt: string;
   finishedGoodsPostedAt?: string;
 };
+type FinishedGoodsBalance = {
+  _id: string;
+  product: { _id: string; name: string; code?: string; unit?: string } | null;
+  store: "production" | "sales";
+  quantity: number;
+  minimumQuantity?: number;
+};
 const pageMeta = {
   overview: {
     title: "Production overview",
@@ -60,6 +67,7 @@ const statusStyle: Record<Batch["status"], string> = {
 
 export default function ProductionWorkspacePage({ view }: { view: View }) {
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [finishedGoodsBalances, setFinishedGoodsBalances] = useState<FinishedGoodsBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const meta = pageMeta[view];
@@ -68,8 +76,12 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
     try {
       setLoading(true);
       setError("");
-      const response = await api.get<{ data: Batch[] }>("/production-batches");
-      setBatches(response.data.data || []);
+      const [batchesResponse, balancesResponse] = await Promise.all([
+        api.get<{ data: Batch[] }>("/production-batches"),
+        api.get<{ data: FinishedGoodsBalance[] }>("/finished-goods/balances"),
+      ]);
+      setBatches(batchesResponse.data.data || []);
+      setFinishedGoodsBalances(balancesResponse.data.data || []);
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -108,6 +120,15 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
       completed: batches.filter((batch) => batch.status === "Completed").length,
     }),
     [batches],
+  );
+  const replenishmentAlerts = useMemo(() =>
+    finishedGoodsBalances
+      .filter((balance) => balance.product && Number(balance.minimumQuantity || 0) > 0 && Number(balance.quantity || 0) <= Number(balance.minimumQuantity || 0))
+      .map((balance) => ({
+        ...balance,
+        shortfall: Math.max(0, Number(balance.minimumQuantity || 0) - Number(balance.quantity || 0)),
+      })),
+    [finishedGoodsBalances],
   );
   return (
     <div className="mx-auto max-w-7xl space-y-4 pb-6">
@@ -160,6 +181,25 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
           icon={<ClipboardCheck size={18} />}
         />
       </section>
+      {view === "overview" && replenishmentAlerts.length > 0 && (
+        <section className="overflow-hidden rounded-2xl border border-red-200 bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-red-100 bg-red-50 px-5 py-3">
+            <div className="flex items-center gap-2 text-red-800"><AlertTriangle size={17} /><h2 className="text-sm font-extrabold">Finished-goods replenishment alerts</h2></div>
+            <span className="text-xs font-semibold text-red-700">{replenishmentAlerts.length} item{replenishmentAlerts.length === 1 ? "" : "s"} need production planning</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {replenishmentAlerts.map((alert) => (
+              <div key={alert._id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-bold text-slate-950">{alert.product?.name}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{alert.product?.code || "Product"} · {alert.store === "sales" ? "Sales Store" : "Production Store"} · {qty(alert.quantity)} {alert.product?.unit || "kg"} available / minimum {qty(Number(alert.minimumQuantity || 0))}</p>
+                </div>
+                <Link to={`/management/production/orders?replenish=${alert.product?._id}&quantity=${alert.shortfall}`} className="inline-flex shrink-0 items-center justify-center rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white hover:bg-red-800">Create production order · {qty(alert.shortfall)} {alert.product?.unit || "kg"}</Link>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="cana-panel overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-5">
           <div>
