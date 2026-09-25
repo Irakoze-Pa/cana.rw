@@ -2,6 +2,7 @@ export interface InventoryRawMaterialSummary {
   _id: string;
   name?: string;
   code?: string;
+  category?: string;
 }
 
 export interface Inventory {

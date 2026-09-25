@@ -31,6 +31,7 @@ const InventoryPage = () => {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [groupFilter, setGroupFilter] = useState<"All" | "Raw materials" | "Packaging">("All");
 
   const [stockModalOpen, setStockModalOpen] = useState(false);
   const [stockModalMode, setStockModalMode] =
@@ -112,9 +113,16 @@ const InventoryPage = () => {
         statusFilter === "All" ||
         item.status === statusFilter;
 
-      return matchesSearch && matchesStatus;
+      const category = typeof item.rawMaterial === "object" ? item.rawMaterial?.category || "" : "";
+      const group = /^Packaging\b/i.test(category) ? "Packaging" : "Raw materials";
+      return matchesSearch && matchesStatus && (groupFilter === "All" || group === groupFilter);
     });
-  }, [inventory, search, statusFilter]);
+  }, [inventory, search, statusFilter, groupFilter]);
+
+  const groupCounts = useMemo(() => ({
+    rawMaterials: inventory.filter((item) => !/^Packaging\b/i.test(typeof item.rawMaterial === "object" ? item.rawMaterial?.category || "" : "")).length,
+    packaging: inventory.filter((item) => /^Packaging\b/i.test(typeof item.rawMaterial === "object" ? item.rawMaterial?.category || "" : "")).length,
+  }), [inventory]);
 
   const totalItems =
     summary?.totalItems ?? inventory.length;
@@ -289,6 +297,11 @@ const InventoryPage = () => {
           }
         />
       </div>
+
+      <section className="cana-panel p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-sm font-extrabold text-slate-950">Stock groups</h2><p className="mt-0.5 text-xs text-slate-500">Receive and monitor production inputs separately from Indobo, stickers and other packaging.</p></div><Link to="/management/raw-materials" className="text-sm font-bold text-red-700 hover:text-red-800">Manage material setup</Link></div>
+        <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setGroupFilter("All")} className={`rounded-lg px-3 py-2 text-xs font-bold ${groupFilter === "All" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>All · {inventory.length}</button><button type="button" onClick={() => setGroupFilter("Raw materials")} className={`rounded-lg px-3 py-2 text-xs font-bold ${groupFilter === "Raw materials" ? "bg-red-700 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>Raw materials · {groupCounts.rawMaterials}</button><button type="button" onClick={() => setGroupFilter("Packaging")} className={`rounded-lg px-3 py-2 text-xs font-bold ${groupFilter === "Packaging" ? "bg-red-700 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>Packaging · {groupCounts.packaging}</button></div>
+      </section>
 
       {/* Filters */}
       <div className="cana-panel p-4">

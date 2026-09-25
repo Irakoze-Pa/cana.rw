@@ -25,6 +25,7 @@ interface ProductFormData {
   name: string;
   category: string;
   price: string;
+  wholesalePrice: string;
   stock: string;
   packSizeKg: string;
   densityKgPerL: string;
@@ -38,6 +39,7 @@ const emptyForm: ProductFormData = {
   name: "",
   category: "",
   price: "",
+  wholesalePrice: "",
   stock: "0",
   packSizeKg: "",
   densityKgPerL: "",
@@ -85,6 +87,7 @@ function ProductModal({
         name: product.name || "",
         category: product.category || "",
         price: String(product.price ?? ""),
+        wholesalePrice: String(product.wholesalePrice ?? product.price ?? ""),
         stock: String(product.stock ?? "0"),
         packSizeKg: String(product.packSizeKg ?? ""),
         densityKgPerL: String(product.densityKgPerL ?? ""),
@@ -329,6 +332,8 @@ function ProductModal({
         "price",
         formData.price
       );
+
+      data.append("wholesalePrice", formData.wholesalePrice || formData.price);
 
       data.append(
         "stock",
@@ -1019,7 +1024,7 @@ function ProductModal({
                   text-gray-700
                 "
               >
-                Selling price per pack
+                Public retail price per pack
               </label>
 
               <div className="relative">
@@ -1113,8 +1118,14 @@ function ProductModal({
               <p className="mt-2 text-xs leading-5 text-gray-500">
                 Use this only for an initial physical count. Completed production batches increase finished-goods stock, and delivered sales orders reduce it.
               </p>
+              </div>
             </div>
-          </div>
+
+            <div>
+              <label htmlFor="wholesalePrice" className="mb-2 block text-sm font-semibold text-gray-700">Wholesale / customer price per pack</label>
+              <input id="wholesalePrice" name="wholesalePrice" type="number" min="0" value={formData.wholesalePrice} onChange={handleChange} disabled={loading} placeholder="Optional — defaults to retail price" className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-100" />
+              <p className="mt-1.5 text-xs text-gray-500">Used automatically for signed-in customer orders. Office staff may still agree a different final price.</p>
+            </div>
 
           {/* DESCRIPTION */}
 

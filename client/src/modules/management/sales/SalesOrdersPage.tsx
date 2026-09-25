@@ -33,6 +33,7 @@ type Product = {
   _id: string;
   name: string;
   price: number;
+  wholesalePrice?: number | null;
   unit: string;
   status: string;
 };
@@ -114,6 +115,8 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [pricingOrder, setPricingOrder] = useState<Order | null>(null);
+  const [agreedPrices, setAgreedPrices] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     customer: "",
     deliveryAddress: "",
@@ -175,12 +178,14 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
       setSaving(false);
     }
   };
-  const setAgreedPrices = async (order: Order) => {
+  const openPricing = (order: Order) => {
+    setPricingOrder(order);
+    setAgreedPrices(Object.fromEntries(order.items.map((item) => [item.product, String(item.unitPrice ?? 0)])));
+  };
+  const saveAgreedPrices = async (order: Order) => {
     const prices = [] as Array<{ product: string; unitPrice: number }>;
     for (const item of order.items) {
-      const value = window.prompt(`Agreed price for ${item.productName} (RWF per ${item.unit})`, String(item.unitPrice ?? 0));
-      if (value === null) return;
-      const unitPrice = Number(value);
+      const unitPrice = Number(agreedPrices[item.product]);
       if (!Number.isFinite(unitPrice) || unitPrice < 0) return setError(`Enter a valid price for ${item.productName}.`);
       prices.push({ product: item.product, unitPrice });
     }
@@ -188,6 +193,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
       setSaving(true);
       const response = await api.patch<{ data: Order }>(`/sales-orders/${order._id}/prices`, { prices });
       setOrders((current) => current.map((item) => item._id === order._id ? response.data.data : item));
+      setPricingOrder(null);
       toast("Agreed prices saved. You can now confirm the order.", "success");
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to save agreed prices."); } finally { setSaving(false); }
   };
@@ -362,7 +368,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                                 products.find(
                                   (product) =>
                                     product._id === event.target.value,
-                                )?.price ?? "",
+                                )?.wholesalePrice ?? products.find((product) => product._id === event.target.value)?.price ?? "",
                               ),
                             }
                           : item,
@@ -374,7 +380,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                   <option value="">Select product</option>
                   {products.map((product) => (
                     <option key={product._id} value={product._id}>
-                      {product.name} · {money(product.price)} RWF/{product.unit}
+                      {product.name} · wholesale {money(product.wholesalePrice ?? product.price)} RWF/{product.unit}
                     </option>
                   ))}
                 </select>
@@ -493,7 +499,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
             </option>
           ))}
         </select></label><div className="ml-auto pb-1 text-sm text-slate-500"><strong className="text-slate-900">{visibleOrders.length}</strong> transaction{visibleOrders.length === 1 ? "" : "s"} shown</div>{(dateFrom || dateTo || search || statusFilter) && <button type="button" onClick={() => { setSearch(""); setStatusFilter(""); setDateFrom(""); setDateTo(""); }} className="pb-1 text-sm font-bold text-red-700">Clear filters</button>}</section>
-      <section className="space-y-2 md:hidden">{loading ? <p className="cana-panel p-8 text-center text-sm text-slate-500">Loading sales orders…</p> : visibleOrders.map((order) => <article key={order._id} className="cana-panel p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-extrabold text-slate-950">{order.orderNumber}</p><p className="mt-1 text-sm font-semibold text-slate-700">{order.customer?.businessName || order.customer?.fullName || "Customer"}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}>{order.status.replaceAll("_", " ")}</span></div><p className="mt-3 text-sm text-slate-600">{order.items.map((item) => `${item.productName} · ${item.quantity} ${item.unit}`).join(", ")}</p><div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3"><strong className="text-slate-950">{money(order.total)} RWF</strong><span className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleDateString("en-RW")}</span></div><div className="mt-3"><OrderActions order={order} saving={saving} onPrint={printSalesOrder} onSetPrices={setAgreedPrices} onTransition={(id, status) => void transition(id, status)} /></div></article>)}{!loading && !visibleOrders.length && <p className="cana-panel p-8 text-center text-sm text-slate-500">No sales orders match this view.</p>}</section>
+      <section className="space-y-2 md:hidden">{loading ? <p className="cana-panel p-8 text-center text-sm text-slate-500">Loading sales orders…</p> : visibleOrders.map((order) => <article key={order._id} className="cana-panel p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-extrabold text-slate-950">{order.orderNumber}</p><p className="mt-1 text-sm font-semibold text-slate-700">{order.customer?.businessName || order.customer?.fullName || "Customer"}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}>{order.status.replaceAll("_", " ")}</span></div><p className="mt-3 text-sm text-slate-600">{order.items.map((item) => `${item.productName} · ${item.quantity} ${item.unit}`).join(", ")}</p><div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3"><strong className="text-slate-950">{money(order.total)} RWF</strong><span className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleDateString("en-RW")}</span></div><div className="mt-3"><OrderActions order={order} saving={saving} onPrint={printSalesOrder} onSetPrices={openPricing} onTransition={(id, status) => void transition(id, status)} /></div></article>)}{!loading && !visibleOrders.length && <p className="cana-panel p-8 text-center text-sm text-slate-500">No sales orders match this view.</p>}</section>
       <div className="hidden overflow-x-auto md:block cana-panel">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -537,7 +543,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                         {order.status.replaceAll("_", " ")}
                       </span>
                     </td>
-                    <td className="px-5 py-4"><OrderActions order={order} saving={saving} onPrint={printSalesOrder} onSetPrices={setAgreedPrices} onTransition={(id, status) => void transition(id, status)} /></td>
+                    <td className="px-5 py-4"><OrderActions order={order} saving={saving} onPrint={printSalesOrder} onSetPrices={openPricing} onTransition={(id, status) => void transition(id, status)} /></td>
                   </tr>
                 ))
             )}
@@ -551,6 +557,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
           </tbody>
         </table>
       </div>
+      {pricingOrder && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm"><form onSubmit={(event) => { event.preventDefault(); void saveAgreedPrices(pricingOrder); }} className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><p className="cana-section-kicker text-red-700">Commercial review</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Confirm order prices</h2><p className="mt-1 text-sm text-slate-500">{pricingOrder.orderNumber} · {pricingOrder.customer?.businessName || pricingOrder.customer?.fullName}</p></div><button type="button" onClick={() => setPricingOrder(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></header><div className="space-y-3 p-5">{pricingOrder.items.map((item) => <div key={item.product} className="grid gap-3 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_7rem_10rem]"><div><p className="font-bold text-slate-950">{item.productName}</p><p className="mt-0.5 text-xs text-slate-500">{item.productCode || "—"} · {item.quantity} {item.unit}</p></div><p className="self-center text-sm font-bold text-slate-700">× {item.quantity}</p><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Agreed unit price<input autoFocus required min="0" step="any" type="number" value={agreedPrices[item.product] ?? ""} onChange={(event) => setAgreedPrices((current) => ({ ...current, [item.product]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-950"/></label></div>)}<div className="flex items-center justify-between border-t border-slate-100 pt-4"><span className="text-sm font-bold text-slate-600">Agreed total</span><strong className="text-xl font-extrabold text-slate-950">{money(pricingOrder.items.reduce((sum, item) => sum + item.quantity * Number(agreedPrices[item.product] || 0), 0))} RWF</strong></div></div><footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4"><button type="button" onClick={() => setPricingOrder(null)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700">Cancel</button><button disabled={saving} className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">{saving ? "Saving…" : "Save agreed prices"}</button></footer></form></div>}
     </div>
   );
 }

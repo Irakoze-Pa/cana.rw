@@ -13,7 +13,8 @@ const transitions: Record<SalesOrderStatus, SalesOrderStatus[]> = {
 export async function createSalesOrder(input: { customer: string; quotation?: string; items: { product: string; quantity: number; unit?: string; unitPrice?: number }[]; tax?: number; deliveryAddress?: string; requestedDeliveryDate?: string; notes?: string; allowInactiveProducts?: boolean; initialStatus?: SalesOrderStatus }) {
   if (!mongoose.Types.ObjectId.isValid(input.customer)) throw new Error("A valid customer is required.");
   if (!Array.isArray(input.items) || input.items.length === 0) throw new Error("At least one sales item is required.");
-  if (!await User.exists({ _id: input.customer, role: UserRole.CUSTOMER, status: UserStatus.ACTIVE })) throw new Error("Select an active customer.");
+  const customer = await User.findOne({ _id: input.customer, role: UserRole.CUSTOMER, status: UserStatus.ACTIVE }).lean();
+  if (!customer) throw new Error("Select an active customer.");
   if (new Set(input.items.map(item => item.product)).size !== input.items.length) throw new Error("Combine repeated products into one order line.");
   const items = await Promise.all(input.items.map(async (item) => {
     if (!mongoose.Types.ObjectId.isValid(item.product) || !Number.isFinite(item.quantity) || item.quantity <= 0) throw new Error("Each sales item needs a valid product and positive quantity.");
@@ -25,7 +26,9 @@ export async function createSalesOrder(input: { customer: string; quotation?: st
     if (product.status !== "Active" && !input.allowInactiveProducts) {
       throw new Error(`${product.name} is inactive and cannot be added to a new sales order.`);
     }
-    const unitPrice = item.unitPrice ?? product.price;
+    // Customer-originated orders receive the wholesale rate; office users can
+    // still explicitly agree a different price before confirmation.
+    const unitPrice = item.unitPrice ?? Number(product.wholesalePrice ?? product.price);
     if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error("Unit price must be a non-negative number.");
     return { product: product._id, productName: product.name, productCode: product.code, quantity: item.quantity, unit: item.unit || product.unit, unitPrice, total: Number((item.quantity * unitPrice).toFixed(2)) };
   }));

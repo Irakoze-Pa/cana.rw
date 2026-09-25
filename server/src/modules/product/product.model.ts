@@ -9,6 +9,8 @@ export interface IProduct extends Document {
   category: string;
 
   price: number;
+  /** Contract price used for signed-in wholesale customers. */
+  wholesalePrice?: number;
   stock: number;
   /** Paint is tracked in kg; scaffolding is counted by individual pieces. */
   baseUnit: "kg" | "pcs";
@@ -59,6 +61,12 @@ const productSchema = new Schema<IProduct>(
       type: Number,
       required: true,
       min: 0,
+    },
+
+    wholesalePrice: {
+      type: Number,
+      min: 0,
+      default: null,
     },
 
     // CURRENT STOCK

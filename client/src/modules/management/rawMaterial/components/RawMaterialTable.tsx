@@ -3,6 +3,7 @@ import {
   Package,
   Trash2,
 } from "lucide-react";
+import { Fragment } from "react";
 
 import type { RawMaterial } from "../types/rawMaterial.types";
 
@@ -18,6 +19,9 @@ const formatNumber = (value: number) => {
     maximumFractionDigits: 2,
   }).format(value);
 };
+
+const stockGroup = (category?: string) =>
+  /^Packaging\b/i.test(category || "") ? "Packaging" : "Raw materials";
 
 function RawMaterialTable({
   materials,
@@ -105,7 +109,7 @@ function RawMaterialTable({
               </th>
 
               <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Cost / Unit
+                Reference Price
               </th>
 
               <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -127,7 +131,7 @@ function RawMaterialTable({
           {/* ================================================= */}
 
           <tbody className="divide-y divide-gray-100">
-            {materials.map((material) => {
+            {[...materials].sort((left, right) => `${stockGroup(left.category)} ${left.category} ${left.name}`.localeCompare(`${stockGroup(right.category)} ${right.category} ${right.name}`)).map((material, index, sortedMaterials) => {
               const quantity =
                 material.quantity ?? 0;
 
@@ -153,9 +157,11 @@ function RawMaterialTable({
                 material.isLowStock ??
                 quantity <= minimumStock;
 
+              const startsCategory = index === 0 || stockGroup(sortedMaterials[index - 1].category) !== stockGroup(material.category);
               return (
+                <Fragment key={material._id}>
+                  {startsCategory && <tr className="bg-slate-50"><td colSpan={10} className="px-5 py-2.5 text-xs font-extrabold uppercase tracking-[.12em] text-slate-600">{stockGroup(material.category)}</td></tr>}
                 <tr
-                  key={material._id}
                   className="
                     transition
                     hover:bg-gray-50/70
@@ -278,9 +284,7 @@ function RawMaterialTable({
                         material.costPerUnit ??
                           0
                       )}{" "}
-                      <span className="text-xs font-normal text-gray-400">
-                        RWF
-                      </span>
+                      <span className="text-xs font-normal text-gray-400">RWF / {material.unit}</span>
                     </span>
                   </td>
 
@@ -401,6 +405,7 @@ function RawMaterialTable({
                     </div>
                   </td>
                 </tr>
+                </Fragment>
               );
             })}
           </tbody>

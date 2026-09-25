@@ -106,10 +106,21 @@ function RawMaterialModal({
   ) => {
     const { name, value } = e.target;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => {
+      // Keep packaging operationally separate from paint-making inputs.
+      // These defaults only help a new record; staff can always choose another category.
+      if (name === "name" && !prev.category) {
+        const normalized = value.toLowerCase();
+        const category = /sticker|label/.test(normalized)
+          ? "Packaging · Labels & branding"
+          : /indobo|bucket|container|can|lid|pack/.test(normalized)
+            ? "Packaging · Containers & packs"
+            : prev.category;
+        const unit = /sticker|label/.test(normalized) ? "pcs" : prev.unit;
+        return { ...prev, name: value, category, unit };
+      }
+      return { ...prev, [name]: value };
+    });
   };
 
   // =====================================================
@@ -487,33 +498,23 @@ function RawMaterialModal({
                     Select category
                   </option>
 
-                  <option value="Pigment">
-                    Pigment
-                  </option>
-
-                  <option value="Resin">
-                    Resin
-                  </option>
-
-                  <option value="Solvent">
-                    Solvent
-                  </option>
-
-                  <option value="Additive">
-                    Additive
-                  </option>
-
-                  <option value="Filler">
-                    Filler
-                  </option>
-
-                  <option value="Packaging">
-                    Packaging
-                  </option>
-
-                  <option value="Other">
-                    Other
-                  </option>
+                  <optgroup label="Production ingredients">
+                    <option value="Pigment">Pigment</option>
+                    <option value="Resin">Resin</option>
+                    <option value="Filler">Filler</option>
+                    <option value="Additive">Additive</option>
+                    <option value="Solvent">Solvent</option>
+                    <option value="Water">Water</option>
+                  </optgroup>
+                  <optgroup label="Packaging & dispatch">
+                    <option value="Packaging · Containers & packs">Packaging · Containers & packs</option>
+                    <option value="Packaging · Labels & branding">Packaging · Labels & branding</option>
+                    <option value="Packaging · Closures & accessories">Packaging · Closures & accessories</option>
+                  </optgroup>
+                  <optgroup label="Operations">
+                    <option value="Consumable">Consumable</option>
+                    <option value="Other">Other</option>
+                  </optgroup>
                 </select>
               </div>
 

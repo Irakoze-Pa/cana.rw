@@ -4,13 +4,13 @@ import { Link, useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
 
-type Product = { _id: string; name: string; code?: string; price: number; unit: string; status: string };
+type Product = { _id: string; name: string; code?: string; price: number; retailPrice?: number; unit: string; status: string };
 type Line = { product: string; quantity: number };
 const money = (amount: number) => Number(amount || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 });
 
 export default function CustomerOrderRequestPage() {
   const { toast } = useToast(); const navigate = useNavigate(); const [products, setProducts] = useState<Product[]>([]); const [lines, setLines] = useState<Line[]>([{ product: "", quantity: 1 }]); const [deliveryAddress, setDeliveryAddress] = useState(""); const [requestedDeliveryDate, setRequestedDeliveryDate] = useState(""); const [notes, setNotes] = useState(""); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState("");
-  useEffect(() => { void (async () => { try { const response = await api.get<{ data: Product[] }>("/products"); setProducts((response.data.data || []).filter((item) => item.status === "Active")); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load products."); } finally { setLoading(false); } })(); }, []);
+  useEffect(() => { void (async () => { try { const response = await api.get<{ data: Product[] }>("/products/customer-prices"); setProducts((response.data.data || []).filter((item) => item.status === "Active")); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load products."); } finally { setLoading(false); } })(); }, []);
   const selectedLines = useMemo(() => lines.map((line) => ({ ...line, productInfo: products.find((product) => product._id === line.product) })).filter((line) => line.productInfo), [lines, products]);
   const estimate = selectedLines.reduce((sum, line) => sum + Number(line.productInfo?.price || 0) * line.quantity, 0);
   const updateLine = (index: number, update: Partial<Line>) => setLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...update } : line));

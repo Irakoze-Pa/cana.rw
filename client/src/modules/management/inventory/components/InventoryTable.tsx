@@ -164,7 +164,7 @@ const InventoryTable = ({
               </th>
 
               <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                Avg. Cost
+                Lot Avg. Cost
               </th>
 
               <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -217,6 +217,12 @@ const InventoryTable = ({
                         <p className="mt-0.5 text-xs font-medium text-gray-400">
                           {item.rawMaterialCode}
                         </p>
+
+                        {typeof item.rawMaterial === "object" && item.rawMaterial?.category && (
+                          <span className="mt-1 inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
+                            {item.rawMaterial.category}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -280,6 +286,7 @@ const InventoryTable = ({
                         item.averageCostPerUnit || 0
                       )}
                     </p>
+                    <p className="mt-0.5 text-xs text-gray-400">RWF / {item.unit}</p>
                   </td>
 
                   {/* Status */}

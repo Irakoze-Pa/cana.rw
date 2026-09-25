@@ -7,6 +7,7 @@ export interface Product {
   category: string;
 
   price: number;
+  wholesalePrice?: number | null;
   stock: number;
   baseUnit?: "kg" | "pcs";
   packSizeKg?: number;
@@ -32,6 +33,7 @@ export interface CreateProductData {
   category: string;
 
   price: number;
+  wholesalePrice?: number;
   stock: number;
   packSizeKg: number;
   densityKgPerL?: number;
@@ -52,6 +54,7 @@ export interface UpdateProductData {
   category?: string;
 
   price?: number;
+  wholesalePrice?: number;
   stock?: number;
   packSizeKg?: number;
   densityKgPerL?: number;

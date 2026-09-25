@@ -7,6 +7,7 @@ export interface CreateProductData {
   code: string;
   category: string;
   price: number;
+  wholesalePrice?: number;
   stock?: number;
   packSizeKg?: number;
   densityKgPerL?: number;
@@ -22,6 +23,7 @@ export interface UpdateProductData {
   code?: string;
   category?: string;
   price?: number;
+  wholesalePrice?: number;
   stock?: number;
   packSizeKg?: number;
   densityKgPerL?: number;
@@ -158,6 +160,9 @@ export const createProduct = async (
     code,
 
     price: Number(data.price),
+    wholesalePrice: data.wholesalePrice === undefined || data.wholesalePrice === null || String(data.wholesalePrice).trim() === ""
+      ? Number(data.price)
+      : Number(data.wholesalePrice),
     stock: Number(data.stock ?? 0),
     baseUnit: isScaffolding ? "pcs" : "kg",
     packSizeKg: packaging.packSizeKg,
@@ -231,6 +236,10 @@ export const updateProduct = async (
 
   if (data.price !== undefined) {
     updateData.price = Number(data.price);
+  }
+
+  if (data.wholesalePrice !== undefined) {
+    updateData.wholesalePrice = Number(data.wholesalePrice);
   }
 
   if (data.stock !== undefined) {

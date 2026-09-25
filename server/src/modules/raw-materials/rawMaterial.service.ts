@@ -91,6 +91,25 @@ const reconcileAvailableQuantities = async () => {
 };
 
 /**
+ * Separate operational packaging from paint ingredients. Older registers used
+ * a generic “Other” or “Packaging” value, which made containers and stickers
+ * appear beside pigments in purchasing and stock reports.
+ */
+const classifyLegacyPackaging = async () => {
+  const generic = { $in: ["Other", "Packaging", ""] };
+  await Promise.all([
+    RawMaterial.updateMany(
+      { category: generic, name: /sticker|label/i },
+      { $set: { category: "Packaging · Labels & branding", unit: "pcs" } },
+    ),
+    RawMaterial.updateMany(
+      { category: generic, name: /indobo|bucket|container|can|lid|pack/i },
+      { $set: { category: "Packaging · Containers & packs" } },
+    ),
+  ]);
+};
+
+/**
  * =========================================================
  * CREATE RAW MATERIAL
  * =========================================================
@@ -221,7 +240,7 @@ export const createRawMaterial = async (
  */
 export const getRawMaterials =
   async () => {
-    await reconcileAvailableQuantities();
+    await Promise.all([reconcileAvailableQuantities(), classifyLegacyPackaging()]);
     return await RawMaterial.find()
       .populate(
         "supplier",

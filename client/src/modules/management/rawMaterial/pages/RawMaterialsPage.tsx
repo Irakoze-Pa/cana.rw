@@ -53,6 +53,7 @@ function RawMaterialsPage() {
     useState("");
 
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<"All" | "Raw materials" | "Packaging">("All");
 
   // =====================================================
   // LOAD RAW MATERIALS
@@ -209,9 +210,18 @@ function RawMaterialsPage() {
     return materials.filter((material) => {
       if (material.status !== "Active") return false;
       const matchesSearch = !query || [material.name, material.code, material.category, material.supplier?.name].filter(Boolean).join(" ").toLowerCase().includes(query);
-      return matchesSearch;
+      const group = /^Packaging\b/i.test(material.category || "") ? "Packaging" : "Raw materials";
+      return matchesSearch && (categoryFilter === "All" || group === categoryFilter);
     });
-  }, [materials, search]);
+  }, [materials, search, categoryFilter]);
+
+  const categorySummary = useMemo(() => {
+    const active = materials.filter((material) => material.status === "Active");
+    return [
+      ["Raw materials", active.filter((material) => !/^Packaging\b/i.test(material.category || "")).length],
+      ["Packaging", active.filter((material) => /^Packaging\b/i.test(material.category || "")).length],
+    ] as const;
+  }, [materials]);
 
   // =====================================================
   // ADD
@@ -296,7 +306,7 @@ function RawMaterialsPage() {
     setModalOpen(false);
     setSelectedMaterial(null);
   };
-  const printRegister = () => printCanaDocument({ title: "Raw material register", reference: `RM-LIST-${new Date().toISOString().slice(0, 10)}`, details: [{ label: "Materials listed", value: visibleMaterials.length }, { label: "Current stock", value: formatQuantity(summary.totalStock) }, { label: "Reserved for production", value: formatQuantity(summary.totalReserved) }, { label: "Available stock", value: formatQuantity(summary.totalAvailable) }, { label: "Low-stock materials", value: summary.lowStockMaterials }], table: { headers: ["Material", "Code", "Current", "Reserved", "Available", "Minimum", "Unit cost"], rows: visibleMaterials.map((material) => [material.name, material.code, `${material.quantity} ${material.unit}`, `${material.reservedQuantity || 0} ${material.unit}`, `${material.availableQuantity ?? Math.max(0, material.quantity - (material.reservedQuantity || 0))} ${material.unit}`, `${material.minimumStock} ${material.unit}`, `${Number(material.costPerUnit || 0).toLocaleString()} RWF`]) }, notes: "Current stock is physical stock. Available stock excludes quantities reserved for production." });
+  const printRegister = () => printCanaDocument({ title: "Raw material register", reference: `RM-LIST-${new Date().toISOString().slice(0, 10)}`, details: [{ label: "Category", value: categoryFilter }, { label: "Materials listed", value: visibleMaterials.length }, { label: "Current stock", value: formatQuantity(summary.totalStock) }, { label: "Reserved for production", value: formatQuantity(summary.totalReserved) }, { label: "Available stock", value: formatQuantity(summary.totalAvailable) }, { label: "Low-stock materials", value: summary.lowStockMaterials }], table: { headers: ["Category", "Material", "Code", "Current", "Available", "Minimum"], rows: visibleMaterials.map((material) => [material.category, material.name, material.code, `${material.quantity} ${material.unit}`, `${material.availableQuantity ?? Math.max(0, material.quantity - (material.reservedQuantity || 0))} ${material.unit}`, `${material.minimumStock} ${material.unit}`]) }, notes: "Production ingredients, packaging, labels and consumables are recorded in separate categories. Available stock excludes quantities reserved for production." });
 
   return (
     <div className="space-y-6">
@@ -553,6 +563,17 @@ function RawMaterialsPage() {
         </div>
       </div>
 
+      <section className="cana-panel p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="text-sm font-extrabold text-slate-950">Stock groups</p><p className="mt-0.5 text-xs text-slate-500">Packaging is managed together; all production inputs are managed together.</p></div>
+          <span className="text-xs font-bold text-slate-500">2 groups</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => setCategoryFilter("All")} className={`rounded-lg px-3 py-2 text-xs font-bold ${categoryFilter === "All" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>All · {summary.activeMaterials}</button>
+          {categorySummary.map(([category, count]) => <button key={category} type="button" onClick={() => setCategoryFilter(category)} className={`rounded-lg px-3 py-2 text-xs font-bold ${categoryFilter === category ? "bg-red-700 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>{category} · {count}</button>)}
+        </div>
+      </section>
+
       <div className="cana-panel p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-lg">
@@ -560,7 +581,7 @@ function RawMaterialsPage() {
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search material name, code, category, or default supplier…" className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm outline-none transition focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-100" />
           </div>
           <div className="flex items-center gap-3">
-            <span className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Approved register</span>
+            <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">{categoryFilter === "All" ? "All categories" : categoryFilter}</span>
             <span className="text-sm text-gray-500"><strong className="text-gray-900">{visibleMaterials.length}</strong> materials</span>
           </div>
         </div>
