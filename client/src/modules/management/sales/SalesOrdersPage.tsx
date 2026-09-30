@@ -23,6 +23,10 @@ type Order = {
     productCode?: string;
     quantity: number;
     unit: string;
+    packLabel?: string;
+    packSizeKg?: number;
+    stockQuantity?: number;
+    stockUnit?: string;
     unitPrice?: number;
     total?: number;
   }[];
@@ -35,6 +39,8 @@ type Product = {
   price: number;
   wholesalePrice?: number | null;
   unit: string;
+  baseUnit?: "kg" | "pcs";
+  packSizeKg?: number;
   status: string;
 };
 const next: Record<string, string[]> = {
@@ -46,6 +52,10 @@ const next: Record<string, string[]> = {
 };
 const money = (amount: number) =>
   Number(amount || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 });
+const orderQuantity = (item: Order["items"][number]) =>
+  item.unit === "packs"
+    ? `${item.quantity} ${item.quantity === 1 ? "pack" : "packs"}${item.packLabel ? ` · ${item.packLabel} each` : ""}`
+    : `${item.quantity} ${item.unit}`;
 const statusStyle = (status: string) => status === "cancelled" ? "bg-red-50 text-red-700" : status === "delivered" ? "bg-emerald-50 text-emerald-700" : status === "ready_for_delivery" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-700";
 function printSalesOrder(order: Order) {
   printCanaDocument({
@@ -89,7 +99,7 @@ function printSalesOrder(order: Order) {
       rows: order.items.map((item) => [
         item.productName,
         item.productCode,
-        `${item.quantity} ${item.unit}`,
+        orderQuantity(item),
         `${money(item.unitPrice || 0)} RWF`,
         `${money(item.total ?? Number(item.unitPrice || 0) * item.quantity)} RWF`,
       ]),
@@ -206,7 +216,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
         ? {
             product: product._id,
             quantity: Number(line.quantity),
-            unit: product.unit,
+            unit: product.baseUnit === "pcs" ? "pcs" : "packs",
             unitPrice: Number(line.unitPrice),
           }
         : null;
@@ -380,14 +390,14 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                   <option value="">Select product</option>
                   {products.map((product) => (
                     <option key={product._id} value={product._id}>
-                      {product.name} · wholesale {money(product.wholesalePrice ?? product.price)} RWF/{product.unit}
+                      {product.name} · wholesale {money(product.wholesalePrice ?? product.price)} RWF/{product.baseUnit === "pcs" ? "pc" : "pack"}
                     </option>
                   ))}
                 </select>
                 <input
                   required
-                  min="0.0001"
-                  step="any"
+                  min="1"
+                  step="1"
                   type="number"
                   value={line.quantity}
                   onChange={(event) =>
@@ -400,7 +410,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                     )
                   }
                   aria-label="Quantity"
-                  placeholder="Qty"
+                  placeholder="Packs"
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
                 />
                 <input
@@ -419,7 +429,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                     )
                   }
                   aria-label="Unit price in RWF"
-                  placeholder="Price (RWF)"
+                  placeholder="Price / pack (RWF)"
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
                 />
                 <button
@@ -499,7 +509,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
             </option>
           ))}
         </select></label><div className="ml-auto pb-1 text-sm text-slate-500"><strong className="text-slate-900">{visibleOrders.length}</strong> transaction{visibleOrders.length === 1 ? "" : "s"} shown</div>{(dateFrom || dateTo || search || statusFilter) && <button type="button" onClick={() => { setSearch(""); setStatusFilter(""); setDateFrom(""); setDateTo(""); }} className="pb-1 text-sm font-bold text-red-700">Clear filters</button>}</section>
-      <section className="space-y-2 md:hidden">{loading ? <p className="cana-panel p-8 text-center text-sm text-slate-500">Loading sales orders…</p> : visibleOrders.map((order) => <article key={order._id} className="cana-panel p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-extrabold text-slate-950">{order.orderNumber}</p><p className="mt-1 text-sm font-semibold text-slate-700">{order.customer?.businessName || order.customer?.fullName || "Customer"}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}>{order.status.replaceAll("_", " ")}</span></div><p className="mt-3 text-sm text-slate-600">{order.items.map((item) => `${item.productName} · ${item.quantity} ${item.unit}`).join(", ")}</p><div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3"><strong className="text-slate-950">{money(order.total)} RWF</strong><span className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleDateString("en-RW")}</span></div><div className="mt-3"><OrderActions order={order} saving={saving} onPrint={printSalesOrder} onSetPrices={openPricing} onTransition={(id, status) => void transition(id, status)} /></div></article>)}{!loading && !visibleOrders.length && <p className="cana-panel p-8 text-center text-sm text-slate-500">No sales orders match this view.</p>}</section>
+      <section className="space-y-2 md:hidden">{loading ? <p className="cana-panel p-8 text-center text-sm text-slate-500">Loading sales orders…</p> : visibleOrders.map((order) => <article key={order._id} className="cana-panel p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-extrabold text-slate-950">{order.orderNumber}</p><p className="mt-1 text-sm font-semibold text-slate-700">{order.customer?.businessName || order.customer?.fullName || "Customer"}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}>{order.status.replaceAll("_", " ")}</span></div><p className="mt-3 text-sm text-slate-600">{order.items.map((item) => `${item.productName} · ${orderQuantity(item)}`).join(", ")}</p><div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3"><strong className="text-slate-950">{money(order.total)} RWF</strong><span className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleDateString("en-RW")}</span></div><div className="mt-3"><OrderActions order={order} saving={saving} onPrint={printSalesOrder} onSetPrices={openPricing} onTransition={(id, status) => void transition(id, status)} /></div></article>)}{!loading && !visibleOrders.length && <p className="cana-panel p-8 text-center text-sm text-slate-500">No sales orders match this view.</p>}</section>
       <div className="hidden overflow-x-auto md:block cana-panel">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -533,7 +543,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                       {order.items
                         .map(
                           (item) =>
-                            `${item.productName} (${item.quantity} ${item.unit})`,
+                            `${item.productName} (${orderQuantity(item)})`,
                         )
                         .join(", ")}
                     </td>
@@ -557,7 +567,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
           </tbody>
         </table>
       </div>
-      {pricingOrder && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm"><form onSubmit={(event) => { event.preventDefault(); void saveAgreedPrices(pricingOrder); }} className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><p className="cana-section-kicker text-red-700">Commercial review</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Confirm order prices</h2><p className="mt-1 text-sm text-slate-500">{pricingOrder.orderNumber} · {pricingOrder.customer?.businessName || pricingOrder.customer?.fullName}</p></div><button type="button" onClick={() => setPricingOrder(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></header><div className="space-y-3 p-5">{pricingOrder.items.map((item) => <div key={item.product} className="grid gap-3 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_7rem_10rem]"><div><p className="font-bold text-slate-950">{item.productName}</p><p className="mt-0.5 text-xs text-slate-500">{item.productCode || "—"} · {item.quantity} {item.unit}</p></div><p className="self-center text-sm font-bold text-slate-700">× {item.quantity}</p><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Agreed unit price<input autoFocus required min="0" step="any" type="number" value={agreedPrices[item.product] ?? ""} onChange={(event) => setAgreedPrices((current) => ({ ...current, [item.product]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-950"/></label></div>)}<div className="flex items-center justify-between border-t border-slate-100 pt-4"><span className="text-sm font-bold text-slate-600">Agreed total</span><strong className="text-xl font-extrabold text-slate-950">{money(pricingOrder.items.reduce((sum, item) => sum + item.quantity * Number(agreedPrices[item.product] || 0), 0))} RWF</strong></div></div><footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4"><button type="button" onClick={() => setPricingOrder(null)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700">Cancel</button><button disabled={saving} className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">{saving ? "Saving…" : "Save agreed prices"}</button></footer></form></div>}
+      {pricingOrder && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm"><form onSubmit={(event) => { event.preventDefault(); void saveAgreedPrices(pricingOrder); }} className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><p className="cana-section-kicker text-red-700">Commercial review</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Confirm order prices</h2><p className="mt-1 text-sm text-slate-500">{pricingOrder.orderNumber} · {pricingOrder.customer?.businessName || pricingOrder.customer?.fullName}</p></div><button type="button" onClick={() => setPricingOrder(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></header><div className="space-y-3 p-5">{pricingOrder.items.map((item) => <div key={item.product} className="grid gap-3 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_7rem_10rem]"><div><p className="font-bold text-slate-950">{item.productName}</p><p className="mt-0.5 text-xs text-slate-500">{item.productCode || "—"} · {orderQuantity(item)}</p></div><p className="self-center text-sm font-bold text-slate-700">× {item.quantity}</p><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Agreed price / {item.unit === "packs" ? "pack" : item.unit}<input autoFocus required min="0" step="any" type="number" value={agreedPrices[item.product] ?? ""} onChange={(event) => setAgreedPrices((current) => ({ ...current, [item.product]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-950"/></label></div>)}<div className="flex items-center justify-between border-t border-slate-100 pt-4"><span className="text-sm font-bold text-slate-600">Agreed total</span><strong className="text-xl font-extrabold text-slate-950">{money(pricingOrder.items.reduce((sum, item) => sum + item.quantity * Number(agreedPrices[item.product] || 0), 0))} RWF</strong></div></div><footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4"><button type="button" onClick={() => setPricingOrder(null)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700">Cancel</button><button disabled={saving} className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">{saving ? "Saving…" : "Save agreed prices"}</button></footer></form></div>}
     </div>
   );
 }

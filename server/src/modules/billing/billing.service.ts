@@ -137,3 +137,21 @@ export async function listPayments() {
     .populate("customer", "fullName phone")
     .lean();
 }
+
+/** Customer portal data: invoices and receipts belonging only to the signed-in customer. */
+export async function listCustomerBilling(customerId: string) {
+  if (!mongoose.Types.ObjectId.isValid(customerId)) {
+    throw new Error("Invalid customer.");
+  }
+
+  const customer = new mongoose.Types.ObjectId(customerId);
+  const [invoices, payments] = await Promise.all([
+    populateInvoice(Invoice.find({ customer }).sort({ createdAt: -1 })).lean(),
+    Payment.find({ customer })
+      .sort({ receivedAt: -1 })
+      .populate("invoice", "invoiceNumber salesOrder")
+      .lean(),
+  ]);
+
+  return { invoices, payments };
+}

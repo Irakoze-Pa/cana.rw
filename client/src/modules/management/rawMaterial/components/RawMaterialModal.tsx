@@ -26,6 +26,7 @@ interface FormData {
   unit: string;
   quantity: string;
   minimumStock: string;
+  costPerUnit: string;
   status: "Active" | "Inactive";
 }
 
@@ -35,6 +36,7 @@ const initialForm: FormData = {
   unit: "kg",
   quantity: "0",
   minimumStock: "0",
+  costPerUnit: "0",
   status: "Active",
 };
 
@@ -82,6 +84,11 @@ function RawMaterialModal({
           material.minimumStock !== undefined
             ? String(material.minimumStock)
             : "",
+
+        costPerUnit:
+          material.costPerUnit !== undefined
+            ? String(material.costPerUnit)
+            : "0",
 
         status:
           material.status ?? "Active",
@@ -148,6 +155,10 @@ function RawMaterialModal({
       formData.minimumStock || 0
     );
 
+    const costPerUnit = Number(
+      formData.costPerUnit || 0
+    );
+
     if (
       !Number.isFinite(quantity) ||
       quantity < 0
@@ -160,6 +171,10 @@ function RawMaterialModal({
       minimumStock < 0
     ) {
       return "Minimum stock must be a valid number greater than or equal to 0.";
+    }
+
+    if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
+      return "Reference price must be a valid number greater than or equal to 0.";
     }
 
     return null;
@@ -197,6 +212,10 @@ function RawMaterialModal({
         formData.minimumStock || 0
       );
 
+      const costPerUnit = Number(
+        formData.costPerUnit || 0
+      );
+
       const payload = {
         name: formData.name.trim(),
 
@@ -211,9 +230,9 @@ function RawMaterialModal({
 
         minimumStock,
 
-        // Price is set when a supplier offer is selected or a goods-received
-        // note is posted. A material master does not own supplier pricing.
-        ...(!isEditMode ? { costPerUnit: 0 } : {}),
+        // This is the current planning/reference price. Receipt lots retain
+        // the actual price paid so historic production costing is not changed.
+        costPerUnit,
 
         status:
           formData.status,
@@ -685,6 +704,39 @@ function RawMaterialModal({
                   "
                 />
 
+              </div>
+
+              {/* ================================================= */}
+              {/* REFERENCE PRICE */}
+              {/* ================================================= */}
+
+              <div>
+                <label
+                  htmlFor="costPerUnit"
+                  className="mb-2 block text-sm font-semibold text-gray-700"
+                >
+                  Reference Price (RWF / {formData.unit || "unit"})
+                </label>
+
+                <input
+                  id="costPerUnit"
+                  name="costPerUnit"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.costPerUnit}
+                  onChange={handleChange}
+                  placeholder="0"
+                  required
+                  disabled={loading}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:bg-gray-50"
+                />
+
+                {isEditMode && (
+                  <p className="mt-1.5 text-xs text-gray-500">
+                    Updates the current planning price only. Existing receipt lots and production costs stay unchanged.
+                  </p>
+                )}
               </div>
 
               {/* ================================================= */}

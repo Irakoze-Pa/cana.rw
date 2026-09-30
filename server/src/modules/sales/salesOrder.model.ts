@@ -9,6 +9,12 @@ const itemSchema = new Schema({
   productCode: { type: String, required: true, trim: true },
   quantity: { type: Number, required: true, min: 0.0001 },
   unit: { type: String, required: true, trim: true },
+  // Quantity on a sales order is the number of customer packs. Stock is kept
+  // in its base unit (normally kg), so retain the converted issue quantity.
+  packLabel: { type: String, trim: true, default: "" },
+  packSizeKg: { type: Number, min: 0 },
+  stockQuantity: { type: Number, required: true, min: 0.0001 },
+  stockUnit: { type: String, required: true, trim: true },
   unitPrice: { type: Number, required: true, min: 0 },
   total: { type: Number, required: true, min: 0 },
 }, { _id: false });
@@ -28,5 +34,5 @@ const salesOrderSchema = new Schema({
   statusHistory: [{ status: { type: String, enum: salesOrderStatuses, required: true }, at: { type: Date, default: Date.now }, by: { type: Schema.Types.ObjectId, ref: "User" } }],
 }, { timestamps: true });
 
-export interface SalesOrderItem { product: Types.ObjectId; productName: string; productCode: string; quantity: number; unit: string; unitPrice: number; total: number }
+export interface SalesOrderItem { product: Types.ObjectId; productName: string; productCode: string; quantity: number; unit: string; packLabel?: string; packSizeKg?: number; stockQuantity: number; stockUnit: string; unitPrice: number; total: number }
 export default mongoose.models.SalesOrder || mongoose.model("SalesOrder", salesOrderSchema);

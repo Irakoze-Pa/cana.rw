@@ -373,11 +373,11 @@ function RawMaterialTable({
                           hover:bg-gray-100
                           hover:text-gray-900
                         "
-                        title="Edit or update material setup"
-                        aria-label={`Edit or update ${material.name}`}
+                        title="Update material details and reference price"
+                        aria-label={`Update ${material.name} and its reference price`}
                       >
                         <Edit size={17} />
-                        <span className="hidden text-xs font-semibold xl:inline">
+                        <span className="text-xs font-semibold">
                           Update
                         </span>
                       </button>

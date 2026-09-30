@@ -62,7 +62,7 @@ const packs = (quantity: number, product?: Product | null) => {
   return `${number(packCount)} ${packCount === 1 ? "pack" : "packs"}`;
 };
 const stockWithPacks = (quantity: number, product?: Product | null) =>
-  `${number(quantity)} ${product?.baseUnit || "kg"}${packs(quantity, product) ? ` · ${packs(quantity, product)}` : ""}`;
+  `${packs(quantity, product) || `${number(quantity)} ${product?.baseUnit || "kg"}`} ${packs(quantity, product) ? `· ${number(quantity)} ${product?.baseUnit || "kg"}` : ""}`;
 const isScaffolding = (product?: Product | null) => product?.category === "Scaffolding" || /scaffold/i.test(product?.name || "");
 
 export default function FinishedGoodsPage() {
@@ -395,19 +395,19 @@ export default function FinishedGoodsPage() {
                           {isScaffolding(product) ? `${product.code} · Equipment · counted in pieces` : `${product.code} · ${product.unit} pack · ${number(product.packSizeKg || 0)} kg per pack`}
                         </p>
                       </td>
-                      <td className={`px-5 py-4 text-right font-semibold ${productionLow ? "text-red-700" : ""}`}>
-                        <span>{number(production)} {isScaffolding(product) ? "pcs" : "kg"}</span>
-                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(production, product) || "Pack size not set"}</p>}
+                      <td className={`px-5 py-4 text-right ${productionLow ? "text-red-700" : ""}`}>
+                        <p className="font-extrabold text-slate-950">{isScaffolding(product) ? `${number(production)} pcs` : packs(production, product) || "Pack size not set"}</p>
+                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-medium text-gray-500">{number(production)} kg</p>}
                         {productionMinimum > 0 && <p className={`mt-1 text-xs font-bold ${productionLow ? "text-red-700" : "text-slate-500"}`}>Min. {number(productionMinimum)} {isScaffolding(product) ? "pcs" : "kg"}{productionLow ? " · Low" : ""}</p>}
                       </td>
-                      <td className={`px-5 py-4 text-right font-semibold ${salesLow ? "text-red-700" : ""}`}>
-                        <span>{number(sales)} {isScaffolding(product) ? "pcs" : "kg"}</span>
-                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(sales, product) || "Pack size not set"}</p>}
+                      <td className={`px-5 py-4 text-right ${salesLow ? "text-red-700" : ""}`}>
+                        <p className="font-extrabold text-slate-950">{isScaffolding(product) ? `${number(sales)} pcs` : packs(sales, product) || "Pack size not set"}</p>
+                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-medium text-gray-500">{number(sales)} kg</p>}
                         {salesMinimum > 0 && <p className={`mt-1 text-xs font-bold ${salesLow ? "text-red-700" : "text-slate-500"}`}>Min. {number(salesMinimum)} {isScaffolding(product) ? "pcs" : "kg"}{salesLow ? " · Low" : ""}</p>}
                       </td>
-                      <td className="px-5 py-4 text-right font-bold text-slate-900">
-                        {number(production + sales)} {isScaffolding(product) ? "pcs" : "kg"}
-                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-normal text-gray-500">{packs(production + sales, product) || "Pack size not set"}</p>}
+                      <td className="px-5 py-4 text-right text-slate-900">
+                        <p className="font-extrabold">{isScaffolding(product) ? `${number(production + sales)} pcs` : packs(production + sales, product) || "Pack size not set"}</p>
+                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-medium text-gray-500">{number(production + sales)} kg</p>}
                       </td>
                     </tr>
                   );

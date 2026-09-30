@@ -10,6 +10,45 @@ const transitions: Record<SalesOrderStatus, SalesOrderStatus[]> = {
   in_production: ["ready_for_delivery", "cancelled"], ready_for_delivery: ["delivered", "cancelled"], delivered: [], cancelled: [],
 };
 
+function stockQuantityForProduct(product: { baseUnit?: string; packSizeKg?: number; unit?: string }, packQuantity: number) {
+  if (product.baseUnit === "pcs") {
+    return { stockQuantity: packQuantity, stockUnit: "pcs", packSizeKg: undefined };
+  }
+
+  const packSizeKg = Number(product.packSizeKg);
+  if (!Number.isFinite(packSizeKg) || packSizeKg <= 0) {
+    throw new Error(`Set the pack weight in kg for ${product.unit || "this product"} before selling it by pack.`);
+  }
+
+  return {
+    stockQuantity: Number((packQuantity * packSizeKg).toFixed(4)),
+    stockUnit: "kg",
+    packSizeKg,
+  };
+}
+
+async function stockQuantityForOrderItem(item: { product: mongoose.Types.ObjectId; quantity: number; stockQuantity?: number }, product?: { baseUnit?: string; packSizeKg?: number; unit?: string }) {
+  if (Number.isFinite(Number(item.stockQuantity)) && Number(item.stockQuantity) > 0) {
+    return Number(item.stockQuantity);
+  }
+
+  const orderProduct = product || await Product.findById(item.product).lean();
+  if (!orderProduct) throw new Error("Finished product no longer exists for this sales order.");
+  return stockQuantityForProduct(orderProduct, Number(item.quantity)).stockQuantity;
+}
+
+async function nextSalesOrderNumber() {
+  const year = new Date().getFullYear();
+  const prefix = `SO-${year}-`;
+  const latest = await SalesOrder.findOne({ orderNumber: new RegExp(`^${prefix}\\d+$`) })
+    .sort({ orderNumber: -1 })
+    .select("orderNumber")
+    .lean();
+  const current = Number(String(latest?.orderNumber || "").slice(prefix.length));
+  const sequence = Number.isFinite(current) ? current + 1 : 1;
+  return `${prefix}${String(sequence).padStart(5, "0")}`;
+}
+
 export async function createSalesOrder(input: { customer: string; quotation?: string; items: { product: string; quantity: number; unit?: string; unitPrice?: number }[]; tax?: number; deliveryAddress?: string; requestedDeliveryDate?: string; notes?: string; allowInactiveProducts?: boolean; initialStatus?: SalesOrderStatus }) {
   if (!mongoose.Types.ObjectId.isValid(input.customer)) throw new Error("A valid customer is required.");
   if (!Array.isArray(input.items) || input.items.length === 0) throw new Error("At least one sales item is required.");
@@ -26,19 +65,45 @@ export async function createSalesOrder(input: { customer: string; quotation?: st
     if (product.status !== "Active" && !input.allowInactiveProducts) {
       throw new Error(`${product.name} is inactive and cannot be added to a new sales order.`);
     }
+    if (!Number.isInteger(item.quantity)) throw new Error(`${product.name} must be sold in whole packs.`);
+    const stock = stockQuantityForProduct(product, Number(item.quantity));
     // Customer-originated orders receive the wholesale rate; office users can
     // still explicitly agree a different price before confirmation.
     const unitPrice = item.unitPrice ?? Number(product.wholesalePrice ?? product.price);
     if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error("Unit price must be a non-negative number.");
-    return { product: product._id, productName: product.name, productCode: product.code, quantity: item.quantity, unit: item.unit || product.unit, unitPrice, total: Number((item.quantity * unitPrice).toFixed(2)) };
+    return {
+      product: product._id,
+      productName: product.name,
+      productCode: product.code,
+      quantity: Number(item.quantity),
+      unit: product.baseUnit === "pcs" ? "pcs" : "packs",
+      packLabel: product.baseUnit === "pcs" ? "" : product.unit,
+      packSizeKg: stock.packSizeKg,
+      stockQuantity: stock.stockQuantity,
+      stockUnit: stock.stockUnit,
+      unitPrice,
+      total: Number((item.quantity * unitPrice).toFixed(2)),
+    };
   }));
   const subtotal = Number(items.reduce((sum, item) => sum + item.total, 0).toFixed(2));
   const tax = input.tax ?? 0;
   if (!Number.isFinite(tax) || tax < 0) throw new Error("Tax cannot be negative.");
-  const orderNumber = `SO-${new Date().getFullYear()}-${String((await SalesOrder.countDocuments()) + 1).padStart(5, "0")}`;
   const { allowInactiveProducts: _allowInactiveProducts, initialStatus = "draft", ...orderInput } = input;
-  const order = await SalesOrder.create({ ...orderInput, orderNumber, items, subtotal, tax, total: Number((subtotal + tax).toFixed(2)), status: initialStatus, statusHistory: [{ status: initialStatus }] });
-  return order.populate("customer", "fullName phone email isCompanyCustomer businessName address tin");
+  const orderData = { ...orderInput, items, subtotal, tax, total: Number((subtotal + tax).toFixed(2)), status: initialStatus, statusHistory: [{ status: initialStatus }] };
+
+  // A count-based sequence reused old numbers after records were deleted.
+  // Use the highest assigned number instead, then retry safely if two users
+  // create an order at the same time.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const order = await SalesOrder.create({ ...orderData, orderNumber: await nextSalesOrderNumber() });
+      return order.populate("customer", "fullName phone email isCompanyCustomer businessName address tin");
+    } catch (error: unknown) {
+      if ((error as { code?: number }).code !== 11000 || attempt === 2) throw error;
+    }
+  }
+
+  throw new Error("Could not allocate a unique sales-order number. Please try again.");
 }
 
 export const listSalesOrders = () => SalesOrder.find().sort({ createdAt: -1 }).populate("customer", "fullName phone email isCompanyCustomer businessName address tin").lean();
@@ -84,7 +149,8 @@ export async function transitionSalesOrder(id: string, status: SalesOrderStatus,
   if (status === "ready_for_delivery" || status === "delivered") {
     for (const item of order.items) {
       const balance = await FinishedGoodsStoreBalance.findOne({ product: item.product, store: "sales" });
-      if (!balance || balance.quantity < item.quantity) {
+      const requiredStock = await stockQuantityForOrderItem(item);
+      if (!balance || balance.quantity < requiredStock) {
         throw new Error(`Insufficient Sales Store stock for ${item.productName}. Transfer finished goods to Sales Store before delivery.`);
       }
     }
@@ -94,9 +160,10 @@ export async function transitionSalesOrder(id: string, status: SalesOrderStatus,
     for (const item of order.items) {
       const product = await Product.findById(item.product);
       if (!product) throw new Error(`Finished product not found for ${item.productName}.`);
-      product.stock = Number((product.stock - item.quantity).toFixed(4));
+      const issuedStock = await stockQuantityForOrderItem(item, product);
+      product.stock = Number((product.stock - issuedStock).toFixed(4));
       await product.save();
-      const salesBalance = await FinishedGoodsStoreBalance.findOneAndUpdate({ product: item.product, store: "sales", quantity: { $gte: item.quantity } }, { $inc: { quantity: -item.quantity } }, { new: true });
+      const salesBalance = await FinishedGoodsStoreBalance.findOneAndUpdate({ product: item.product, store: "sales", quantity: { $gte: issuedStock } }, { $inc: { quantity: -issuedStock } }, { new: true });
       if (!salesBalance) throw new Error(`Sales Store stock changed before delivery for ${item.productName}. Please review the order.`);
     }
   }
