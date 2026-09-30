@@ -20,8 +20,9 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/context/authContext";
 import api from "@/services/api";
 
-type Person = { fullName?: string };
-type SalesOrder = { _id: string; orderNumber: string; status: string; total: number; createdAt?: string; requestedDeliveryDate?: string; customer?: Person };
+type Person = { fullName?: string; phone?: string; businessName?: string };
+type SalesOrderItem = { productName: string; productCode?: string; quantity: number; unit: string; packLabel?: string; unitPrice: number; total: number };
+type SalesOrder = { _id: string; orderNumber: string; status: string; total: number; createdAt?: string; requestedDeliveryDate?: string; deliveryAddress?: string; customer?: Person; items?: SalesOrderItem[] };
 type Material = { _id: string; name: string; code: string; availableQuantity: number; minimumStock: number; unit: string };
 type Invoice = { _id: string; invoiceNumber: string; balance: number; dueDate?: string; customer?: Person };
 type Quote = { _id: string; createdAt?: string; customer?: Person; items?: unknown[] };
@@ -134,8 +135,8 @@ export default function AdminDashboard() {
       <section className="grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
         <Panel title="Priority fulfilment" description="Sales orders still moving through delivery." action="View sales" to="/management/sales" icon={<ClipboardList size={17} />}>
           {data.attentionOrders.map((order) => (
-            <Link to="/management/sales" key={order._id} className="flex flex-col gap-2 px-4 py-3 transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between">
-              <div><p className="text-sm font-bold text-slate-900">{order.orderNumber}</p><p className="mt-0.5 text-xs text-slate-500">{order.customer?.fullName || "Customer"} · delivery {date(order.requestedDeliveryDate)}</p></div>
+            <Link to="/management/sales/orders" key={order._id} className="flex flex-col gap-3 px-4 py-3 transition hover:bg-slate-50 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0"><p className="text-sm font-bold text-slate-900">{order.orderNumber}</p><p className="mt-0.5 text-xs text-slate-500">{order.customer?.businessName || order.customer?.fullName || "Customer"}{order.customer?.phone ? ` · ${order.customer.phone}` : ""} · delivery {date(order.requestedDeliveryDate)}</p><OrderLines items={order.items} /></div>
               <div className="flex items-center gap-3"><span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold capitalize text-amber-700">{status(order.status)}</span><strong className="text-sm text-slate-900">{money(order.total)}</strong></div>
             </Link>
           ))}
@@ -156,8 +157,8 @@ export default function AdminDashboard() {
       <section className="grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
         <Panel title="Recent sales" description="Latest orders entering the commercial workflow." action="All sales" to="/management/sales" icon={<ShoppingCart size={17} />}>
           {data.recentSales.map((order) => (
-            <Link to="/management/sales" key={order._id} className="flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-slate-50">
-              <div><p className="text-sm font-bold text-slate-900">{order.orderNumber}</p><p className="mt-0.5 text-xs text-slate-500">{order.customer?.fullName || "Customer"} · {date(order.createdAt)}</p></div>
+            <Link to="/management/sales/orders" key={order._id} className="flex items-start justify-between gap-3 px-4 py-3 transition hover:bg-slate-50">
+              <div className="min-w-0"><p className="text-sm font-bold text-slate-900">{order.orderNumber}</p><p className="mt-0.5 text-xs text-slate-500">{order.customer?.businessName || order.customer?.fullName || "Customer"} · {date(order.createdAt)}</p><OrderLines items={order.items} /></div>
               <div className="text-right"><p className="text-sm font-bold text-slate-900">{money(order.total)}</p><span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold capitalize text-slate-600">{status(order.status)}</span></div>
             </Link>
           ))}
@@ -218,6 +219,11 @@ function MarketingOverview({ data, loading, error, onRefresh }: { data: Summary;
       </section>
     </div>
   );
+}
+
+function OrderLines({ items = [] }: { items?: SalesOrderItem[] }) {
+  if (!items.length) return null;
+  return <div className="mt-2 flex flex-wrap gap-1.5">{items.slice(0, 3).map((item, index) => <span key={`${item.productName}-${index}`} className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700">{item.productName} · {item.quantity} {item.unit === "packs" ? (item.quantity === 1 ? "pack" : "packs") : item.unit}{item.packLabel ? ` (${item.packLabel})` : ""} · {money(item.unitPrice)} each · {money(item.total)}</span>)}{items.length > 3 && <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500">+{items.length - 3} more</span>}</div>;
 }
 
 function HeadlineMetric({ label, value }: { label: string; value: string }) {
