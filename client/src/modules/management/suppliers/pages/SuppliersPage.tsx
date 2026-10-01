@@ -17,9 +17,11 @@ import {
 
 import type { Supplier } from "../types/supplier.types";
 import { useToast } from "@/context/toastContext";
+import { useConfirmation } from "@/context/confirmationContext";
 
 function SuppliersPage() {
   const { toast } = useToast();
+  const { confirm } = useConfirmation();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -138,9 +140,7 @@ function SuppliersPage() {
   const handleDeleteSupplier = async (
     supplier: Supplier
   ) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${supplier.name}"?`
-    );
+    const confirmed = await confirm({ title: "Delete supplier", description: `Delete “${supplier.name}”? This cannot be undone.`, confirmLabel: "Delete supplier", tone: "danger" });
 
     if (!confirmed) {
       return;

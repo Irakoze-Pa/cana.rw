@@ -7,6 +7,7 @@ import {
   AuthProvider
 } from "@/context/authContext";
 import { ToastProvider } from "@/context/toastContext";
+import { ConfirmationProvider } from "@/context/confirmationContext";
 
 
 
@@ -24,7 +25,7 @@ children:ReactNode;
 return (
 
 <AuthProvider>
-<ToastProvider>{children}</ToastProvider>
+<ToastProvider><ConfirmationProvider>{children}</ConfirmationProvider></ToastProvider>
 </AuthProvider>
 
 );

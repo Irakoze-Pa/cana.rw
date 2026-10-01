@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CircleDollarSign, Loader2, MoreHorizontal, Pencil, Trash2, X } from "lucide-react";
 
 import type { Product } from "./product.types";
+import { useConfirmation } from "@/context/confirmationContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
 type Catalogue = "paint" | "scaffold";
@@ -21,6 +22,7 @@ const isScaffolding = (product: Product) => product.category === "Scaffolding" |
 const money = (value: number) => `${Number(value || 0).toLocaleString()} RWF`;
 
 export default function ProductTable({ onEdit, search = "", category = "", status = "", catalogue = "paint", onSummary, refreshToken = 0 }: ProductTableProps) {
+  const { confirm } = useConfirmation();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -54,7 +56,7 @@ export default function ProductTable({ onEdit, search = "", category = "", statu
 
   const deleteProduct = async (product: Product) => {
     setMenuOpen(null);
-    if (!window.confirm(`Delete “${product.name}”? This cannot be undone.`)) return;
+    if (!await confirm({ title: "Delete product", description: `Delete “${product.name}”? This cannot be undone.`, confirmLabel: "Delete product", tone: "danger" })) return;
     setDeletingId(product._id);
     try {
       const response = await fetch(`${API_URL}/products/${product._id}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` } });

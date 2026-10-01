@@ -33,6 +33,7 @@ import type {
   UpdateProductionBatchData,
 } from "../types/productionBatch.types";
 import { printCanaDocument } from "../../utils/printCanaDocument";
+import { useConfirmation } from "@/context/confirmationContext";
 
 // =====================================================
 // DEFAULT STATS
@@ -180,6 +181,7 @@ function printBatchRecord(batch: ProductionBatch) {
 // =====================================================
 
 const ProductionBatchesPage = () => {
+  const { confirm } = useConfirmation();
   // =================================================
   // DATA
   // =================================================
@@ -520,10 +522,7 @@ const ProductionBatchesPage = () => {
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `Are you sure you want to delete ${batch.batchNo}?`
-      );
+    const confirmed = await confirm({ title: "Delete production batch", description: `Delete ${batch.batchNo}? This cannot be undone.`, confirmLabel: "Delete batch", tone: "danger" });
 
     if (!confirmed) {
       return;

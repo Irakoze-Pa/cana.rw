@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { KeyRound, Pencil, Plus, RefreshCw, ShieldCheck, UserRound, X } from "lucide-react";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
+import { useConfirmation } from "@/context/confirmationContext";
 
 type Company = "cana_group" | "cana_paints" | "cana_services";
 type Role = "customer" | "staff" | "admin" | "superadmin";
@@ -16,6 +17,7 @@ const pretty = (value?: string) => value ? value.replaceAll("_", " ").replace(/
 
 export default function UsersPage() {
   const { toast } = useToast();
+  const { confirm } = useConfirmation();
   const [users, setUsers] = useState<User[]>([]);
   const [scope, setScope] = useState<"all" | Company>("all");
   const [loading, setLoading] = useState(true);
@@ -29,7 +31,7 @@ export default function UsersPage() {
   const openCreate = () => { setEditing(null); setDraft(blank); setOpen(true); };
   const openEdit = (user: User) => { setEditing(user); setDraft({ ...blank, ...user, password: "" }); setOpen(true); };
   const save = async (event: React.FormEvent) => { event.preventDefault(); try { const response = editing ? await api.patch<{ data: User }>(`/users/${editing._id}`, draft) : await api.post<{ data: User }>("/users", draft); setUsers((current) => editing ? current.map((user) => user._id === editing._id ? response.data.data : user) : [response.data.data, ...current]); toast(editing ? "Account and access saved." : "Staff account created.", "success"); setOpen(false); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save account."); } };
-  const toggle = async (user: User) => { try { const status = user.status === "active" ? "inactive" : "active"; const response = await api.patch<{ data: User }>(`/users/${user._id}`, { status }); setUsers((current) => current.map((item) => item._id === user._id ? response.data.data : item)); toast(`${user.fullName} is now ${status}.`, "success"); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to change account state."); } };
+  const toggle = async (user: User) => { const status = user.status === "active" ? "inactive" : "active"; const confirmed = await confirm({ title: status === "inactive" ? "Deactivate user" : "Activate user", description: status === "inactive" ? `${user.fullName} will no longer be able to sign in.` : `${user.fullName} will regain access to their assigned workspaces.`, confirmLabel: status === "inactive" ? "Deactivate" : "Activate", tone: status === "inactive" ? "danger" : "primary" }); if (!confirmed) return; try { const response = await api.patch<{ data: User }>(`/users/${user._id}`, { status }); setUsers((current) => current.map((item) => item._id === user._id ? response.data.data : item)); toast(`${user.fullName} is now ${status}.`, "success"); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to change account state."); } };
   const resetPassword = async (user: User) => { const temporaryPassword = window.prompt(`Set a temporary password for ${user.fullName} (minimum 8 characters):`); if (!temporaryPassword) return; try { await api.post(`/users/${user._id}/reset-password`, { temporaryPassword }); toast("Temporary password saved.", "success"); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to reset password."); } };
   return <div className="space-y-6"><header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div className="flex gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600"><ShieldCheck size={21} /></span><div><p className="cana-section-kicker">People & access</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">Users & access</h1><p className="mt-1 text-sm text-slate-500">Create staff accounts, assign their work access, or safely deactivate them.</p></div></div><div className="flex gap-2"><button onClick={openCreate} className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"><Plus size={16} />Add user</button><button onClick={() => void load()} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16} />Refresh</button></div></header>
     <div className="grid gap-3 sm:grid-cols-3"><Stat label="Active staff" value={users.filter((user) => user.role !== "customer" && user.status === "active").length} /><Stat label="Administrators" value={users.filter((user) => ["admin", "superadmin"].includes(user.role) && user.status === "active").length} /><Stat label="Inactive accounts" value={users.filter((user) => user.status === "inactive").length} /></div>

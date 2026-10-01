@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
+import { useConfirmation } from "@/context/confirmationContext";
 import { cananLetterheadMarkup, officialApprovalMarkup } from "@/modules/management/utils/printCanaDocument";
 
 type Staff = {
@@ -65,6 +66,7 @@ const escapeHtml = (value: string) =>
 
 export default function PayrollPage() {
   const { toast } = useToast();
+  const { confirm } = useConfirmation();
   const [runs, setRuns] = useState<Run[]>([]),
     [staff, setStaff] = useState<Staff[]>([]),
     [advances, setAdvances] = useState<Advance[]>([]);
@@ -150,6 +152,8 @@ export default function PayrollPage() {
     }
   };
   const updateRun = async (id: string, status: string) => {
+    const confirmed = await confirm({ title: status === "paid" ? "Mark payroll paid" : "Approve payroll", description: status === "paid" ? "Confirm that this payroll has been paid. This records the payment status for all included staff." : "Approve this payroll run for payment? Review salaries and deductions before continuing.", confirmLabel: status === "paid" ? "Mark paid" : "Approve payroll", tone: "warning" });
+    if (!confirmed) return;
     try {
       setBusy(true);
       await api.patch(`/payroll/${id}/status`, { status });
@@ -170,6 +174,8 @@ export default function PayrollPage() {
     id: string,
     status: "approved" | "rejected" | "paid",
   ) => {
+    const confirmed = await confirm({ title: status === "rejected" ? "Reject staff advance" : status === "paid" ? "Mark advance paid" : "Approve staff advance", description: status === "rejected" ? "Reject this advance request?" : status === "paid" ? "Confirm that this advance has been paid to the staff member." : "Approve this advance for payment and payroll deduction.", confirmLabel: status === "rejected" ? "Reject advance" : status === "paid" ? "Mark paid" : "Approve advance", tone: status === "rejected" ? "danger" : "warning" });
+    if (!confirmed) return;
     try {
       setBusy(true);
       await api.patch(`/staff-payments/${id}`, { status });

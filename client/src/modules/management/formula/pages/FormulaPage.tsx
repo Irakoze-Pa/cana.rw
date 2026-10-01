@@ -22,6 +22,7 @@ import {
 
 import FormulaModal from "../components/FormulaModal";
 import FormulaDetails from "../components/FormulaDetailsModal";
+import { useConfirmation } from "@/context/confirmationContext";
 
 import type {
   Formula,
@@ -38,6 +39,7 @@ import {
 } from "../services/formula.service";
 
 export default function FormulasPage() {
+  const { confirm } = useConfirmation();
   // =====================================================
   // STATE
   // =====================================================
@@ -394,10 +396,7 @@ export default function FormulasPage() {
   const handleDeactivate = async (
     formula: Formula
   ) => {
-    const confirmed =
-      window.confirm(
-        `Are you sure you want to deactivate "${formula.name} V${formula.version}"?`
-      );
+    const confirmed = await confirm({ title: "Deactivate formula", description: `Deactivate “${formula.name} V${formula.version}”? It will no longer be available for new production.`, confirmLabel: "Deactivate", tone: "warning" });
 
     if (!confirmed) {
       return;
@@ -441,10 +440,7 @@ export default function FormulasPage() {
   const handleDelete = async (
     formula: Formula
   ) => {
-    const confirmed =
-      window.confirm(
-        `Delete "${formula.name} V${formula.version}"? This action cannot be undone.`
-      );
+    const confirmed = await confirm({ title: "Delete formula", description: `Delete “${formula.name} V${formula.version}”? This action cannot be undone.`, confirmLabel: "Delete formula", tone: "danger" });
 
     if (!confirmed) {
       return;

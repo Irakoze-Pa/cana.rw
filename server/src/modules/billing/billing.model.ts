@@ -5,9 +5,23 @@ export type InvoiceStatus = (typeof invoiceStatuses)[number];
 
 const invoiceLineSchema = new Schema({ productName: { type: String, required: true }, productCode: { type: String, default: "" }, quantity: { type: Number, required: true }, unit: { type: String, required: true }, unitPrice: { type: Number, required: true }, total: { type: Number, required: true } }, { _id: false });
 const invoiceSchema = new Schema({ invoiceNumber: { type: String, required: true, unique: true, index: true }, salesOrder: { type: Schema.Types.ObjectId, ref: "SalesOrder", required: true, unique: true }, customer: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true }, lines: { type: [invoiceLineSchema], required: true }, subtotal: { type: Number, required: true }, tax: { type: Number, default: 0 }, total: { type: Number, required: true }, amountPaid: { type: Number, default: 0 }, balance: { type: Number, required: true }, status: { type: String, enum: invoiceStatuses, default: "draft" }, issueDate: { type: Date, default: Date.now }, dueDate: Date, notes: { type: String, default: "" } }, { timestamps: true });
-const paymentSchema = new Schema({ receiptNumber: { type: String, required: true, unique: true, index: true }, invoice: { type: Schema.Types.ObjectId, ref: "Invoice", required: true, index: true }, customer: { type: Schema.Types.ObjectId, ref: "User", required: true }, amount: { type: Number, required: true, min: 0.01 }, method: { type: String, enum: ["cash", "bank_transfer", "mobile_money", "card", "other"], required: true }, reference: { type: String, trim: true, default: "" }, notes: { type: String, trim: true, default: "" }, receivedAt: { type: Date, default: Date.now }, receivedBy: { type: Schema.Types.ObjectId, ref: "User" } }, { timestamps: true });
+const paymentSchema = new Schema({ receiptNumber: { type: String, required: true, unique: true, index: true }, invoice: { type: Schema.Types.ObjectId, ref: "Invoice", index: true }, openingBalance: { type: Schema.Types.ObjectId, ref: "CustomerOpeningBalance", index: true }, customer: { type: Schema.Types.ObjectId, ref: "User", required: true }, amount: { type: Number, required: true, min: 0.01 }, method: { type: String, enum: ["cash", "bank_transfer", "mobile_money", "card", "other"], required: true }, reference: { type: String, trim: true, default: "" }, notes: { type: String, trim: true, default: "" }, receivedAt: { type: Date, default: Date.now }, receivedBy: { type: Schema.Types.ObjectId, ref: "User" } }, { timestamps: true });
+const openingBalanceSchema = new Schema({
+  openingNumber: { type: String, required: true, unique: true, index: true },
+  customer: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+  amount: { type: Number, required: true, min: 0.01 },
+  amountPaid: { type: Number, default: 0, min: 0 },
+  balance: { type: Number, required: true, min: 0 },
+  status: { type: String, enum: ["open", "partially_paid", "paid", "void"], default: "open", index: true },
+  openingDate: { type: Date, required: true },
+  dueDate: Date,
+  description: { type: String, required: true, trim: true },
+  notes: { type: String, trim: true, default: "" },
+  createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+}, { timestamps: true });
 
 export interface InvoiceLine { productName: string; productCode?: string; quantity: number; unit: string; unitPrice: number; total: number }
 export interface InvoiceDoc extends mongoose.Document { _id: Types.ObjectId; invoiceNumber: string; salesOrder: Types.ObjectId; customer: Types.ObjectId; lines: InvoiceLine[]; subtotal: number; tax: number; total: number; amountPaid: number; balance: number; status: InvoiceStatus; issueDate: Date; dueDate?: Date; notes?: string }
 export const Invoice = mongoose.models.Invoice || mongoose.model<InvoiceDoc>("Invoice", invoiceSchema);
 export const Payment = mongoose.models.Payment || mongoose.model("Payment", paymentSchema);
+export const CustomerOpeningBalance = mongoose.models.CustomerOpeningBalance || mongoose.model("CustomerOpeningBalance", openingBalanceSchema);

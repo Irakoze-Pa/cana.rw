@@ -18,6 +18,7 @@ import {
 import PurchaseOrderModal from "../components/PurchaseOrderModal";
 import { printCanaDocument } from "../../utils/printCanaDocument";
 import api from "@/services/api";
+import { useConfirmation } from "@/context/confirmationContext";
 
 // =====================================================
 // TYPES
@@ -124,6 +125,7 @@ interface CreatePurchaseOrderData {
 // =====================================================
 
 function PurchaseOrdersPage() {
+  const { confirm } = useConfirmation();
   // ===================================================
   // STATE
   // ===================================================
@@ -261,9 +263,7 @@ function PurchaseOrdersPage() {
   const handleDelete = async (
     id: string
   ) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this purchase order?"
-    );
+    const confirmed = await confirm({ title: "Delete purchase order", description: "Delete this purchase order? This cannot be undone.", confirmLabel: "Delete purchase order", tone: "danger" });
 
     if (!confirmed) {
       return;

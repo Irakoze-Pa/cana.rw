@@ -121,6 +121,39 @@ textarea:focus-visible {
   padding-bottom: 0.625rem !important;
 }
 
+/* One compact table language for operations: strong references, quiet labels
+   and predictable row density. Individual pages can keep specialised columns
+   without drifting away from the corporate system. */
+.cana-management-shell .cana-page-content .cana-panel > .overflow-x-auto > table,
+.cana-management-shell .cana-page-content .cana-panel > table {
+  font-size: 0.8125rem;
+}
+
+.cana-management-shell .cana-page-content table thead th {
+  color: #64748b;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.075em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.cana-management-shell .cana-page-content table tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.cana-management-shell .cana-page-content table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.cana-management-shell .cana-page-content table :is(th, td):first-child {
+  padding-left: 1rem !important;
+}
+
+.cana-management-shell .cana-page-content table :is(th, td):last-child {
+  padding-right: 1rem !important;
+}
+
 .cana-page-content :is(input, select, textarea) {
   min-height: 2.5rem;
 }
@@ -241,6 +274,18 @@ textarea:focus-visible {
   .cana-page-content { padding: 0.75rem 0.75rem 5.75rem; }
 
   .cana-panel { border-radius: 0.875rem; }
+
+  .cana-management-shell .cana-page-content table {
+    font-size: 0.75rem;
+  }
+
+  .cana-management-shell .cana-page-content table :is(th, td):first-child {
+    padding-left: 0.75rem !important;
+  }
+
+  .cana-management-shell .cana-page-content table :is(th, td):last-child {
+    padding-right: 0.75rem !important;
+  }
 
   .cana-public-surface {
     background-image: none;

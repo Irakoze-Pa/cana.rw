@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
+import { useConfirmation } from "@/context/confirmationContext";
 import { printCanaDocument } from "@/modules/management/utils/printCanaDocument";
 
 type Order = {
@@ -52,23 +53,32 @@ type Payment = {
   method: string;
   customer?: { fullName?: string };
   invoice?: { invoiceNumber?: string };
+  openingBalance?: { openingNumber?: string; description?: string };
 };
+type Customer = { _id: string; fullName: string; phone?: string; businessName?: string };
+type OpeningBalance = { _id: string; openingNumber: string; customer?: Customer; amount: number; amountPaid: number; balance: number; status: string; openingDate: string; dueDate?: string; description: string; notes?: string };
+type CustomerAccount = { customer: Customer; invoiceTotal: number; openingTotal: number; amountPaid: number; balance: number };
 const money = (amount: number) =>
   Number(amount || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 });
 const statusStyle = (status: string) => status === "paid" ? "bg-emerald-50 text-emerald-700" : status === "void" ? "bg-red-50 text-red-700" : status === "overdue" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700";
 
 export default function BillingPage() {
   const { toast } = useToast();
+  const { confirm } = useConfirmation();
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [openingBalances, setOpeningBalances] = useState<OpeningBalance[]>([]);
+  const [customerAccounts, setCustomerAccounts] = useState<CustomerAccount[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [receiptFrom, setReceiptFrom] = useState("");
   const [receiptTo, setReceiptTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [openingOpen, setOpeningOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [invoiceDetails, setInvoiceDetails] = useState<Invoice | null>(null);
   const [invoiceForm, setInvoiceForm] = useState({
@@ -78,22 +88,30 @@ export default function BillingPage() {
   });
   const [paymentForm, setPaymentForm] = useState({
     invoice: "",
+    openingBalance: "",
     amount: "",
     method: "mobile_money",
     reference: "",
     notes: "",
   });
+  const [openingForm, setOpeningForm] = useState({ customer: "", amount: "", openingDate: new Date().toISOString().slice(0, 10), dueDate: "", description: "Opening customer balance", notes: "" });
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const [sales, invoiceData, paymentData] = await Promise.all([
+      const [sales, customerData, invoiceData, openingData, accountData, paymentData] = await Promise.all([
         api.get<{ data: Order[] }>("/sales-orders"),
+        api.get<{ data: Customer[] }>("/users/customers"),
         api.get<{ data: Invoice[] }>("/billing/invoices"),
+        api.get<{ data: OpeningBalance[] }>("/billing/opening-balances"),
+        api.get<{ data: CustomerAccount[] }>("/billing/customer-accounts"),
         api.get<{ data: Payment[] }>("/billing/payments"),
       ]);
       setOrders(sales.data.data || []);
+      setCustomers(customerData.data.data || []);
       setInvoices(invoiceData.data.data || []);
+      setOpeningBalances(openingData.data.data || []);
+      setCustomerAccounts(accountData.data.data || []);
       setPayments(paymentData.data.data || []);
     } catch (cause) {
       setError(
@@ -109,6 +127,7 @@ export default function BillingPage() {
   const createInvoice = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
+    if (!await confirm({ title: "Issue invoice", description: "Issue an invoice for this confirmed sales order? The invoice will become part of the customer account.", confirmLabel: "Issue invoice", tone: "warning" })) return;
     setSaving(true);
     setError("");
     try {
@@ -128,6 +147,7 @@ export default function BillingPage() {
   const receivePayment = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
+    if (!await confirm({ title: "Record customer payment", description: `Record a payment of ${money(Number(paymentForm.amount || 0))} RWF? A receipt will be created and the customer balance updated.`, confirmLabel: "Record payment", tone: "warning" })) return;
     setSaving(true);
     setError("");
     try {
@@ -138,6 +158,7 @@ export default function BillingPage() {
       setPaymentOpen(false);
       setPaymentForm({
         invoice: "",
+        openingBalance: "",
         amount: "",
         method: "mobile_money",
         reference: "",
@@ -152,6 +173,19 @@ export default function BillingPage() {
     } finally {
       setSaving(false);
     }
+  };
+  const createOpeningBalance = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+    if (!await confirm({ title: "Record opening customer debt", description: `Add an opening balance of ${money(Number(openingForm.amount || 0))} RWF to this customer account?`, confirmLabel: "Record opening debt", tone: "warning" })) return;
+    setSaving(true); setError("");
+    try {
+      await api.post("/billing/opening-balances", { ...openingForm, amount: Number(openingForm.amount) });
+      setOpeningOpen(false);
+      setOpeningForm({ customer: "", amount: "", openingDate: new Date().toISOString().slice(0, 10), dueDate: "", description: "Opening customer balance", notes: "" });
+      await load(); toast("Opening customer balance recorded.", "success");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to record opening balance."); }
+    finally { setSaving(false); }
   };
   const printInvoice = (invoice: Invoice) =>
     printCanaDocument({
@@ -204,7 +238,7 @@ export default function BillingPage() {
         name: payment.customer?.fullName || "Customer",
       },
       details: [
-        { label: "Invoice", value: payment.invoice?.invoiceNumber },
+        { label: "Applied to", value: payment.invoice?.invoiceNumber || payment.openingBalance?.openingNumber || "Customer opening balance" },
         { label: "Amount received", value: `${money(payment.amount)} RWF` },
         { label: "Payment method", value: payment.method.replaceAll("_", " ") },
         { label: "Transaction reference", value: payment.reference || "—" },
@@ -214,12 +248,13 @@ export default function BillingPage() {
         "Acknowledgement of the payment shown above. This receipt does not imply that the invoice is fully settled.",
     });
   const filteredPayments = useMemo(() => payments.filter((payment) => { const paymentDate = payment.receivedAt.slice(0, 10); return (!receiptFrom || paymentDate >= receiptFrom) && (!receiptTo || paymentDate <= receiptTo); }), [payments, receiptFrom, receiptTo]);
-  const printPaymentRegister = () => printCanaDocument({ title: "Payment receipt register", reference: "PAY-" + (receiptFrom || "ALL") + "-" + (receiptTo || "TODAY"), status: "Official payment register", details: [{ label: "Period from", value: receiptFrom || "Beginning" }, { label: "Period to", value: receiptTo || "Today" }, { label: "Receipts", value: String(filteredPayments.length) }, { label: "Total received", value: money(filteredPayments.reduce((sum, payment) => sum + payment.amount, 0)) + " RWF" }], table: { headers: ["Receipt no.", "Date", "Customer", "Invoice", "Method", "Reference", "Amount (RWF)"], rows: filteredPayments.map((payment) => [payment.receiptNumber, new Date(payment.receivedAt).toLocaleDateString("en-RW"), payment.customer?.fullName || "Customer", payment.invoice?.invoiceNumber || "—", payment.method.replaceAll("_", " "), payment.reference || "—", money(payment.amount)]) }, notes: "This register lists all payments recorded in the selected period. Each payment has its own printable receipt." });
+  const printPaymentRegister = () => printCanaDocument({ title: "Payment receipt register", reference: "PAY-" + (receiptFrom || "ALL") + "-" + (receiptTo || "TODAY"), status: "Official payment register", details: [{ label: "Period from", value: receiptFrom || "Beginning" }, { label: "Period to", value: receiptTo || "Today" }, { label: "Receipts", value: String(filteredPayments.length) }, { label: "Total received", value: money(filteredPayments.reduce((sum, payment) => sum + payment.amount, 0)) + " RWF" }], table: { headers: ["Receipt no.", "Date", "Customer", "Applied to", "Method", "Reference", "Amount (RWF)"], rows: filteredPayments.map((payment) => [payment.receiptNumber, new Date(payment.receivedAt).toLocaleDateString("en-RW"), payment.customer?.fullName || "Customer", payment.invoice?.invoiceNumber || payment.openingBalance?.openingNumber || "Opening balance", payment.method.replaceAll("_", " "), payment.reference || "—", money(payment.amount)]) }, notes: "This register lists all payments recorded in the selected period. Each payment has its own printable receipt." });
   const invoicedOrders = new Set(
     invoices.map((invoice) => invoice.salesOrder?.orderNumber),
   );
   const matchingInvoices = invoices.filter((invoice) => `${invoice.invoiceNumber} ${invoice.customer?.fullName || ""}`.toLowerCase().includes(search.toLowerCase()));
   const selectedPaymentInvoice = invoices.find((invoice) => invoice._id === paymentForm.invoice);
+  const selectedPaymentOpening = openingBalances.find((opening) => opening._id === paymentForm.openingBalance);
   return (
     <div className="space-y-4">
       <header className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -235,6 +270,13 @@ export default function BillingPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setOpeningOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 transition hover:bg-slate-50"
+          >
+            <Plus size={16} />
+            Opening balance
+          </button>
           <button
             onClick={() => setPaymentOpen(true)}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 transition hover:bg-slate-50"
@@ -345,6 +387,7 @@ export default function BillingPage() {
           </button>
         </form>
       )}
+      {openingOpen && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm"><form onSubmit={createOpeningBalance} className="w-full max-w-xl rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><p className="cana-section-kicker text-red-700">Opening receivable</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Record customer opening balance</h2><p className="mt-1 text-sm text-slate-500">Use this only for debt that existed before CANAN started using this system.</p></div><button type="button" onClick={() => setOpeningOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></header><div className="grid gap-4 p-5 sm:grid-cols-2"><label className="text-sm font-bold text-slate-700 sm:col-span-2">Customer<select required value={openingForm.customer} onChange={(event) => setOpeningForm({ ...openingForm, customer: event.target.value })} className="mt-1.5 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm"><option value="">Select customer</option>{customers.map((customer) => <option key={customer._id} value={customer._id}>{customer.businessName || customer.fullName} · {customer.phone || "No phone"}</option>)}</select></label><label className="text-sm font-bold text-slate-700">Opening debt (RWF)<input required min="0.01" step="0.01" type="number" value={openingForm.amount} onChange={(event) => setOpeningForm({ ...openingForm, amount: event.target.value })} className="mt-1.5 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm"/></label><label className="text-sm font-bold text-slate-700">Opening date<input required type="date" value={openingForm.openingDate} onChange={(event) => setOpeningForm({ ...openingForm, openingDate: event.target.value })} className="mt-1.5 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm"/></label><label className="text-sm font-bold text-slate-700 sm:col-span-2">Reason / description<input required value={openingForm.description} onChange={(event) => setOpeningForm({ ...openingForm, description: event.target.value })} placeholder="Example: Outstanding balance brought forward" className="mt-1.5 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm"/></label><label className="text-sm font-bold text-slate-700">Optional due date<input type="date" value={openingForm.dueDate} onChange={(event) => setOpeningForm({ ...openingForm, dueDate: event.target.value })} className="mt-1.5 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm"/></label><label className="text-sm font-bold text-slate-700">Notes<input value={openingForm.notes} onChange={(event) => setOpeningForm({ ...openingForm, notes: event.target.value })} className="mt-1.5 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm"/></label></div><footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4"><button type="button" onClick={() => setOpeningOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700">Cancel</button><button disabled={saving} className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">{saving ? "Saving…" : "Record opening balance"}</button></footer></form></div>}
       <input
         aria-label="Search invoices"
         placeholder="Search invoice or customer"
@@ -430,7 +473,7 @@ export default function BillingPage() {
           </tbody>
         </table>
       </section>
-      {invoiceDetails && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-label={`Invoice ${invoiceDetails.invoiceNumber} details`} className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl"><header className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-4"><div><p className="cana-section-kicker text-red-700">Client invoice</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">{invoiceDetails.invoiceNumber}</h2><p className="mt-1 text-sm text-slate-500">Issued {new Date(invoiceDetails.issueDate).toLocaleDateString("en-RW", { dateStyle: "medium" })}</p></div><div className="flex items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(invoiceDetails.status)}`}>{invoiceDetails.status.replaceAll("_", " ")}</span><button type="button" onClick={() => setInvoiceDetails(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></div></header><div className="space-y-5 p-5"><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Bill to</p><p className="mt-1 font-bold text-slate-950">{invoiceDetails.customer?.fullName || "Customer"}</p><p className="mt-1 text-sm text-slate-600">Order {invoiceDetails.salesOrder?.orderNumber || "—"}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Due date</p><p className="mt-1 font-bold text-slate-950">{invoiceDetails.dueDate ? new Date(invoiceDetails.dueDate).toLocaleDateString("en-RW", { dateStyle: "medium" }) : "On receipt"}</p></div><div className="rounded-xl bg-slate-950 p-3 text-white"><p className="text-xs font-bold uppercase tracking-wide text-slate-300">Balance due</p><p className="mt-1 text-lg font-extrabold">{money(invoiceDetails.balance)} RWF</p><p className="mt-1 text-xs text-slate-300">Paid {money(invoiceDetails.amountPaid)} RWF</p></div></div><div className="overflow-x-auto rounded-xl border border-slate-200"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Description</th><th className="px-4 py-3">Quantity</th><th className="px-4 py-3 text-right">Unit price</th><th className="px-4 py-3 text-right">Amount</th></tr></thead><tbody className="divide-y divide-slate-100">{invoiceDetails.lines.map((line, index) => <tr key={`${line.productName}-${index}`}><td className="px-4 py-3 font-bold text-slate-950">{line.productName}</td><td className="px-4 py-3 text-slate-700">{line.quantity} {line.unit}</td><td className="px-4 py-3 text-right text-slate-700">{money(line.unitPrice)} RWF</td><td className="px-4 py-3 text-right font-bold text-slate-950">{money(line.total)} RWF</td></tr>)}</tbody><tfoot className="border-t-2 border-slate-200 bg-slate-50"><tr><td colSpan={3} className="px-4 py-3 text-right text-sm font-bold text-slate-700">Invoice total</td><td className="px-4 py-3 text-right text-lg font-extrabold text-slate-950">{money(invoiceDetails.total)} RWF</td></tr></tfoot></table></div>{invoiceDetails.notes && <div className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Notes</p><p className="mt-1 text-sm leading-6 text-slate-700">{invoiceDetails.notes}</p></div>}<footer className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => printInvoice(invoiceDetails)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-800"><Printer size={15}/>Print invoice</button>{invoiceDetails.balance > 0 && invoiceDetails.status !== "void" && <button type="button" onClick={() => { setPaymentForm((current) => ({ ...current, invoice: invoiceDetails._id, amount: String(invoiceDetails.balance) })); setInvoiceDetails(null); setPaymentOpen(true); }} className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white"><CreditCard size={15}/>Record payment</button>}</footer></div></section></div>}
+      {invoiceDetails && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-label={`Invoice ${invoiceDetails.invoiceNumber} details`} className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl"><header className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-4"><div><p className="cana-section-kicker text-red-700">Client invoice</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">{invoiceDetails.invoiceNumber}</h2><p className="mt-1 text-sm text-slate-500">Issued {new Date(invoiceDetails.issueDate).toLocaleDateString("en-RW", { dateStyle: "medium" })}</p></div><div className="flex items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(invoiceDetails.status)}`}>{invoiceDetails.status.replaceAll("_", " ")}</span><button type="button" onClick={() => setInvoiceDetails(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></div></header><div className="space-y-5 p-5"><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Bill to</p><p className="mt-1 font-bold text-slate-950">{invoiceDetails.customer?.fullName || "Customer"}</p><p className="mt-1 text-sm text-slate-600">Order {invoiceDetails.salesOrder?.orderNumber || "—"}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Due date</p><p className="mt-1 font-bold text-slate-950">{invoiceDetails.dueDate ? new Date(invoiceDetails.dueDate).toLocaleDateString("en-RW", { dateStyle: "medium" }) : "On receipt"}</p></div><div className="rounded-xl bg-slate-950 p-3 text-white"><p className="text-xs font-bold uppercase tracking-wide text-slate-300">Balance due</p><p className="mt-1 text-lg font-extrabold">{money(invoiceDetails.balance)} RWF</p><p className="mt-1 text-xs text-slate-300">Paid {money(invoiceDetails.amountPaid)} RWF</p></div></div><div className="overflow-x-auto rounded-xl border border-slate-200"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Description</th><th className="px-4 py-3">Quantity</th><th className="px-4 py-3 text-right">Unit price</th><th className="px-4 py-3 text-right">Amount</th></tr></thead><tbody className="divide-y divide-slate-100">{invoiceDetails.lines.map((line, index) => <tr key={`${line.productName}-${index}`}><td className="px-4 py-3 font-bold text-slate-950">{line.productName}</td><td className="px-4 py-3 text-slate-700">{line.quantity} {line.unit}</td><td className="px-4 py-3 text-right text-slate-700">{money(line.unitPrice)} RWF</td><td className="px-4 py-3 text-right font-bold text-slate-950">{money(line.total)} RWF</td></tr>)}</tbody><tfoot className="border-t-2 border-slate-200 bg-slate-50"><tr><td colSpan={3} className="px-4 py-3 text-right text-sm font-bold text-slate-700">Invoice total</td><td className="px-4 py-3 text-right text-lg font-extrabold text-slate-950">{money(invoiceDetails.total)} RWF</td></tr></tfoot></table></div>{invoiceDetails.notes && <div className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Notes</p><p className="mt-1 text-sm leading-6 text-slate-700">{invoiceDetails.notes}</p></div>}<footer className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => printInvoice(invoiceDetails)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-800"><Printer size={15}/>Print invoice</button>{invoiceDetails.balance > 0 && invoiceDetails.status !== "void" && <button type="button" onClick={() => { setPaymentForm((current) => ({ ...current, invoice: invoiceDetails._id, openingBalance: "", amount: String(invoiceDetails.balance) })); setInvoiceDetails(null); setPaymentOpen(true); }} className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white"><CreditCard size={15}/>Record payment</button>}</footer></div></section></div>}
       {paymentOpen && (
         <form
           onSubmit={receivePayment}
@@ -443,10 +486,9 @@ export default function BillingPage() {
             </button>
           </div>
           <select
-            required
             value={paymentForm.invoice}
             onChange={(event) =>
-              setPaymentForm({ ...paymentForm, invoice: event.target.value })
+              setPaymentForm({ ...paymentForm, invoice: event.target.value, openingBalance: "", amount: "" })
             }
             className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
           >
@@ -463,14 +505,22 @@ export default function BillingPage() {
               ))}
           </select>
           {selectedPaymentInvoice && <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700"><span className="font-bold text-slate-950">{selectedPaymentInvoice.invoiceNumber}</span> · Remaining balance <strong>{money(selectedPaymentInvoice.balance)} RWF</strong></div>}
+          <select
+            value={paymentForm.openingBalance}
+            onChange={(event) => setPaymentForm({ ...paymentForm, openingBalance: event.target.value, invoice: "", amount: "" })}
+            className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
+          >
+            <option value="">Or select opening balance</option>
+            {openingBalances.filter((opening) => opening.balance > 0 && opening.status !== "void").map((opening) => <option key={opening._id} value={opening._id}>{opening.openingNumber} · {opening.customer?.businessName || opening.customer?.fullName || "Customer"} · {money(opening.balance)} RWF</option>)}
+          </select>
+          {selectedPaymentOpening && <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700"><span className="font-bold text-slate-950">{selectedPaymentOpening.openingNumber}</span> · Remaining opening balance <strong>{money(selectedPaymentOpening.balance)} RWF</strong></div>}
           <input
             required
             aria-label="Amount received in RWF"
             min="0.01"
             step="0.01"
             max={
-              invoices.find((invoice) => invoice._id === paymentForm.invoice)
-                ?.balance
+              selectedPaymentInvoice?.balance ?? selectedPaymentOpening?.balance
             }
             type="number"
             value={paymentForm.amount}
@@ -526,7 +576,7 @@ export default function BillingPage() {
                 {payment.customer?.fullName} · {payment.receiptNumber}
               </span>
               <span className="text-xs text-gray-500">
-                {payment.invoice?.invoiceNumber} ·{" "}
+                {payment.invoice?.invoiceNumber || payment.openingBalance?.openingNumber || "Opening balance"} ·{" "}
                 {new Date(payment.receivedAt).toLocaleDateString("en-RW")} ·{" "}
                 {payment.method.replaceAll("_", " ")}
               </span>
@@ -548,6 +598,11 @@ export default function BillingPage() {
         </div>
       </section>
       </div>
+      <section className="cana-panel overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3"><div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Customer receivables</p><h2 className="mt-1 font-extrabold text-slate-950">Customer debt & payment list</h2></div><span className="text-sm text-slate-500"><strong className="text-slate-950">{customerAccounts.filter((account) => account.balance > 0).length}</strong> accounts outstanding</span></div>
+        <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Customer</th><th className="px-4 py-3 text-right">Sales invoices</th><th className="px-4 py-3 text-right">Opening debt</th><th className="px-4 py-3 text-right">Payments</th><th className="px-4 py-3 text-right">Balance due</th></tr></thead><tbody className="divide-y divide-slate-100">{customerAccounts.map((account) => <tr key={account.customer._id}><td className="px-4 py-3"><p className="font-bold text-slate-950">{account.customer.businessName || account.customer.fullName}</p><p className="mt-0.5 text-xs text-slate-500">{account.customer.businessName ? account.customer.fullName : account.customer.phone || "—"}</p></td><td className="px-4 py-3 text-right text-slate-700">{money(account.invoiceTotal)} RWF</td><td className="px-4 py-3 text-right text-slate-700">{money(account.openingTotal)} RWF</td><td className="px-4 py-3 text-right font-semibold text-emerald-700">{money(account.amountPaid)} RWF</td><td className="px-4 py-3 text-right font-extrabold text-slate-950">{money(account.balance)} RWF</td></tr>)}{!loading && !customerAccounts.length && <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-slate-500">No customer accounts are available yet.</td></tr>}</tbody></table></div>
+      </section>
+      <section className="cana-panel overflow-hidden"><div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Brought forward</p><h2 className="mt-1 font-extrabold text-slate-950">Opening customer debts</h2></div><span className="text-sm text-slate-500">{openingBalances.length} record{openingBalances.length === 1 ? "" : "s"}</span></div><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Reference</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Description</th><th className="px-4 py-3 text-right">Original</th><th className="px-4 py-3 text-right">Paid</th><th className="px-4 py-3 text-right">Balance</th><th className="px-4 py-3">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{openingBalances.map((opening) => <tr key={opening._id}><td className="px-4 py-3"><p className="font-bold text-slate-950">{opening.openingNumber}</p><p className="mt-0.5 text-xs text-slate-500">{new Date(opening.openingDate).toLocaleDateString("en-RW")}</p></td><td className="px-4 py-3 font-semibold text-slate-800">{opening.customer?.businessName || opening.customer?.fullName || "Customer"}</td><td className="px-4 py-3 text-slate-600">{opening.description}</td><td className="px-4 py-3 text-right text-slate-700">{money(opening.amount)} RWF</td><td className="px-4 py-3 text-right text-emerald-700">{money(opening.amountPaid)} RWF</td><td className="px-4 py-3 text-right font-bold text-slate-950">{money(opening.balance)} RWF</td><td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(opening.status)}`}>{opening.status.replaceAll("_", " ")}</span></td></tr>)}{!loading && !openingBalances.length && <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">No opening customer debts recorded.</td></tr>}</tbody></table></div></section>
     </div>
   );
 }

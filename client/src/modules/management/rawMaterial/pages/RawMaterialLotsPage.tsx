@@ -7,6 +7,7 @@ import type { RawMaterial } from "../types/rawMaterial.types";
 import { getSuppliers } from "../../suppliers/services/supplierService";
 import type { Supplier } from "../../suppliers/types/supplier.types";
 import { printCanaDocument } from "../../utils/printCanaDocument";
+import { useConfirmation } from "@/context/confirmationContext";
 
 type Lot = {
   _id: string;
@@ -33,6 +34,7 @@ const statusStyle: Record<string, string> = {
 };
 
 export default function RawMaterialLotsPage() {
+  const { confirm } = useConfirmation();
   const [searchParams] = useSearchParams();
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -161,7 +163,7 @@ export default function RawMaterialLotsPage() {
   };
   const release = async (lot: Lot) => {
     const rawMaterialId = materialId || lot.rawMaterial?._id;
-    if (!rawMaterialId || !window.confirm(`Release ${lot.lotNumber} to available stock after quality approval?`)) return;
+    if (!rawMaterialId || !await confirm({ title: "Release material lot", description: `Release ${lot.lotNumber} to available stock after quality approval?`, confirmLabel: "Release to stock", tone: "warning" })) return;
     try {
       await api.patch(`/raw-materials/${rawMaterialId}/lots/${lot._id}/release`);
       await loadLots();

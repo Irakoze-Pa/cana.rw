@@ -40,6 +40,7 @@ import {
   createProductionBatch,
   getProductionBatches,
 } from "../services/productionBatch.service";
+import { useConfirmation } from "@/context/confirmationContext";
 
 import type {
   ProductionBatch,
@@ -322,6 +323,7 @@ function printProductionOrder(order: ProductionOrder) {
 /* ========================================================================== */
 
 export default function ProductionOrdersPage() {
+  const { confirm } = useConfirmation();
   const [searchParams, setSearchParams] = useSearchParams();
   const replenishmentProductId = searchParams.get("replenish") || "";
   const replenishmentQuantity = Number(searchParams.get("quantity") || 0);
@@ -749,10 +751,7 @@ export default function ProductionOrdersPage() {
   const handleDelete = async (
     order: ProductionOrder
   ) => {
-    const confirmed =
-      window.confirm(
-        `Delete production order "${order.productionOrderNo}"?`
-      );
+    const confirmed = await confirm({ title: "Delete production order", description: `Delete production order “${order.productionOrderNo}”? This cannot be undone.`, confirmLabel: "Delete order", tone: "danger" });
 
     if (!confirmed) {
       return;

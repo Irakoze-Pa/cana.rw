@@ -32,9 +32,11 @@ import type {
 } from "../types/rawMaterial.types";
 import { printCanaDocument } from "../../utils/printCanaDocument";
 import { useToast } from "@/context/toastContext";
+import { useConfirmation } from "@/context/confirmationContext";
 
 function RawMaterialsPage() {
   const { toast } = useToast();
+  const { confirm } = useConfirmation();
   const [materials, setMaterials] =
     useState<RawMaterial[]>([]);
 
@@ -252,10 +254,7 @@ function RawMaterialsPage() {
   const handleDelete = async (
     id: string
   ) => {
-    const confirmed =
-      window.confirm(
-        "Delete this unused test material and permanently remove its lots, supplier offers, stock, and inventory ledger? This cannot be undone. Materials used by formulas or production cannot be deleted."
-      );
+    const confirmed = await confirm({ title: "Delete raw material", description: "Delete this unused material and permanently remove its lots, supplier offers, stock, and inventory ledger? Materials used by formulas or production cannot be deleted.", confirmLabel: "Delete material", tone: "danger" });
 
     if (!confirmed) {
       return;
