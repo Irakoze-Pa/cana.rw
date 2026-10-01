@@ -21,6 +21,9 @@ export interface RawMaterial {
 
   unit: string;
 
+  /** Supplier package capacities in the same base unit, used to derive pack counts. */
+  packSizes?: number[];
+
   /**
    * Current physical stock.
    */
@@ -80,6 +83,7 @@ export interface CreateRawMaterialData {
   category: string;
 
   unit: string;
+  packSizes?: number[];
 
   /**
    * Initial stock.
@@ -121,6 +125,7 @@ export interface UpdateRawMaterialData {
   category?: string;
 
   unit?: string;
+  packSizes?: number[];
 
   /**
    * Current physical stock.

@@ -14,6 +14,7 @@ import {
 } from "react";
 
 import inventoryService from "../services/inventoryService";
+import { useConfirmation } from "@/context/confirmationContext";
 
 import type {
   AddStockData,
@@ -58,7 +59,10 @@ const StockTransactionModal = ({
   onClose,
   onSuccess,
 }: StockTransactionModalProps) => {
+  const { confirm } = useConfirmation();
   const [quantity, setQuantity] = useState("");
+  const [packSize, setPackSize] = useState("");
+  const [entryMode, setEntryMode] = useState<"pack" | "kg">("pack");
   const [unitCost, setUnitCost] = useState("");
 
   const [transactionType, setTransactionType] =
@@ -82,6 +86,8 @@ const StockTransactionModal = ({
     }
 
     setQuantity("");
+    setPackSize(typeof inventory?.rawMaterial === "object" && inventory.rawMaterial?.packSizes?.length ? String(inventory.rawMaterial.packSizes[0]) : "");
+    setEntryMode(typeof inventory?.rawMaterial === "object" && inventory.rawMaterial?.packSizes?.length && inventory.unit === "kg" ? "pack" : "kg");
 
     setUnitCost(
       inventory?.averageCostPerUnit
@@ -93,7 +99,7 @@ const StockTransactionModal = ({
 
     setNewQuantity(
       inventory
-        ? String(inventory.quantity)
+        ? String(typeof inventory.rawMaterial === "object" && inventory.rawMaterial?.packSizes?.length && inventory.unit === "kg" ? inventory.quantity / inventory.rawMaterial.packSizes[0] : inventory.quantity)
         : ""
     );
 
@@ -132,6 +138,12 @@ const StockTransactionModal = ({
   const isAdd = mode === "add";
   const isRemove = mode === "remove";
   const isAdjust = mode === "adjust";
+  const packSizes = typeof inventory.rawMaterial === "object" ? inventory.rawMaterial?.packSizes || [] : [];
+  const hasPackSizes = inventory.unit === "kg" && packSizes.length > 0;
+  const usesPacks = hasPackSizes && entryMode === "pack";
+  const selectedPackSize = Number(packSize || packSizes[0] || 0);
+  const asKg = (value: string) => usesPacks ? Number(value) * selectedPackSize : Number(value);
+  const changeEntryMode = (nextMode: "pack" | "kg") => { setEntryMode(nextMode); setQuantity(""); if (isAdjust) setNewQuantity(String(nextMode === "pack" ? currentQuantity / selectedPackSize : currentQuantity)); };
 
   const title = isAdd
     ? "Add Stock"
@@ -159,6 +171,15 @@ const StockTransactionModal = ({
       return;
     }
 
+    const entered = isAdjust ? asKg(newQuantity) : asKg(quantity);
+    if (!Number.isFinite(entered) || (isAdjust ? entered < 0 : entered <= 0)) {
+      setError(isAdjust ? "New pack count cannot be negative." : "Enter a number of packs greater than zero.");
+      return;
+    }
+    const operation = isAdd ? "add" : isRemove ? "remove" : "set";
+    const confirmed = await confirm({ title: `${isAdjust ? "Confirm stock adjustment" : isRemove ? "Confirm stock issue" : "Confirm stock entry"}`, description: usesPacks ? ` ${operation === "set" ? "Set stock to" : `${operation[0].toUpperCase()}${operation.slice(1)}`} ${Number(isAdjust ? newQuantity : quantity || 0).toLocaleString()} pack(s) of ${selectedPackSize.toLocaleString()} kg (${Number(entered || 0).toLocaleString()} kg).` : `${operation[0].toUpperCase()}${operation.slice(1)} ${Number(entered || 0).toLocaleString()} ${inventory.unit}.`, confirmLabel: isAdjust ? "Adjust stock" : isRemove ? "Issue stock" : "Post stock", tone: isRemove ? "warning" : "primary" });
+    if (!confirmed) return;
+
     try {
       setLoading(true);
 
@@ -167,8 +188,7 @@ const StockTransactionModal = ({
       // =================================================
 
       if (isAdd) {
-        const parsedQuantity =
-          Number(quantity);
+        const parsedQuantity = asKg(quantity);
 
         const parsedUnitCost =
           unitCost.trim() === ""
@@ -219,8 +239,7 @@ const StockTransactionModal = ({
       // =================================================
 
       if (isRemove) {
-        const parsedQuantity =
-          Number(quantity);
+        const parsedQuantity = asKg(quantity);
 
         if (
           !Number.isFinite(parsedQuantity) ||
@@ -268,8 +287,7 @@ const StockTransactionModal = ({
       // =================================================
 
       if (isAdjust) {
-        const parsedNewQuantity =
-          Number(newQuantity);
+        const parsedNewQuantity = asKg(newQuantity);
 
         const parsedUnitCost =
           unitCost.trim() === ""
@@ -480,6 +498,7 @@ const StockTransactionModal = ({
 
           {isAdd && (
             <>
+              {hasPackSizes && <label><span className="mb-2 block text-sm font-semibold text-gray-700">Enter stock by</span><select value={entryMode} onChange={(event) => changeEntryMode(event.target.value as "pack" | "kg")} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900"><option value="pack">Number of packs</option><option value="kg">Kilograms</option></select></label>}
               <div>
                 <label className="mb-2 block text-sm font-semibold text-gray-700">
                   Transaction Type
@@ -512,9 +531,10 @@ const StockTransactionModal = ({
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {usesPacks && <label className="sm:col-span-2"><span className="mb-2 block text-sm font-semibold text-gray-700">Package size</span><select value={packSize} onChange={(event) => setPackSize(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900">{packSizes.map((size) => <option key={size} value={size}>{formatNumber(size)} kg per pack</option>)}</select></label>}
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">
-                    Quantity
+                    {usesPacks ? "Number of packs" : "Quantity"}
                   </label>
 
                   <div className="relative">
@@ -534,9 +554,10 @@ const StockTransactionModal = ({
                     />
 
                     <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
-                      {inventory.unit}
+                      {usesPacks ? "packs" : inventory.unit}
                     </span>
                   </div>
+                  {usesPacks && <p className="mt-1.5 text-xs text-gray-500">Will post {formatNumber(asKg(quantity) || 0)} kg.</p>}
                 </div>
 
                 <div>
@@ -568,8 +589,10 @@ const StockTransactionModal = ({
 
           {isRemove && (
             <div>
+              {hasPackSizes && <label className="mb-4 block"><span className="mb-2 block text-sm font-semibold text-gray-700">Issue stock by</span><select value={entryMode} onChange={(event) => changeEntryMode(event.target.value as "pack" | "kg")} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900"><option value="pack">Number of packs</option><option value="kg">Kilograms</option></select></label>}
+              {usesPacks && <label className="mb-4 block"><span className="mb-2 block text-sm font-semibold text-gray-700">Package size</span><select value={packSize} onChange={(event) => setPackSize(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900">{packSizes.map((size) => <option key={size} value={size}>{formatNumber(size)} kg per pack</option>)}</select></label>}
               <label className="mb-2 block text-sm font-semibold text-gray-700">
-                Quantity to Remove
+                {usesPacks ? "Packs to remove" : "Quantity to Remove"}
               </label>
 
               <div className="relative">
@@ -577,7 +600,7 @@ const StockTransactionModal = ({
                   type="number"
                   min="0"
                   step="0.01"
-                  max={availableQuantity}
+                  max={usesPacks ? availableQuantity / selectedPackSize : availableQuantity}
                   value={quantity}
                   onChange={(event) =>
                     setQuantity(
@@ -590,7 +613,7 @@ const StockTransactionModal = ({
                 />
 
                 <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
-                  {inventory.unit}
+                  {usesPacks ? "packs" : inventory.unit}
                 </span>
               </div>
 
@@ -602,6 +625,7 @@ const StockTransactionModal = ({
                   )}{" "}
                   {inventory.unit}
                 </span>
+                {usesPacks && <span> · {formatNumber(availableQuantity / selectedPackSize)} packs at {formatNumber(selectedPackSize)} kg</span>}
               </p>
             </div>
           )}
@@ -612,15 +636,17 @@ const StockTransactionModal = ({
 
           {isAdjust && (
             <>
+              {hasPackSizes && <label><span className="mb-2 block text-sm font-semibold text-gray-700">Set stock by</span><select value={entryMode} onChange={(event) => changeEntryMode(event.target.value as "pack" | "kg")} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900"><option value="pack">Number of packs</option><option value="kg">Kilograms</option></select></label>}
+              {usesPacks && <label><span className="mb-2 block text-sm font-semibold text-gray-700">Package size</span><select value={packSize} onChange={(event) => setPackSize(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900">{packSizes.map((size) => <option key={size} value={size}>{formatNumber(size)} kg per pack</option>)}</select></label>}
               <div>
                 <label className="mb-2 block text-sm font-semibold text-gray-700">
-                  New Quantity
+                  {usesPacks ? "New pack count" : "New Quantity"}
                 </label>
 
                 <div className="relative">
                   <input
                     type="number"
-                    min={reservedQuantity}
+                    min={usesPacks ? reservedQuantity / selectedPackSize : reservedQuantity}
                     step="0.01"
                     value={newQuantity}
                     onChange={(event) =>
@@ -634,7 +660,7 @@ const StockTransactionModal = ({
                   />
 
                   <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
-                    {inventory.unit}
+                    {usesPacks ? "packs" : inventory.unit}
                   </span>
                 </div>
 
@@ -648,6 +674,7 @@ const StockTransactionModal = ({
                   </span>
                   .
                 </p>
+                {usesPacks && <p className="mt-1 text-xs text-gray-500">New stock will be {formatNumber(asKg(newQuantity) || 0)} kg.</p>}
               </div>
 
               <div>

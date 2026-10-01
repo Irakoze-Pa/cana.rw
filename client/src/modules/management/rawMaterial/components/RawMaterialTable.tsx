@@ -23,6 +23,11 @@ const formatNumber = (value: number) => {
 const stockGroup = (category?: string) =>
   /^Packaging\b/i.test(category || "") ? "Packaging" : "Raw materials";
 
+const stockSummary = (quantity: number, unit: string, packSizes?: number[]) => {
+  if (!packSizes?.length) return "—";
+  return `${formatNumber(quantity / packSizes[0])} packs @ ${formatNumber(packSizes[0])} ${unit}`;
+};
+
 function RawMaterialTable({
   materials,
   loading = false,
@@ -224,10 +229,7 @@ function RawMaterialTable({
                       </p>
 
                       <p className="mt-0.5 text-xs text-gray-400">
-                        Min:{" "}
-                        {formatNumber(
-                          minimumStock
-                        )}
+                        {material.packSizes?.length ? `${stockSummary(quantity, material.unit, material.packSizes)} · ` : ""}Min: {formatNumber(minimumStock)} {material.unit}
                       </p>
                     </div>
                   </td>
@@ -245,7 +247,7 @@ function RawMaterialTable({
                       </p>
 
                       <p className="mt-0.5 text-xs text-gray-400">
-                        {material.unit}
+                        {material.packSizes?.length ? stockSummary(availableQuantity, material.unit, material.packSizes) : material.unit}
                       </p>
                     </div>
                   </td>
@@ -286,6 +288,7 @@ function RawMaterialTable({
                       )}{" "}
                       <span className="text-xs font-normal text-gray-400">RWF / {material.unit}</span>
                     </span>
+                    {material.packSizes?.length ? <p className="mt-0.5 text-xs text-gray-400">{formatNumber((material.costPerUnit || 0) * material.packSizes[0])} RWF / {material.packSizes[0]} {material.unit} pack</p> : null}
                   </td>
 
                   {/* ================================================= */}

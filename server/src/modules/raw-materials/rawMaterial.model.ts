@@ -10,6 +10,9 @@ export interface IRawMaterial extends Document {
 
   unit: string;
 
+  /** One or more supplier pack capacities in the material's base unit. */
+  packSizes: number[];
+
   quantity: number;
 
   reservedQuantity: number;
@@ -71,6 +74,18 @@ const rawMaterialSchema =
         type: String,
         required: true,
         trim: true,
+      },
+
+      // A material can arrive in more than one pack size (for example Styrene
+      // Acrylic in 195 kg, 220 kg and 240 kg drums). Stock remains in the
+      // base unit; pack quantities shown in the UI are derived from this.
+      packSizes: {
+        type: [Number],
+        default: [],
+        validate: {
+          validator: (sizes: number[]) => Array.isArray(sizes) && sizes.every((size) => Number.isFinite(size) && size > 0),
+          message: "Each pack size must be greater than zero.",
+        },
       },
 
       // =====================================================

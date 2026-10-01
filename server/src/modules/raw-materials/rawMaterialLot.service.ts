@@ -6,7 +6,7 @@ import InventoryTransaction from "../inventory/inventoryTransaction.model";
 import PurchaseOrder from "../purchaseOrders/purchaseOrder.model";
 import SupplierMaterial from "./supplierMaterial.model";
 
-export async function listLots(rawMaterialId?: string) { const query = rawMaterialId ? { rawMaterial: rawMaterialId } : {}; return RawMaterialLot.find(query).populate("rawMaterial", "name code unit").populate("supplier", "name code").sort({ expiresAt: 1, receivedAt: -1 }).lean(); }
+export async function listLots(rawMaterialId?: string) { const query = rawMaterialId ? { rawMaterial: rawMaterialId } : {}; return RawMaterialLot.find(query).populate("rawMaterial", "name code unit packSizes").populate("supplier", "name code").sort({ expiresAt: 1, receivedAt: -1 }).lean(); }
 export async function createLot(rawMaterialId: string, input: { supplier: string; purchaseOrder?: string; lotNumber?: string; receivedQuantity: number; unitCost: number; updateSupplierPrice?: boolean; receivedAt?: string; expiresAt?: string; status?: LotStatus; notes?: string }) {
   if (!mongoose.Types.ObjectId.isValid(rawMaterialId)) throw new Error("Invalid raw material.");
   const material = await RawMaterial.findById(rawMaterialId);
@@ -46,7 +46,7 @@ export async function createLot(rawMaterialId: string, input: { supplier: string
     purchaseOrder.status = purchaseOrder.items.every((item: any) => Number(receivedByMaterial.get(String(item.rawMaterial)) || 0) >= Number(item.quantity)) ? "received" : "partially_received";
     await purchaseOrder.save();
   }
-  return RawMaterialLot.findById(lot._id).populate("rawMaterial", "name code unit").populate("supplier", "name code");
+  return RawMaterialLot.findById(lot._id).populate("rawMaterial", "name code unit packSizes").populate("supplier", "name code");
 }
 
 export async function releaseLot(rawMaterialId: string, lotId: string) {
@@ -59,12 +59,12 @@ export async function releaseLot(rawMaterialId: string, lotId: string) {
   await addStock({ rawMaterial: rawMaterialId, quantity: lot.availableQuantity, unitCost: lot.unitCost, lotNumber: lot.lotNumber, type: "Purchase", referenceType: "Manual", referenceId: undefined, reason: `Lot ${lot.lotNumber} released after quality check`, notes: lot.notes });
   lot.status = "available";
   await lot.save();
-  return RawMaterialLot.findById(lot._id).populate("rawMaterial", "name code unit").populate("supplier", "name code");
+  return RawMaterialLot.findById(lot._id).populate("rawMaterial", "name code unit packSizes").populate("supplier", "name code");
 }
 
 export async function getLotTrace(lotId: string) {
   if (!mongoose.Types.ObjectId.isValid(lotId)) throw new Error("Invalid material lot.");
-  const lot = await RawMaterialLot.findById(lotId).populate("rawMaterial", "name code unit").populate("supplier", "name code").lean();
+  const lot = await RawMaterialLot.findById(lotId).populate("rawMaterial", "name code unit packSizes").populate("supplier", "name code").lean();
   if (!lot) throw new Error("Material lot not found.");
   const transactions = await InventoryTransaction.find({ rawMaterial: lot.rawMaterial?._id || lot.rawMaterial, lotNumber: lot.lotNumber })
     .sort({ transactionDate: 1, createdAt: 1 })

@@ -3,6 +3,8 @@ export interface InventoryRawMaterialSummary {
   name?: string;
   code?: string;
   category?: string;
+  unit?: string;
+  packSizes?: number[];
 }
 
 export interface Inventory {

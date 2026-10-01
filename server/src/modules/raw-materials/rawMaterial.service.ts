@@ -12,6 +12,7 @@ export interface CreateRawMaterialData {
   code?: string;
   category: string;
   unit: string;
+  packSizes?: number[];
 
   quantity?: number;
   reservedQuantity?: number;
@@ -31,6 +32,7 @@ export interface UpdateRawMaterialData {
   code?: string;
   category?: string;
   unit?: string;
+  packSizes?: number[];
 
   quantity?: number;
   reservedQuantity?: number;
@@ -76,6 +78,8 @@ const calculateAvailableQuantity = (
     quantity - reservedQuantity
   );
 };
+
+const normalizePackSizes = (sizes?: number[]) => [...new Set((sizes || []).map(Number).filter((size) => Number.isFinite(size) && size > 0))].sort((left, right) => left - right);
 
 /** Repairs legacy balances so the material master always obeys: available = current - reserved. */
 const reconcileAvailableQuantities = async () => {
@@ -191,6 +195,8 @@ export const createRawMaterial = async (
         data.category.trim(),
 
       unit: data.unit.trim(),
+
+      packSizes: normalizePackSizes(data.packSizes),
 
       quantity,
 
@@ -407,6 +413,8 @@ export const updateRawMaterial =
       updateData.unit =
         data.unit.trim();
     }
+
+    if (data.packSizes !== undefined) updateData.packSizes = normalizePackSizes(data.packSizes);
 
     /**
      * Update material.

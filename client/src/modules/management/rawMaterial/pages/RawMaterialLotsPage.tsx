@@ -21,7 +21,7 @@ type Lot = {
   expiresAt?: string;
   status: string;
   notes?: string;
-  rawMaterial?: { _id?: string; name?: string; code?: string };
+  rawMaterial?: { _id?: string; name?: string; code?: string; packSizes?: number[] };
   supplier?: { name?: string };
 };
 type LotTrace = { lot: Lot; summary: { receivedQuantity: number; availableQuantity: number; issuedQuantity: number; returnedQuantity: number }; transactions: Array<{ _id: string; type: string; quantity: number; unit: string; transactionDate?: string; reason?: string; notes?: string; productionBatch?: { batchNo?: string; batchNumber?: string; productName?: string; status?: string }; productionOrder?: { productionOrderNo?: string } }> };
@@ -32,6 +32,7 @@ const statusStyle: Record<string, string> = {
   expired: "bg-red-50 text-red-700",
   consumed: "bg-gray-100 text-gray-600",
 };
+const packEquivalent = (quantity: number, unit: string, sizes?: number[]) => !sizes?.length ? "" : sizes.map((size) => `${(quantity / size).toLocaleString("en-RW", { maximumFractionDigits: 2 })} × ${size} ${unit}`).join(" · ");
 
 export default function RawMaterialLotsPage() {
   const { confirm } = useConfirmation();
@@ -60,6 +61,9 @@ export default function RawMaterialLotsPage() {
     status: "available",
     notes: "",
   });
+  const [packCount, setPackCount] = useState("");
+  const [packSize, setPackSize] = useState("");
+  const [entryMode, setEntryMode] = useState<"pack" | "kg">("pack");
   const loadMaterials = async () => {
     try {
       const [materialData, supplierData, purchaseOrderData] = await Promise.all([getRawMaterials(), getSuppliers(), api.get<{ data: OpenPurchaseOrder[] }>("/purchase-orders")]);
@@ -105,6 +109,11 @@ export default function RawMaterialLotsPage() {
     setForm((previous) => previous.supplier ? previous : ({ ...previous, supplier }));
   }, [purchaseOrderId, purchaseOrders]);
   const selectedPurchaseOrder = purchaseOrders.find((order) => order._id === purchaseOrderId);
+  const selectedMaterial = materials.find((item) => item._id === materialId);
+  const materialPackSizes = selectedMaterial?.unit === "kg" ? selectedMaterial.packSizes || [] : [];
+  const receivesByPack = materialPackSizes.length > 0 && entryMode === "pack";
+  const selectedPackSize = Number(packSize || materialPackSizes[0] || 0);
+  useEffect(() => { setPackSize(materialPackSizes.length ? String(materialPackSizes[0]) : ""); setPackCount(""); setEntryMode(materialPackSizes.length ? "pack" : "kg"); }, [materialId]);
   const selectPurchaseOrder = (id: string) => {
     setPurchaseOrderId(id);
     const order = purchaseOrders.find((item) => item._id === id);
@@ -134,11 +143,15 @@ export default function RawMaterialLotsPage() {
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!materialId) return setError("Select a raw material first.");
+    const receivedQuantity = receivesByPack ? Number(packCount) * selectedPackSize : Number(form.receivedQuantity.replaceAll(",", ""));
+    if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return setError(receivesByPack ? "Enter a valid number of packs." : "Enter a valid received quantity.");
+    const confirmed = await confirm({ title: "Post goods receipt", description: receivesByPack ? `Receive ${packCount} pack(s) of ${selectedMaterial?.name || "this material"} at ${selectedPackSize.toLocaleString()} kg per pack (${receivedQuantity.toLocaleString()} kg total)?` : `Receive ${receivedQuantity.toLocaleString()} ${selectedMaterial?.unit || "kg"} of ${selectedMaterial?.name || "this material"}?`, confirmLabel: "Post receipt", tone: "warning" });
+    if (!confirmed) return;
     try {
       await api.post(`/raw-materials/${materialId}/lots`, {
         ...form,
         purchaseOrder: purchaseOrderId || undefined,
-        receivedQuantity: form.receivedQuantity.replaceAll(",", ""),
+        receivedQuantity: String(receivedQuantity),
         unitCost: form.unitCost.replaceAll(",", ""),
         expiresAt: form.expiresAt || undefined,
         lotNumber: form.lotNumber || undefined,
@@ -279,7 +292,7 @@ export default function RawMaterialLotsPage() {
           <input
             value={form.lotNumber}
             onChange={(event) =>
-              setForm({ ...form, lotNumber: event.target.value })
+            setForm({ ...form, lotNumber: event.target.value })
             }
             placeholder="Supplier lot number (optional)"
             className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
@@ -288,19 +301,26 @@ export default function RawMaterialLotsPage() {
             <option value="">Select supplier that delivered this lot</option>
             {suppliers.map((supplier) => <option key={supplier._id} value={supplier._id}>{supplier.name} · {supplier.code}</option>)}
           </select>
+          {materialPackSizes.length > 0 && <label className="text-sm font-semibold text-gray-700">Receive by
+            <select value={entryMode} onChange={(event) => setEntryMode(event.target.value as "pack" | "kg")} className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"><option value="pack">Number of packs</option><option value="kg">Kilograms</option></select>
+          </label>}
+          {receivesByPack && <label className="text-sm font-semibold text-gray-700">Package size
+            <select value={packSize} onChange={(event) => setPackSize(event.target.value)} className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm">{materialPackSizes.map((size) => <option key={size} value={size}>{size.toLocaleString()} kg per pack</option>)}</select>
+          </label>}
           <label className="text-sm font-semibold text-gray-700">
-            Received quantity ({materials.find((item) => item._id === materialId)?.unit || "kg"})
+            {receivesByPack ? "Packs received" : `Received quantity (${selectedMaterial?.unit || "kg"})`}
             <input
               required
               type="text"
               inputMode="decimal"
-              value={form.receivedQuantity}
+              value={receivesByPack ? packCount : form.receivedQuantity}
               onChange={(event) =>
-                setForm({ ...form, receivedQuantity: event.target.value })
+                receivesByPack ? setPackCount(event.target.value) : setForm({ ...form, receivedQuantity: event.target.value })
               }
-              placeholder="Example: 10000"
+              placeholder={receivesByPack ? "Example: 10" : "Example: 10000"}
               className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
             />
+            {receivesByPack && <span className="mt-1 block text-xs font-normal text-slate-500">Will receive {((Number(packCount) || 0) * selectedPackSize).toLocaleString()} kg.</span>}
           </label>
           <label className="text-sm font-semibold text-gray-700">Actual unit cost (RWF / {materials.find((item) => item._id === materialId)?.unit || "kg"})
             <input type="text" inputMode="decimal" value={form.unitCost === "0" ? "" : form.unitCost} onChange={(event) => setForm({ ...form, unitCost: event.target.value || "0" })} placeholder="Use PO / latest price" className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" />
@@ -385,12 +405,14 @@ export default function RawMaterialLotsPage() {
                   </td>
                   <td className="px-5 py-4">
                     {lot.receivedQuantity} {lot.unit}
+                    {packEquivalent(Number(lot.receivedQuantity), lot.unit, lot.rawMaterial?.packSizes) && <span className="mt-0.5 block text-xs text-slate-500">{packEquivalent(Number(lot.receivedQuantity), lot.unit, lot.rawMaterial?.packSizes)}</span>}
                     <span className="block text-xs text-gray-500">
                       {new Date(lot.receivedAt).toLocaleDateString()}
                     </span>
                   </td>
                   <td className="px-5 py-4 font-semibold">
                     {lot.availableQuantity} {lot.unit}
+                    {packEquivalent(Number(lot.availableQuantity), lot.unit, lot.rawMaterial?.packSizes) && <span className="mt-0.5 block text-xs font-normal text-slate-500">{packEquivalent(Number(lot.availableQuantity), lot.unit, lot.rawMaterial?.packSizes)}</span>}
                   </td>
                   <td className="px-5 py-4">
                     {lot.expiresAt ? (

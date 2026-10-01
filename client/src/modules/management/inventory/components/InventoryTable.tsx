@@ -25,6 +25,7 @@ const formatNumber = (value: number) => {
     maximumFractionDigits: 2,
   }).format(value || 0);
 };
+const packSummary = (quantity: number, unit: string, sizes?: number[]) => !sizes?.length ? "" : `${formatNumber(quantity / sizes[0])} packs @ ${formatNumber(sizes[0])} ${unit}`;
 
 const getStatus = (item: Inventory) => {
   if (item.status === "Inactive") {
@@ -234,7 +235,7 @@ const InventoryTable = ({
                     </p>
 
                     <p className="mt-0.5 text-xs text-gray-400">
-                      {item.unit}
+                      {packSummary(quantity, item.unit, typeof item.rawMaterial === "object" ? item.rawMaterial?.packSizes : undefined) || item.unit}
                     </p>
                   </td>
 

@@ -422,7 +422,7 @@ export const getInventory =
     const inventory = await Inventory.find()
       .populate(
         "rawMaterial",
-        "name code category unit supplier minimumStock costPerUnit status"
+        "name code category unit packSizes supplier minimumStock costPerUnit status"
       )
       .sort({
         rawMaterialName: 1,
@@ -457,7 +457,7 @@ export const getInventoryById =
         inventoryId
       ).populate(
         "rawMaterial",
-        "name code category unit supplier minimumStock costPerUnit status"
+        "name code category unit packSizes supplier minimumStock costPerUnit status"
       );
 
     if (!inventory) {
