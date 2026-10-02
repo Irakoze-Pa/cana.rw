@@ -37,7 +37,7 @@ const getStatus = (item: Inventory) => {
     };
   }
 
-  const quantity = item.quantity || 0;
+  const quantity = item.availableQuantity ?? item.quantity ?? 0;
   const minimumStock = item.minimumStock || 0;
 
   if (
@@ -141,7 +141,7 @@ const InventoryTable = ({
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="min-w-[1200px] w-full">
+        <table className="min-w-[980px] w-full">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50/70">
               <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -149,15 +149,7 @@ const InventoryTable = ({
               </th>
 
               <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                Total Stock
-              </th>
-
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                Reserved
-              </th>
-
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                Available
+                Available stock
               </th>
 
               <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -183,17 +175,9 @@ const InventoryTable = ({
               const status = getStatus(item);
               const StatusIcon = status.icon;
 
-              const quantity = item.quantity || 0;
-
-              const reservedQuantity =
-                item.reservedQuantity || 0;
-
               const availableQuantity =
                 item.availableQuantity ??
-                Math.max(
-                  0,
-                  quantity - reservedQuantity
-                );
+                item.quantity ?? 0;
 
               const minimumStock =
                 item.minimumStock || 0;
@@ -228,29 +212,7 @@ const InventoryTable = ({
                     </div>
                   </td>
 
-                  {/* Total Stock */}
-                  <td className="px-4 py-4">
-                    <p className="text-sm font-semibold text-gray-900">
-                      {formatNumber(quantity)}
-                    </p>
-
-                    <p className="mt-0.5 text-xs text-gray-400">
-                      {packSummary(quantity, item.unit, typeof item.rawMaterial === "object" ? item.rawMaterial?.packSizes : undefined) || item.unit}
-                    </p>
-                  </td>
-
-                  {/* Reserved */}
-                  <td className="px-4 py-4">
-                    <p className="text-sm font-medium text-gray-700">
-                      {formatNumber(reservedQuantity)}
-                    </p>
-
-                    <p className="mt-0.5 text-xs text-gray-400">
-                      {item.unit}
-                    </p>
-                  </td>
-
-                  {/* Available */}
+                  {/* Available stock */}
                   <td className="px-4 py-4">
                     <p
                       className={`text-sm font-semibold ${
@@ -265,7 +227,7 @@ const InventoryTable = ({
                     </p>
 
                     <p className="mt-0.5 text-xs text-gray-400">
-                      {item.unit}
+                      {packSummary(availableQuantity, item.unit, typeof item.rawMaterial === "object" ? item.rawMaterial?.packSizes : undefined) || item.unit}
                     </p>
                   </td>
 
@@ -393,7 +355,7 @@ const InventoryTable = ({
         <div className="hidden items-center gap-2 text-xs text-gray-400 sm:flex">
           <CheckCircle2 className="h-3.5 w-3.5" />
 
-          Inventory is managed through stock
+          Stock is controlled through lots and
           transactions
         </div>
       </div>

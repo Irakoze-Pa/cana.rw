@@ -82,7 +82,7 @@ function RawMaterialTable({
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1250px] text-left">
+        <table className="w-full min-w-[1050px] text-left">
           {/* ================================================= */}
           {/* HEADER */}
           {/* ================================================= */}
@@ -102,15 +102,7 @@ function RawMaterialTable({
               </th>
 
               <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Total Stock
-              </th>
-
-              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Reserved
-              </th>
-
-              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Available
+                Available stock
               </th>
 
               <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -140,32 +132,23 @@ function RawMaterialTable({
               const quantity =
                 material.quantity ?? 0;
 
-              const reservedQuantity =
-                material.reservedQuantity ?? 0;
-
               const availableQuantity =
                 material.availableQuantity ??
-                Math.max(
-                  0,
-                  quantity -
-                    reservedQuantity
-                );
+                quantity;
 
               const minimumStock =
                 material.minimumStock ?? 0;
 
-              const isOutOfStock =
-                material.isOutOfStock ??
-                quantity <= 0;
+              const isOutOfStock = availableQuantity <= 0;
 
               const isLowStock =
-                material.isLowStock ??
-                quantity <= minimumStock;
+                !isOutOfStock &&
+                availableQuantity <= minimumStock;
 
               const startsCategory = index === 0 || stockGroup(sortedMaterials[index - 1].category) !== stockGroup(material.category);
               return (
                 <Fragment key={material._id}>
-                  {startsCategory && <tr className="bg-slate-50"><td colSpan={10} className="px-5 py-2.5 text-xs font-extrabold uppercase tracking-[.12em] text-slate-600">{stockGroup(material.category)}</td></tr>}
+                  {startsCategory && <tr className="bg-slate-50"><td colSpan={8} className="px-5 py-2.5 text-xs font-extrabold uppercase tracking-[.12em] text-slate-600">{stockGroup(material.category)}</td></tr>}
                 <tr
                   className="
                     transition
@@ -209,50 +192,6 @@ function RawMaterialTable({
                   </td>
 
                   {/* ================================================= */}
-                  {/* TOTAL STOCK */}
-                  {/* ================================================= */}
-
-                  <td className="px-5 py-4">
-                    <div>
-                      <p
-                        className={`text-sm font-bold ${
-                          isOutOfStock
-                            ? "text-red-600"
-                            : isLowStock
-                              ? "text-amber-600"
-                              : "text-gray-900"
-                        }`}
-                      >
-                        {formatNumber(
-                          quantity
-                        )}
-                      </p>
-
-                      <p className="mt-0.5 text-xs text-gray-400">
-                        {material.packSizes?.length ? `${stockSummary(quantity, material.unit, material.packSizes)} · ` : ""}Min: {formatNumber(minimumStock)} {material.unit}
-                      </p>
-                    </div>
-                  </td>
-
-                  {/* ================================================= */}
-                  {/* RESERVED */}
-                  {/* ================================================= */}
-
-                  <td className="px-5 py-4">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700">
-                        {formatNumber(
-                          reservedQuantity
-                        )}
-                      </p>
-
-                      <p className="mt-0.5 text-xs text-gray-400">
-                        {material.packSizes?.length ? stockSummary(availableQuantity, material.unit, material.packSizes) : material.unit}
-                      </p>
-                    </div>
-                  </td>
-
-                  {/* ================================================= */}
                   {/* AVAILABLE */}
                   {/* ================================================= */}
 
@@ -271,7 +210,9 @@ function RawMaterialTable({
                       </p>
 
                       <p className="mt-0.5 text-xs text-gray-400">
-                        {material.unit}
+                        {material.packSizes?.length
+                          ? `${stockSummary(availableQuantity, material.unit, material.packSizes)} · Min: ${formatNumber(minimumStock)} ${material.unit}`
+                          : `Min: ${formatNumber(minimumStock)} ${material.unit}`}
                       </p>
                     </div>
                   </td>

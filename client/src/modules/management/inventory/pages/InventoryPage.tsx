@@ -4,7 +4,6 @@ import {
   PackagePlus,
   RefreshCw,
   Search,
-  TrendingDown,
   Warehouse,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -127,26 +126,10 @@ const InventoryPage = () => {
   const totalItems =
     summary?.totalItems ?? inventory.length;
 
-  const totalQuantity =
-    summary?.totalQuantity ??
-    inventory.reduce(
-      (sum, item) => sum + (item.quantity || 0),
-      0
-    );
-
-  const totalReserved =
-    summary?.totalReservedQuantity ??
-    inventory.reduce(
-      (sum, item) =>
-        sum + (item.reservedQuantity || 0),
-      0
-    );
-
   const totalAvailable =
     summary?.totalAvailableQuantity ??
     inventory.reduce(
-      (sum, item) =>
-        sum + (item.availableQuantity || 0),
+      (sum, item) => sum + (item.availableQuantity ?? item.quantity ?? 0),
       0
     );
 
@@ -204,6 +187,7 @@ const InventoryPage = () => {
 
     handleCloseModal();
 
+    window.dispatchEvent(new Event("cana:stock-updated"));
     void loadInventory(true);
   };
 
@@ -263,17 +247,11 @@ const InventoryPage = () => {
       </header>
 
       {/* Summary */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           icon={<Boxes size={19} />}
           label="Inventory Items"
           value={formatNumber(totalItems)}
-        />
-
-        <SummaryCard
-          icon={<Warehouse size={19} />}
-          label="Total Quantity"
-          value={`${formatNumber(totalQuantity)} kg`}
         />
 
         <SummaryCard
@@ -283,18 +261,17 @@ const InventoryPage = () => {
         />
 
         <SummaryCard
-          icon={<TrendingDown size={19} />}
-          label="Reserved Stock"
-          value={`${formatNumber(totalReserved)} kg`}
+          icon={<AlertTriangle size={19} />}
+          label="Low Stock"
+          value={formatNumber(lowStock)}
+          danger={lowStock > 0}
         />
 
         <SummaryCard
           icon={<AlertTriangle size={19} />}
-          label="Low / Out of Stock"
-          value={`${lowStock} / ${outOfStock}`}
-          danger={
-            lowStock > 0 || outOfStock > 0
-          }
+          label="Out of Stock"
+          value={formatNumber(outOfStock)}
+          danger={outOfStock > 0}
         />
       </div>
 

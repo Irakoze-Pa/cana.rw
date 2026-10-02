@@ -141,41 +141,9 @@ function RawMaterialsPage() {
 
     const lowStockMaterials =
       activeCatalog.filter((material) => {
-        if (
-          typeof material.isLowStock ===
-          "boolean"
-        ) {
-          return material.isLowStock;
-        }
-
-        return (
-          Number(material.quantity) <=
-          Number(
-            material.minimumStock
-          )
-        );
+        const available = Number(material.availableQuantity ?? material.quantity);
+        return available > 0 && available <= Number(material.minimumStock);
       }).length;
-
-    const totalStock =
-      activeCatalog.reduce(
-        (total, material) =>
-          total +
-          Number(
-            material.quantity
-          ),
-        0
-      );
-
-    const totalReserved =
-      activeCatalog.reduce(
-        (total, material) =>
-          total +
-          Number(
-            material.reservedQuantity ??
-              0
-          ),
-        0
-      );
 
     const totalAvailable =
       activeCatalog.reduce(
@@ -183,16 +151,7 @@ function RawMaterialsPage() {
           total +
           Number(
             material.availableQuantity ??
-              Math.max(
-                0,
-                Number(
-                  material.quantity
-                ) -
-                  Number(
-                    material.reservedQuantity ??
-                      0
-                  )
-              )
+              Number(material.quantity)
           ),
         0
       );
@@ -201,8 +160,6 @@ function RawMaterialsPage() {
       totalMaterials,
       activeMaterials,
       lowStockMaterials,
-      totalStock,
-      totalReserved,
       totalAvailable,
     };
   }, [materials]);
@@ -305,7 +262,7 @@ function RawMaterialsPage() {
     setModalOpen(false);
     setSelectedMaterial(null);
   };
-  const printRegister = () => printCanaDocument({ title: "Raw material register", reference: `RM-LIST-${new Date().toISOString().slice(0, 10)}`, details: [{ label: "Category", value: categoryFilter }, { label: "Materials listed", value: visibleMaterials.length }, { label: "Current stock", value: formatQuantity(summary.totalStock) }, { label: "Reserved for production", value: formatQuantity(summary.totalReserved) }, { label: "Available stock", value: formatQuantity(summary.totalAvailable) }, { label: "Low-stock materials", value: summary.lowStockMaterials }], table: { headers: ["Category", "Material", "Code", "Current", "Pack equivalent", "Available", "Minimum"], rows: visibleMaterials.map((material) => { const quantity = Number(material.quantity || 0); const packs = material.packSizes?.length ? material.packSizes.map((size) => `${(quantity / size).toLocaleString("en-RW", { maximumFractionDigits: 2 })} × ${size} ${material.unit}`).join(" · ") : "—"; return [material.category, material.name, material.code, `${quantity} ${material.unit}`, packs, `${material.availableQuantity ?? Math.max(0, quantity - (material.reservedQuantity || 0))} ${material.unit}`, `${material.minimumStock} ${material.unit}`]; }) }, notes: "Stock is controlled in the base unit. Pack equivalents are calculated from the configured supplier package sizes and may be fractional for opened packs." });
+  const printRegister = () => printCanaDocument({ title: "Raw material register", reference: `RM-LIST-${new Date().toISOString().slice(0, 10)}`, details: [{ label: "Category", value: categoryFilter }, { label: "Materials listed", value: visibleMaterials.length }, { label: "Available stock", value: formatQuantity(summary.totalAvailable) }, { label: "Low-stock materials", value: summary.lowStockMaterials }], table: { headers: ["Category", "Material", "Code", "Available stock", "Pack equivalent", "Minimum"], rows: visibleMaterials.map((material) => { const available = Number(material.availableQuantity ?? material.quantity ?? 0); const packs = material.packSizes?.length ? material.packSizes.map((size) => `${(available / size).toLocaleString("en-RW", { maximumFractionDigits: 2 })} × ${size} ${material.unit}`).join(" · ") : "—"; return [material.category, material.name, material.code, `${available} ${material.unit}`, packs, `${material.minimumStock} ${material.unit}`]; }) }, notes: "Available stock is controlled by the inventory ledger. Pack equivalents are calculated from the configured supplier package sizes and may be fractional for opened packs." });
 
   return (
     <div className="space-y-6">
@@ -482,20 +439,6 @@ function RawMaterialsPage() {
           }
         />
 
-        {/* TOTAL STOCK */}
-
-        <SummaryCard
-          label="Total Stock"
-          value={formatQuantity(
-            summary.totalStock
-          )}
-          icon={
-            <Archive
-              size={20}
-            />
-          }
-        />
-
         {/* AVAILABLE */}
 
         <SummaryCard
@@ -539,21 +482,7 @@ function RawMaterialsPage() {
 
           <div className="flex flex-wrap gap-5 text-sm">
             <StockMetric
-              label="Current Stock"
-              value={formatQuantity(
-                summary.totalStock
-              )}
-            />
-
-            <StockMetric
-              label="Reserved"
-              value={formatQuantity(
-                summary.totalReserved
-              )}
-            />
-
-            <StockMetric
-              label="Available"
+              label="Available stock"
               value={formatQuantity(
                 summary.totalAvailable
               )}

@@ -228,7 +228,6 @@ const syncRawMaterialStock = async (
     quantity: inventory.quantity,
     reservedQuantity: inventory.reservedQuantity,
     availableQuantity: inventory.availableQuantity,
-    costPerUnit: inventory.averageCostPerUnit,
   });
 };
 

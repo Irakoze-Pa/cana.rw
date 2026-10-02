@@ -831,7 +831,7 @@ function RawMaterialModal({
                     </Link>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {/* AVAILABLE */}
 
                     <div className="rounded-xl border border-gray-100 bg-white p-4">
@@ -853,31 +853,13 @@ function RawMaterialModal({
                       </p>
                     </div>
 
-                    {/* RESERVED */}
-
                     <div className="rounded-xl border border-gray-100 bg-white p-4">
                       <p className="text-xs font-medium text-gray-500">
-                        Reserved
+                        Minimum level
                       </p>
 
                       <p className="mt-1 text-lg font-bold text-gray-900">
-                        {material.reservedQuantity ??
-                          0}{" "}
-                        <span className="text-xs font-medium text-gray-400">
-                          {material.unit}
-                        </span>
-                      </p>
-                    </div>
-
-                    {/* TOTAL */}
-
-                    <div className="rounded-xl border border-gray-100 bg-white p-4">
-                      <p className="text-xs font-medium text-gray-500">
-                        Total Stock
-                      </p>
-
-                      <p className="mt-1 text-lg font-bold text-gray-900">
-                        {material.quantity ?? 0}{" "}
+                        {material.minimumStock ?? 0}{" "}
                         <span className="text-xs font-medium text-gray-400">
                           {material.unit}
                         </span>

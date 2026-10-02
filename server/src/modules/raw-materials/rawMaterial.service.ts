@@ -247,7 +247,7 @@ export const createRawMaterial = async (
 export const getRawMaterials =
   async () => {
     await Promise.all([reconcileAvailableQuantities(), classifyLegacyPackaging()]);
-    return await RawMaterial.find()
+    const materials = await RawMaterial.find()
       .populate(
         "supplier",
         "name code"
@@ -255,6 +255,33 @@ export const getRawMaterials =
       .sort({
         createdAt: -1,
       });
+
+    // The inventory ledger is the single source of truth for quantities.
+    // Setup owns the material configuration; this keeps its stock display in
+    // lockstep with the Raw-material store without copying balances in UI.
+    const inventoryRecords = await Inventory.find({
+      rawMaterial: { $in: materials.map((material) => material._id) },
+    })
+      .select("rawMaterial quantity reservedQuantity availableQuantity")
+      .lean();
+    const inventoryByMaterialId = new Map(
+      inventoryRecords.map((inventory) => [
+        inventory.rawMaterial.toString(),
+        inventory,
+      ])
+    );
+
+    return materials.map((material) => {
+      const inventory = inventoryByMaterialId.get(material._id.toString());
+      if (!inventory) return material;
+
+      return {
+        ...material.toObject(),
+        quantity: Number(inventory.quantity || 0),
+        reservedQuantity: Number(inventory.reservedQuantity || 0),
+        availableQuantity: Number(inventory.availableQuantity || 0),
+      };
+    });
   };
 
 /**
