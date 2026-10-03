@@ -4,6 +4,7 @@ import {
   createPurchaseOrder,
   getPurchaseOrders,
   getPurchaseOrderById,
+  updatePurchaseOrder,
   updatePurchaseOrderStatus,
   deletePurchaseOrder,
 } from "./purchaseOrder.service";
@@ -41,6 +42,20 @@ export async function createPurchaseOrderController(
       success: false,
       message,
     });
+  }
+}
+
+export async function updatePurchaseOrderController(req: Request, res: Response) {
+  try {
+    const purchaseOrder = await updatePurchaseOrder(String(req.params.id), req.body);
+    return res.status(200).json({
+      success: true,
+      message: "Purchase order updated successfully.",
+      data: purchaseOrder,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update purchase order.";
+    return res.status(message === "Purchase order not found." ? 404 : 400).json({ success: false, message });
   }
 }
 

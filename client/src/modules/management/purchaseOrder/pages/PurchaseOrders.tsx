@@ -13,6 +13,7 @@ import {
   X,
   Loader2,
   Printer,
+  Pencil,
 } from "lucide-react";
 
 import PurchaseOrderModal from "../components/PurchaseOrderModal";
@@ -137,6 +138,9 @@ function PurchaseOrdersPage() {
   const [isModalOpen, setIsModalOpen] =
     useState(false);
 
+  const [editingOrder, setEditingOrder] =
+    useState<PurchaseOrder | null>(null);
+
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -212,7 +216,7 @@ function PurchaseOrdersPage() {
   // CREATE PURCHASE ORDER
   // ===================================================
 
-  const handleCreatePurchaseOrder = async (
+  const handleSavePurchaseOrder = async (
     data: CreatePurchaseOrderData
   ) => {
     try {
@@ -237,14 +241,22 @@ function PurchaseOrdersPage() {
         notes: data.notes || undefined,
       };
 
-      await api.post("/purchase-orders", payload);
+      if (editingOrder) {
+        await api.patch(`/purchase-orders/${editingOrder._id}`, payload);
+      } else {
+        await api.post("/purchase-orders", payload);
+      }
 
       await fetchPurchaseOrders();
 
       setIsModalOpen(false);
 
+      setEditingOrder(null);
+
       alert(
-        "Purchase order created successfully."
+        editingOrder
+          ? "Purchase order updated successfully."
+          : "Purchase order created successfully."
       );
     } catch (error) {
       console.error(
@@ -254,6 +266,19 @@ function PurchaseOrdersPage() {
 
       throw error;
     }
+  };
+
+  const handleEditPurchaseOrder = (order: PurchaseOrder) => {
+    if (!["draft", "pending_approval"].includes(order.status)) {
+      alert("Only draft or pending-approval purchase orders can be edited. Return an approved order to draft first.");
+      return;
+    }
+    if (typeof order.supplier === "string" || order.items.some((item) => !item.rawMaterial || typeof item.rawMaterial === "string")) {
+      alert("This purchase order is missing supplier or material details and cannot be edited.");
+      return;
+    }
+    setEditingOrder(order);
+    setIsModalOpen(true);
   };
 
   // ===================================================
@@ -721,9 +746,7 @@ function PurchaseOrdersPage() {
 
         <button
           type="button"
-          onClick={() =>
-            setIsModalOpen(true)
-          }
+          onClick={() => { setEditingOrder(null); setIsModalOpen(true); }}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"
         >
           <Plus size={18} />
@@ -1012,9 +1035,7 @@ function PurchaseOrdersPage() {
 
               <button
                 type="button"
-                onClick={() =>
-                  setIsModalOpen(true)
-                }
+                onClick={() => { setEditingOrder(null); setIsModalOpen(true); }}
                 className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
               >
                 <Plus size={16} />
@@ -1234,6 +1255,13 @@ function PurchaseOrdersPage() {
 
                             {["approved", "partially_received"].includes(order.status) && <button type="button" onClick={() => recordDelivery(order)} title="Record physical delivery" className="rounded-lg bg-slate-900 px-2.5 py-2 text-xs font-bold text-white hover:bg-slate-700">Receive</button>}
 
+                            {["draft", "pending_approval"].includes(order.status) && <button
+                              type="button"
+                              onClick={() => handleEditPurchaseOrder(order)}
+                              title="Edit purchase order"
+                              className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+                            ><Pencil size={16} /></button>}
+
                             <button
                               type="button"
                               onClick={() => printPurchaseOrder(order)}
@@ -1421,6 +1449,8 @@ function PurchaseOrdersPage() {
 
                       {["approved", "partially_received"].includes(order.status) && <button type="button" onClick={() => recordDelivery(order)} className="h-9 rounded-lg bg-slate-900 px-3 text-xs font-bold text-white">Receive</button>}
 
+                      {["draft", "pending_approval"].includes(order.status) && <button type="button" onClick={() => handleEditPurchaseOrder(order)} title="Edit purchase order" className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><Pencil size={16} /></button>}
+
                       <button
                         type="button"
                         onClick={() =>
@@ -1483,12 +1513,24 @@ function PurchaseOrdersPage() {
 
       <PurchaseOrderModal
         isOpen={isModalOpen}
-        onClose={() =>
-          setIsModalOpen(false)
-        }
-        onSubmit={
-          handleCreatePurchaseOrder
-        }
+        initialData={editingOrder ? {
+          supplier: typeof editingOrder.supplier === "string" ? editingOrder.supplier : editingOrder.supplier._id,
+          orderDate: String(editingOrder.orderDate).slice(0, 10),
+          expectedDeliveryDate: editingOrder.expectedDeliveryDate ? String(editingOrder.expectedDeliveryDate).slice(0, 10) : undefined,
+          items: editingOrder.items.map((item) => ({
+            rawMaterial: typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial?._id || "",
+            quantity: Number(item.quantity || 0),
+            unit: item.unit,
+            unitPrice: Number(item.unitPrice || 0),
+            total: Number(item.total || 0),
+          })),
+          subtotal: Number(editingOrder.subtotal || 0),
+          tax: 0,
+          total: Number(editingOrder.total || 0),
+          notes: editingOrder.notes,
+        } : null}
+        onClose={() => { setIsModalOpen(false); setEditingOrder(null); }}
+        onSubmit={handleSavePurchaseOrder}
       />
 
       {/* =================================================

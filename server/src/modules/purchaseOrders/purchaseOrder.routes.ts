@@ -4,6 +4,7 @@ import {
   createPurchaseOrderController,
   getPurchaseOrdersController,
   getPurchaseOrderByIdController,
+  updatePurchaseOrderController,
   updatePurchaseOrderStatusController,
   deletePurchaseOrderController,
 } from "./purchaseOrder.controller";
@@ -44,6 +45,11 @@ router.get(
 router.patch(
   "/:id/status",
   updatePurchaseOrderStatusController
+);
+
+router.patch(
+  "/:id",
+  updatePurchaseOrderController
 );
 
 // =====================================================

@@ -35,6 +35,7 @@ type Item = {
   label: string;
   to: string;
   icon: React.ElementType;
+  category?: string;
   departments?: string[];
   companies?: string[];
   roles?: string[];
@@ -43,6 +44,7 @@ type Item = {
 type Group = {
   label: string;
   icon: React.ElementType;
+  shortcutTo?: string;
   companies?: string[];
   items: Item[];
 };
@@ -218,54 +220,57 @@ const groups: Group[] = [
   {
     label: "Sales & finance",
     icon: ShoppingCart,
+    shortcutTo: "/management/sales",
     items: [
       {
         label: "Customers",
         to: "/management/customers",
         icon: UserCog,
+        category: "Customer pipeline",
         departments: ["sales", "customer_service", "marketing", "management"],
       },
       {
         label: "Quotation queue",
         to: "/management/quotations",
         icon: FileText,
+        category: "Customer pipeline",
         departments: ["sales", "customer_service", "marketing", "management"],
       },
       {
-        label: "Sales workspace",
+        label: "Sales & orders",
         to: "/management/sales",
         icon: ShoppingCart,
-        departments: ["sales", "customer_service", "finance", "management"],
-      },
-      {
-        label: "Sales orders",
-        to: "/management/sales/orders",
-        icon: ClipboardList,
+        category: "Sales operations",
+        end: true,
         departments: ["sales", "customer_service", "finance", "management"],
       },
       {
         label: "Fulfilment & delivery",
         to: "/management/sales/fulfilment",
         icon: Truck,
+        category: "Sales operations",
         departments: ["sales", "customer_service", "production", "warehouse", "management"],
-      },
-      {
-        label: "Sales & production report",
-        to: "/management/reports",
-        icon: FileBarChart,
-        departments: ["sales", "finance", "marketing", "production", "management"],
       },
       {
         label: "Proforma builder",
         to: "/management/sales/proforma",
         icon: FileText,
+        category: "Billing & documents",
         departments: ["sales", "customer_service", "management"],
       },
       {
-        label: "Invoices & payments",
+        label: "Invoices & receipts",
         to: "/management/billing",
         icon: ReceiptText,
+        category: "Billing & documents",
         departments: ["sales", "finance", "management"],
+      },
+      {
+        label: "Sales & production report",
+        to: "/management/reports",
+        icon: FileBarChart,
+        category: "Review",
+        departments: ["sales", "finance", "marketing", "production", "management"],
       },
     ],
   },
@@ -423,7 +428,7 @@ export default function ManagementSidebar({
                         ...current,
                         [group.label]: !expanded,
                       }))
-                    : navigate(group.items[0].to)
+                    : navigate(group.shortcutTo || group.items[0].to)
                 }
                 title={!sidebarOpen ? group.label : undefined}
                 className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-sm font-semibold ${active ? "bg-gray-300 text-gray-900" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`}
@@ -441,20 +446,23 @@ export default function ManagementSidebar({
               </button>
               {sidebarOpen && expanded && (
                 <div className="ml-5 mt-1 space-y-1 border-l border-gray-200 pl-3">
-                  {group.items.map((item) => {
+                  {group.items.map((item, index) => {
                     const ChildIcon = item.icon;
+                    const showCategory = Boolean(item.category) && (index === 0 || group.items[index - 1]?.category !== item.category);
                     return (
-                      <NavLink
-                        key={item.to}
-                        to={item.to}
-                        end={item.end}
-                        className={({ isActive }) =>
-                          `flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm ${isActive ? "bg-red-600/15 font-semibold text-red-700" : "text-gray-500 hover:bg-gray-200 hover:text-gray-700"}`
-                        }
-                      >
-                        <ChildIcon size={16} />
-                        {item.label}
-                      </NavLink>
+                      <div key={item.to}>
+                        {showCategory && <p className="px-3 pb-1 pt-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">{item.category}</p>}
+                        <NavLink
+                          to={item.to}
+                          end={item.end}
+                          className={({ isActive }) =>
+                            `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm ${isActive ? "bg-red-600/15 font-semibold text-red-700" : "text-gray-500 hover:bg-gray-200 hover:text-gray-700"}`
+                          }
+                        >
+                          <ChildIcon size={15} />
+                          {item.label}
+                        </NavLink>
+                      </div>
                     );
                   })}
                 </div>

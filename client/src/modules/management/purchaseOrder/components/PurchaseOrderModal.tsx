@@ -82,6 +82,7 @@ export interface PurchaseOrderFormData {
 interface PurchaseOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialData?: PurchaseOrderFormData | null;
   onSubmit: (
     data: PurchaseOrderFormData
   ) => Promise<void> | void;
@@ -112,6 +113,7 @@ const formatWeight = (quantity: number, unit: string) => {
 function PurchaseOrderModal({
   isOpen,
   onClose,
+  initialData = null,
   onSubmit,
 }: PurchaseOrderModalProps) {
   // ===================================================
@@ -247,7 +249,17 @@ function PurchaseOrderModal({
     fetchSuppliers();
     fetchRawMaterials();
     fetchOffers();
-  }, [isOpen]);
+    if (initialData) {
+      setSupplier(initialData.supplier);
+      setOrderDate(initialData.orderDate);
+      setExpectedDeliveryDate(initialData.expectedDeliveryDate || "");
+      setNotes(initialData.notes || "");
+      setTax(0);
+      setItems(initialData.items.map((item) => ({ ...item })));
+    } else {
+      resetForm();
+    }
+  }, [isOpen, initialData]);
 
   // ===================================================
   // AVAILABLE RAW MATERIALS
@@ -558,7 +570,7 @@ function PurchaseOrderModal({
     };
 
     // -------------------------------------------------
-    // CREATE PURCHASE ORDER
+      // CREATE OR UPDATE PURCHASE ORDER
     // -------------------------------------------------
 
     try {
@@ -571,7 +583,7 @@ function PurchaseOrderModal({
       onClose();
     } catch (error) {
       console.error(
-        "Create Purchase Order Error:",
+          "Save Purchase Order Error:",
         error
       );
     } finally {
@@ -703,11 +715,11 @@ function PurchaseOrderModal({
                   text-gray-900
                 "
               >
-                Create Purchase Order
+                {initialData ? "Edit Purchase Order" : "Create Purchase Order"}
               </h2>
 
               <p className="text-xs text-gray-500">
-                Purchase raw materials from a supplier
+                {initialData ? "Update the draft order before approval" : "Purchase raw materials from a supplier"}
               </p>
             </div>
           </div>
@@ -1687,7 +1699,7 @@ function PurchaseOrderModal({
 
               {isSubmitting
                 ? "Creating..."
-                : "Create Purchase Order"}
+                : initialData ? "Save Changes" : "Create Purchase Order"}
             </button>
           </div>
         </form>

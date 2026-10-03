@@ -5,18 +5,12 @@ import Inventory from "../inventory/inventory.model";
 import InventoryTransaction from "../inventory/inventoryTransaction.model";
 import SupplierMaterial from "../raw-materials/supplierMaterial.model";
 
-// =====================================================
-// CREATE PURCHASE ORDER
-// =====================================================
-
-export const createPurchaseOrder = async (
-  data: any
-) => {
+const preparePurchaseOrderItems = async (data: any) => {
   if (!data?.supplier || !Array.isArray(data.items) || data.items.length === 0) {
     throw new Error("Select a supplier and at least one raw material.");
   }
 
-  const preparedItems = await Promise.all(
+  return Promise.all(
     data.items.map(async (item: any) => {
       const quantity = Number(item.quantity);
       if (!item?.rawMaterial || !Number.isFinite(quantity) || quantity <= 0) {
@@ -33,15 +27,11 @@ export const createPurchaseOrder = async (
         rawMaterial: material._id,
         status: "Active",
       }).lean();
-
       if (!offer) {
         throw new Error(`Raw material "${material.name}" is not an active offer for the selected supplier.`);
       }
 
-      // Prices are procurement reference data, not a required PO entry. Use
-      // the supplier offer first, then the material's last known cost.
       const unitPrice = Number(offer.unitPrice ?? material.costPerUnit ?? 0);
-
       return {
         rawMaterial: material._id,
         quantity,
@@ -51,6 +41,16 @@ export const createPurchaseOrder = async (
       };
     }),
   );
+};
+
+// =====================================================
+// CREATE PURCHASE ORDER
+// =====================================================
+
+export const createPurchaseOrder = async (
+  data: any
+) => {
+  const preparedItems = await preparePurchaseOrderItems(data);
 
   const subtotal = Number(
     preparedItems.reduce((sum, item) => sum + item.total, 0).toFixed(2),
@@ -70,6 +70,33 @@ export const createPurchaseOrder = async (
     total: subtotal,
   });
 
+  return purchaseOrder;
+};
+
+// A draft may be freely corrected. A pending approval can be returned for
+// correction as well, but an approved order is a supplier commitment and is
+// protected from line changes; use the status workflow to return it to draft.
+export const updatePurchaseOrder = async (id: string, data: any) => {
+  const purchaseOrder = await PurchaseOrder.findById(id);
+  if (!purchaseOrder) throw new Error("Purchase order not found.");
+  if (!['draft', 'pending_approval'].includes(purchaseOrder.status)) {
+    throw new Error("Only draft or pending-approval purchase orders can be edited. Return an approved order to draft before changing it.");
+  }
+
+  const preparedItems = await preparePurchaseOrderItems(data);
+  const subtotal = Number(preparedItems.reduce((sum, item) => sum + item.total, 0).toFixed(2));
+
+  purchaseOrder.set({
+    supplier: data.supplier,
+    orderDate: data.orderDate ? new Date(data.orderDate) : purchaseOrder.orderDate,
+    expectedDeliveryDate: data.expectedDeliveryDate ? new Date(data.expectedDeliveryDate) : undefined,
+    items: preparedItems,
+    subtotal,
+    tax: 0,
+    total: subtotal,
+    notes: String(data.notes || "").trim() || undefined,
+  });
+  await purchaseOrder.save();
   return purchaseOrder;
 };
 
