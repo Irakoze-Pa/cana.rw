@@ -101,6 +101,7 @@ const emptyExpenseForm = () => ({
   bankName: "",
   notes: "",
 });
+const emptyExpenseLine = () => ({ category: "transport", description: "", amount: "" });
 const money = (v: number) =>
   Number(v || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 });
 const label = (v: string) => v.replaceAll("_", " ");
@@ -113,6 +114,7 @@ export default function ExpensesPage() {
   const [knownExpense, setKnownExpense] = useState("custom");
   const [error, setError] = useState("");
   const [form, setForm] = useState(emptyExpenseForm);
+  const [lines, setLines] = useState([emptyExpenseLine()]);
   const load = async () => {
     try {
       const response = await api.get<{ data: Expense[] }>("/expenses");
@@ -138,10 +140,11 @@ export default function ExpensesPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post("/expenses", { ...form, amount: Number(form.amount) });
+      await api.post("/expenses/batch", { ...form, lines: lines.map((line) => ({ ...line, amount: Number(line.amount) })) });
       setOpen(false);
       setKnownExpense("custom");
       setForm(emptyExpenseForm());
+      setLines([emptyExpenseLine()]);
       await load();
     } catch (cause) {
       setError(
@@ -219,6 +222,7 @@ export default function ExpensesPage() {
               setError("");
               setKnownExpense("custom");
               setForm(emptyExpenseForm());
+              setLines([emptyExpenseLine()]);
               setOpen(true);
             }}
             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white"
@@ -347,6 +351,15 @@ export default function ExpensesPage() {
                   className="mt-1 w-full rounded-xl border p-2.5"
                 />
               </label>
+              <div className="rounded-xl border border-slate-200 p-3 sm:col-span-2">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-extrabold text-slate-900">Expense lines</p>
+                  <button type="button" onClick={() => setLines((current) => [...current, emptyExpenseLine()])} className="text-xs font-bold text-slate-700">+ Add reason</button>
+                </div>
+                <div className="space-y-2">{lines.map((line, index) => <div key={index} className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)_120px_auto]"><select value={line.category} onChange={(event) => setLines((current) => current.map((item, position) => position === index ? { ...item, category: event.target.value } : item))} className="rounded-lg border border-slate-200 px-2 py-2 text-sm">{categories.map((item) => <option key={item} value={item}>{label(item)}</option>)}</select><input required value={line.description} onChange={(event) => setLines((current) => current.map((item, position) => position === index ? { ...item, description: event.target.value } : item))} placeholder="Reason / description" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" /><input required min="1" type="number" value={line.amount} onChange={(event) => setLines((current) => current.map((item, position) => position === index ? { ...item, amount: event.target.value } : item))} placeholder="Amount" className="rounded-lg border border-slate-200 px-2 py-2 text-sm" />{lines.length > 1 ? <button type="button" onClick={() => setLines((current) => current.filter((_, position) => position !== index))} className="px-2 text-xs font-bold text-red-700">Remove</button> : <span />}</div>)}</div>
+                <p className="mt-2 text-right text-sm font-bold text-slate-700">Total: {money(lines.reduce((sum, line) => sum + Number(line.amount || 0), 0))} RWF</p>
+              </div>
+              <div className="hidden">
               <label className="text-sm font-bold">
                 Known expense
                 <select
@@ -394,7 +407,7 @@ export default function ExpensesPage() {
               <label className="text-sm font-bold sm:col-span-2">
                 Description
                 <input
-                  required
+                  required={false}
                   value={form.description}
                   onChange={(e) =>
                     setForm({ ...form, description: e.target.value })
@@ -413,11 +426,21 @@ export default function ExpensesPage() {
               <label className="text-sm font-bold">
                 Amount (RWF)
                 <input
-                  required
+                  required={false}
                   min="1"
                   type="number"
                   value={form.amount}
                   onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  className="mt-1 w-full rounded-xl border p-2.5"
+                />
+              </label>
+              </div>
+              <label className="text-sm font-bold">
+                Payee
+                <input
+                  value={form.payee}
+                  onChange={(e) => setForm({ ...form, payee: e.target.value })}
+                  placeholder="Who was paid"
                   className="mt-1 w-full rounded-xl border p-2.5"
                 />
               </label>

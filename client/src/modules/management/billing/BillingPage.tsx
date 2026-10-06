@@ -15,13 +15,6 @@ import { useToast } from "@/context/toastContext";
 import { useConfirmation } from "@/context/confirmationContext";
 import { printCanaDocument } from "@/modules/management/utils/printCanaDocument";
 
-type Order = {
-  _id: string;
-  orderNumber: string;
-  total: number;
-  status: string;
-  customer?: { fullName?: string };
-};
 type Line = {
   productName: string;
   quantity: number;
@@ -105,7 +98,6 @@ export default function BillingPage() {
   const [invoiceFilter, setInvoiceFilter] = useState<
     "all" | "unpaid" | "paid" | "void"
   >("all");
-  const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [openingBalances, setOpeningBalances] = useState<OpeningBalance[]>([]);
@@ -118,7 +110,6 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState("");
-  const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [openingOpen, setOpeningOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentToReverse, setPaymentToReverse] = useState<Payment | null>(
@@ -127,11 +118,6 @@ export default function BillingPage() {
   const [reversalReason, setReversalReason] = useState("");
   const canReversePayments = user?.role === "superadmin";
   const [invoiceDetails, setInvoiceDetails] = useState<Invoice | null>(null);
-  const [invoiceForm, setInvoiceForm] = useState({
-    salesOrder: "",
-    dueDate: "",
-    notes: "",
-  });
   const [paymentForm, setPaymentForm] = useState({
     invoice: "",
     openingBalance: "",
@@ -153,21 +139,18 @@ export default function BillingPage() {
     setError("");
     try {
       const [
-        sales,
         customerData,
         invoiceData,
         openingData,
         accountData,
         paymentData,
       ] = await Promise.all([
-        api.get<{ data: Order[] }>("/sales-orders"),
         api.get<{ data: Customer[] }>("/users/customers"),
         api.get<{ data: Invoice[] }>("/billing/invoices"),
         api.get<{ data: OpeningBalance[] }>("/billing/opening-balances"),
         api.get<{ data: CustomerAccount[] }>("/billing/customer-accounts"),
         api.get<{ data: Payment[] }>("/billing/payments"),
       ]);
-      setOrders(sales.data.data || []);
       setCustomers(customerData.data.data || []);
       setInvoices(invoiceData.data.data || []);
       setOpeningBalances(openingData.data.data || []);
@@ -185,74 +168,6 @@ export default function BillingPage() {
   useEffect(() => {
     void load();
   }, []);
-  const createInvoice = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (saving) return;
-    if (
-      !(await confirm({
-        title: "Issue invoice",
-        description:
-          "Issue an invoice for this confirmed sales order? The invoice will become part of the customer account.",
-        confirmLabel: "Issue invoice",
-        tone: "warning",
-      }))
-    )
-      return;
-    setSaving(true);
-    setError("");
-    try {
-      await api.post("/billing/invoices", invoiceForm);
-      setInvoiceOpen(false);
-      setInvoiceForm({ salesOrder: "", dueDate: "", notes: "" });
-      await load();
-      toast("Invoice issued successfully.", "success");
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Unable to create invoice.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-  const createMissingInvoices = async () => {
-    if (saving) return;
-    if (
-      !(await confirm({
-        title: "Create missing invoices",
-        description:
-          "Create an issued invoice for every delivered sales order that does not already have one. Existing invoices will not be changed.",
-        confirmLabel: "Create invoices",
-        tone: "warning",
-      }))
-    )
-      return;
-    setSaving(true);
-    setError("");
-    try {
-      const response = await api.post<{
-        data: {
-          created: number;
-          alreadyInvoiced: number;
-          deliveredOrders: number;
-        };
-      }>("/billing/invoices/create-missing");
-      await load();
-      toast(
-        response.data.data.created
-          ? `${response.data.data.created} missing invoice${response.data.data.created === 1 ? "" : "s"} created.`
-          : "All delivered sales orders already have invoices.",
-        "success",
-      );
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Unable to create missing invoices.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
   const receivePayment = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
@@ -509,9 +424,6 @@ export default function BillingPage() {
       notes:
         "Reversed receipts remain listed for audit purposes but are excluded from the total received.",
     });
-  const invoicedOrders = new Set(
-    invoices.map((invoice) => invoice.salesOrder?.orderNumber),
-  );
   const paidInvoices = useMemo(
     () =>
       invoices.filter(
@@ -557,6 +469,19 @@ export default function BillingPage() {
         .reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
     };
   }, [invoices, openingBalances, customerAccounts, payments]);
+  const receivableAccounts = useMemo(
+    () =>
+      [...customerAccounts].sort(
+        (left, right) =>
+          Number(right.balance || 0) - Number(left.balance || 0) ||
+          Number(right.amountPaid || 0) - Number(left.amountPaid || 0),
+      ),
+    [customerAccounts],
+  );
+  const customersWithDebt = useMemo(
+    () => receivableAccounts.filter((account) => Number(account.balance) > 0),
+    [receivableAccounts],
+  );
   const matchingInvoices = invoices.filter((invoice) => {
     const matchesSearch =
       `${invoice.invoiceNumber} ${invoice.customer?.fullName || ""}`
@@ -599,8 +524,8 @@ export default function BillingPage() {
     setPaymentOpen(true);
   };
   return (
-    <div className="space-y-4">
-      <header className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center">
+    <div className="mx-auto max-w-7xl space-y-4 pb-6">
+      <header className="flex flex-col justify-between gap-3 border-b-2 border-slate-950 pb-4 sm:flex-row sm:items-center">
         <div className="flex gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm">
             <ReceiptText size={21} />
@@ -613,7 +538,7 @@ export default function BillingPage() {
               Invoices & payments
             </h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              Live records from issued invoices, customer debts, and receipts
+              Invoices are created automatically when a sales order is delivered
               {lastUpdated
                 ? ` · updated ${lastUpdated.toLocaleTimeString("en-RW", { hour: "2-digit", minute: "2-digit" })}`
                 : ""}
@@ -622,12 +547,11 @@ export default function BillingPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => void createMissingInvoices()}
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50"
+            onClick={() => setPaymentOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-800"
           >
-            <ReceiptText size={16} />
-            Create missing invoices
+            <CreditCard size={16} />
+            Record payment
           </button>
           <button
             onClick={() => setOpeningOpen(true)}
@@ -635,20 +559,6 @@ export default function BillingPage() {
           >
             <Plus size={16} />
             Opening balance
-          </button>
-          <button
-            onClick={() => setPaymentOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 transition hover:bg-slate-50"
-          >
-            <CreditCard size={16} />
-            Record payment
-          </button>
-          <button
-            onClick={() => setInvoiceOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800"
-          >
-            <Plus size={16} />
-            New invoice
           </button>
           <button
             onClick={() => void load()}
@@ -660,30 +570,116 @@ export default function BillingPage() {
           </button>
         </div>
       </header>
-      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          ["Customer receivables", liveFigures.totalReceivable],
-          ["Invoice balance due", liveFigures.invoiceOutstanding],
-          ["Opening debt due", liveFigures.openingOutstanding],
-          ["Receipts recorded", liveFigures.receipts],
-        ].map(([label, amount]) => (
-          <div key={String(label)} className="cana-panel px-3 py-2.5">
+          {
+            label: "Customer debt due",
+            value: liveFigures.totalReceivable,
+            helper: "All invoice and opening balances",
+            currency: true,
+          },
+          {
+            label: "Customer payments received",
+            value: liveFigures.receipts,
+            helper: "Active receipts recorded",
+            currency: true,
+          },
+          {
+            label: "Customers with debt",
+            value: customersWithDebt.length,
+            helper: "Accounts needing follow-up",
+            currency: false,
+          },
+          {
+            label: "Invoices awaiting payment",
+            value: unpaidInvoices.length,
+            helper: "Issued invoices with a balance",
+            currency: false,
+          },
+        ].map(({ label, value, helper, currency }) => (
+          <div key={label} className="bg-white px-3 py-3">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
               {label}
             </p>
             <p className="mt-1 text-lg font-extrabold tracking-tight text-slate-950">
-              {typeof amount === "string"
-                ? amount
-                : `${money(Number(amount))} RWF`}
+              {currency ? `${money(Number(value))} RWF` : value}
             </p>
+            <p className="mt-1 text-[11px] text-slate-500">{helper}</p>
           </div>
         ))}
+      </section>
+      <section className="overflow-hidden border border-slate-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+              Customer receivables
+            </p>
+            <h2 className="mt-0.5 text-sm font-extrabold text-slate-950">
+              Customer debt & payment list
+            </h2>
+          </div>
+          <span className="text-xs font-semibold text-slate-500">
+            {customersWithDebt.length} accounts with debt
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-xs">
+            <thead className="bg-slate-950 uppercase tracking-wide text-white">
+              <tr>
+                <th className="px-3 py-2.5">Customer</th>
+                <th className="px-3 py-2.5 text-right">Payments received</th>
+                <th className="px-3 py-2.5 text-right">Debt due</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {receivableAccounts.map((account) => (
+                <tr key={`summary-${account.customer._id}`} className="hover:bg-slate-50">
+                  <td className="px-3 py-2.5">
+                    <p className="font-bold text-slate-950">
+                      {account.customer.businessName || account.customer.fullName}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      {account.customer.businessName
+                        ? account.customer.fullName
+                        : account.customer.phone || "—"}
+                    </p>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-emerald-700">
+                    {money(account.amountPaid)} RWF
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-extrabold text-slate-950">
+                    {money(account.balance)} RWF
+                  </td>
+                </tr>
+              ))}
+              {!loading && !customerAccounts.length && (
+                <tr>
+                  <td colSpan={3} className="px-3 py-8 text-center text-sm text-slate-500">
+                    No customer receivables are available yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
         <span>
           Issued invoice value:{" "}
           <strong className="text-slate-800">
             {money(liveFigures.invoiceValue)} RWF
+          </strong>
+        </span>
+        <span>
+          Invoice balance:{" "}
+          <strong className="text-slate-800">
+            {money(liveFigures.invoiceOutstanding)} RWF
+          </strong>
+        </span>
+        <span>
+          Opening debt:{" "}
+          <strong className="text-slate-800">
+            {money(liveFigures.openingOutstanding)} RWF
           </strong>
         </span>
         <span>
@@ -697,89 +693,6 @@ export default function BillingPage() {
       </div>
       {error && (
         <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
-      )}
-      {invoiceOpen && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <form
-            onSubmit={createInvoice}
-            className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl"
-          >
-            <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
-              <div>
-                <p className="cana-section-kicker text-red-700">
-                  Customer finance
-                </p>
-                <h2 className="mt-1 text-xl font-extrabold text-slate-950">
-                  Create client invoice
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Issue an invoice from a confirmed sales order.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setInvoiceOpen(false)}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="grid gap-4 p-5 sm:grid-cols-2">
-              <select
-                required
-                value={invoiceForm.salesOrder}
-                onChange={(event) =>
-                  setInvoiceForm({
-                    ...invoiceForm,
-                    salesOrder: event.target.value,
-                  })
-                }
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
-              >
-                <option value="">Select confirmed sales order</option>
-                {orders
-                  .filter(
-                    (order) =>
-                      !["draft", "cancelled"].includes(order.status) &&
-                      !invoicedOrders.has(order.orderNumber),
-                  )
-                  .map((order) => (
-                    <option key={order._id} value={order._id}>
-                      {order.orderNumber} ·{" "}
-                      {order.customer?.fullName || "Customer"} ·{" "}
-                      {money(order.total)} RWF
-                    </option>
-                  ))}
-              </select>
-              <input
-                aria-label="Invoice due date"
-                type="date"
-                value={invoiceForm.dueDate}
-                onChange={(event) =>
-                  setInvoiceForm({
-                    ...invoiceForm,
-                    dueDate: event.target.value,
-                  })
-                }
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
-              />
-              <input
-                value={invoiceForm.notes}
-                onChange={(event) =>
-                  setInvoiceForm({ ...invoiceForm, notes: event.target.value })
-                }
-                placeholder="Invoice notes (optional)"
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm md:col-span-2"
-              />
-              <button
-                disabled={saving}
-                className="disabled:opacity-50 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white sm:col-span-2"
-              >
-                Issue invoice
-              </button>
-            </div>
-          </form>
-        </div>
       )}
       {openingOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm">
@@ -924,7 +837,7 @@ export default function BillingPage() {
           </form>
         </div>
       )}
-      <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2.5 lg:flex-row lg:items-center">
+      <div className="flex flex-col gap-2 border border-slate-200 bg-slate-50 p-2.5 lg:flex-row lg:items-center">
         <input
           aria-label="Search invoices"
           placeholder="Search invoice or customer"
@@ -956,9 +869,9 @@ export default function BillingPage() {
         </div>
       </div>
       <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
-        <section className="space-y-2 md:hidden">
+        <section className="max-h-[620px] space-y-2 overflow-y-auto pr-1 md:hidden">
           {loading ? (
-            <p className="cana-panel p-8 text-center text-sm text-slate-500">
+            <p className="border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
               Loading invoices…
             </p>
           ) : (
@@ -966,7 +879,7 @@ export default function BillingPage() {
               <article
                 key={invoice._id}
                 onClick={() => setInvoiceDetails(invoice)}
-                className="cana-panel cursor-pointer p-4 transition hover:border-slate-300"
+                className="cursor-pointer border border-slate-200 bg-white p-4 transition hover:border-slate-950"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -1019,7 +932,7 @@ export default function BillingPage() {
                     <button
                       type="button"
                       onClick={() => openPaymentForInvoice(invoice)}
-                      className="inline-flex items-center gap-1 rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-bold text-white"
+                      className="inline-flex items-center gap-1 rounded-lg bg-red-700 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-red-800"
                     >
                       <CreditCard size={13} />
                       Pay balance
@@ -1038,12 +951,12 @@ export default function BillingPage() {
             ))
           )}
           {!loading && !matchingInvoices.length && (
-            <p className="cana-panel p-8 text-center text-sm text-slate-500">
+            <p className="border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
               No invoices match this search.
             </p>
           )}
         </section>
-        <section className="hidden overflow-x-auto md:block cana-panel">
+        <section className="hidden overflow-hidden border border-slate-200 bg-white md:block">
           <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
             <h2 className="text-sm font-extrabold text-slate-950">Invoices</h2>
             <button
@@ -1054,8 +967,9 @@ export default function BillingPage() {
               Record payment
             </button>
           </div>
+          <div className="max-h-[620px] overflow-auto">
           <table className="min-w-full text-left text-xs">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase text-white">
               <tr>
                 <th className="px-3 py-2.5">Invoice</th>
                 <th className="px-3 py-2.5">Client</th>
@@ -1146,12 +1060,13 @@ export default function BillingPage() {
               {!loading && invoices.length === 0 && (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-gray-500">
-                    Issue an invoice from a sales order to begin.
+                    Delivered orders will appear here as invoices.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+          </div>
         </section>
         {invoiceDetails && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm">
@@ -1495,7 +1410,7 @@ export default function BillingPage() {
             </form>
           </div>
         )}
-        <section className="cana-panel p-3">
+        <section className="border border-slate-200 bg-white p-3">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
             <div>
               <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
@@ -1663,26 +1578,24 @@ export default function BillingPage() {
           </form>
         </div>
       )}
-      <section className="cana-panel overflow-hidden">
+      <section className="overflow-hidden border border-slate-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Customer receivables
+              Account composition
             </p>
             <h2 className="mt-1 font-extrabold text-slate-950">
-              Customer debt & payment list
+              Detailed customer balance
             </h2>
           </div>
           <span className="text-sm text-slate-500">
-            <strong className="text-slate-950">
-              {customerAccounts.filter((account) => account.balance > 0).length}
-            </strong>{" "}
+            <strong className="text-slate-950">{customersWithDebt.length}</strong>{" "}
             accounts outstanding
           </span>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-950 text-xs uppercase tracking-wide text-white">
               <tr>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3 text-right">Sales invoices</th>
@@ -1692,7 +1605,7 @@ export default function BillingPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {customerAccounts.map((account) => (
+              {receivableAccounts.map((account) => (
                 <tr key={account.customer._id}>
                   <td className="px-4 py-3">
                     <p className="font-bold text-slate-950">
@@ -1733,7 +1646,7 @@ export default function BillingPage() {
           </table>
         </div>
       </section>
-      <section className="cana-panel overflow-hidden">
+      <section className="overflow-hidden border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -1750,7 +1663,7 @@ export default function BillingPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-950 text-xs uppercase tracking-wide text-white">
               <tr>
                 <th className="px-4 py-3">Reference</th>
                 <th className="px-4 py-3">Customer</th>

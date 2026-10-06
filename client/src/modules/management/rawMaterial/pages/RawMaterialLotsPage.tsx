@@ -25,7 +25,8 @@ type Lot = {
   supplier?: { name?: string };
 };
 type LotTrace = { lot: Lot; summary: { receivedQuantity: number; availableQuantity: number; issuedQuantity: number; returnedQuantity: number }; transactions: Array<{ _id: string; type: string; quantity: number; unit: string; transactionDate?: string; reason?: string; notes?: string; productionBatch?: { batchNo?: string; batchNumber?: string; productName?: string; status?: string }; productionOrder?: { productionOrderNo?: string } }> };
-type OpenPurchaseOrder = { _id: string; poNumber: string; status: string; supplier: string | { _id: string; name: string; code?: string }; items: Array<{ rawMaterial: string | { _id: string; name: string; code?: string; unit?: string }; quantity: number; unit: string }> };
+type OpenPurchaseOrder = { _id: string; poNumber: string; status: string; supplier: string | { _id: string; name: string; code?: string }; items: Array<{ rawMaterial: string | { _id: string; name: string; code?: string; unit?: string }; quantity: number; unit: string; unitPrice?: number }> };
+type PurchaseReceiptLine = { rawMaterial: string; name: string; code: string; unit: string; orderedQuantity: number; receivedQuantity: string; unitCost: string; lotNumber: string };
 const statusStyle: Record<string, string> = {
   available: "bg-emerald-50 text-emerald-700",
   quarantined: "bg-amber-50 text-amber-700",
@@ -48,6 +49,7 @@ export default function RawMaterialLotsPage() {
   const [traceLoading, setTraceLoading] = useState(false);
   const [purchaseOrders, setPurchaseOrders] = useState<OpenPurchaseOrder[]>([]);
   const [purchaseOrderId, setPurchaseOrderId] = useState(searchParams.get("purchaseOrder") || "");
+  const [purchaseReceiptLines, setPurchaseReceiptLines] = useState<PurchaseReceiptLine[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [form, setForm] = useState({
@@ -101,12 +103,11 @@ export default function RawMaterialLotsPage() {
   useEffect(() => {
     if (!purchaseOrderId || !purchaseOrders.length) return;
     const order = purchaseOrders.find((item) => item._id === purchaseOrderId);
-    if (!order) return;
+    if (!order) { setPurchaseReceiptLines([]); return; }
     const supplier = typeof order.supplier === "string" ? order.supplier : order.supplier._id;
-    const firstItem = order.items[0];
-    const rawMaterial = typeof firstItem?.rawMaterial === "string" ? firstItem.rawMaterial : firstItem?.rawMaterial?._id;
-    setMaterialId(rawMaterial || "");
-    setForm((previous) => previous.supplier ? previous : ({ ...previous, supplier }));
+    setMaterialId("");
+    setPurchaseReceiptLines(order.items.map((item) => ({ rawMaterial: typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial._id || "", name: typeof item.rawMaterial === "string" ? "Raw material" : item.rawMaterial.name || "Raw material", code: typeof item.rawMaterial === "string" ? "" : item.rawMaterial.code || "", unit: item.unit, orderedQuantity: Number(item.quantity || 0), receivedQuantity: "", unitCost: item.unitPrice ? String(item.unitPrice) : "", lotNumber: "" })));
+    setForm((previous) => ({ ...previous, supplier }));
   }, [purchaseOrderId, purchaseOrders]);
   const selectedPurchaseOrder = purchaseOrders.find((order) => order._id === purchaseOrderId);
   const selectedMaterial = materials.find((item) => item._id === materialId);
@@ -117,11 +118,10 @@ export default function RawMaterialLotsPage() {
   const selectPurchaseOrder = (id: string) => {
     setPurchaseOrderId(id);
     const order = purchaseOrders.find((item) => item._id === id);
-    if (!order) return;
+    if (!order) { setPurchaseReceiptLines([]); return; }
     const supplier = typeof order.supplier === "string" ? order.supplier : order.supplier._id;
-    const firstItem = order.items[0];
-    const rawMaterial = typeof firstItem?.rawMaterial === "string" ? firstItem.rawMaterial : firstItem?.rawMaterial?._id;
-    setMaterialId(rawMaterial || "");
+    setMaterialId("");
+    setPurchaseReceiptLines(order.items.map((item) => ({ rawMaterial: typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial._id || "", name: typeof item.rawMaterial === "string" ? "Raw material" : item.rawMaterial.name || "Raw material", code: typeof item.rawMaterial === "string" ? "" : item.rawMaterial.code || "", unit: item.unit, orderedQuantity: Number(item.quantity || 0), receivedQuantity: "", unitCost: item.unitPrice ? String(item.unitPrice) : "", lotNumber: "" })));
     setForm((previous) => ({ ...previous, supplier, receivedQuantity: "" }));
   };
   const summary = useMemo(() => {
@@ -142,6 +142,20 @@ export default function RawMaterialLotsPage() {
   }), [lots, query, statusFilter]);
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (purchaseOrderId) {
+      const lines = purchaseReceiptLines.filter((line) => Number(line.receivedQuantity.replaceAll(",", "")) > 0);
+      if (!form.supplier) return setError("Select the supplier that delivered this purchase order.");
+      if (!lines.length) return setError("Enter a received quantity for at least one raw material.");
+      if (lines.some((line) => Number(line.unitCost.replaceAll(",", "")) <= 0 || !Number.isFinite(Number(line.unitCost.replaceAll(",", ""))))) return setError("Enter the actual unit price for every received material.");
+      const confirmed = await confirm({ title: "Post purchase-order delivery", description: `Post ${lines.length} received material${lines.length === 1 ? "" : "s"} against ${selectedPurchaseOrder?.poNumber}? Each line uses its own actual unit price.`, confirmLabel: "Post delivery", tone: "warning" });
+      if (!confirmed) return;
+      try {
+        for (const line of lines) await api.post(`/raw-materials/${line.rawMaterial}/lots`, { ...form, purchaseOrder: purchaseOrderId, receivedQuantity: line.receivedQuantity.replaceAll(",", ""), unitCost: line.unitCost.replaceAll(",", "") || "0", lotNumber: line.lotNumber || undefined, expiresAt: form.expiresAt || undefined });
+        setOpen(false); setPurchaseOrderId(""); setPurchaseReceiptLines([]); setForm({ supplier: "", lotNumber: "", receivedQuantity: "", unitCost: "0", updateSupplierPrice: false, receivedAt: new Date().toISOString().slice(0, 10), expiresAt: "", status: "available", notes: "" });
+        await Promise.all([loadLots(), loadMaterials()]);
+      } catch (err) { setError(err instanceof Error ? err.message : "Unable to post the purchase-order delivery."); }
+      return;
+    }
     if (!materialId) return setError("Select a raw material first.");
     const receivedQuantity = receivesByPack ? Number(packCount) * selectedPackSize : Number(form.receivedQuantity.replaceAll(",", ""));
     if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return setError(receivesByPack ? "Enter a valid number of packs." : "Enter a valid received quantity.");
@@ -230,7 +244,7 @@ export default function RawMaterialLotsPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setOpen(true)}
-            disabled={!materialId}
+            disabled={!materialId && !purchaseOrderId}
             className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus size={16} />
@@ -276,7 +290,7 @@ export default function RawMaterialLotsPage() {
           <div className="flex items-center justify-between md:col-span-2">
             <div>
               <h2 className="font-bold">Record physical delivery</h2>
-              <p className="mt-1 text-sm text-slate-500">Stock is posted only after this delivery is confirmed. Select a purchase order to prefill supplier and material.</p>
+              <p className="mt-1 text-sm text-slate-500">Record the quantities and actual prices delivered today.</p>
             </div>
             <button type="button" onClick={() => setOpen(false)}>
               <X size={18} />
@@ -288,29 +302,32 @@ export default function RawMaterialLotsPage() {
               {purchaseOrders.map((order) => <option key={order._id} value={order._id}>{order.poNumber} · {typeof order.supplier === "string" ? "Supplier" : order.supplier.name}</option>)}
             </select>
           </label>
-          {selectedPurchaseOrder && <p className="rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-600 md:col-span-2">Order {selectedPurchaseOrder.poNumber}: record only the quantity physically delivered. The order will remain partially received until every item is received.</p>}
-          <input
+          {selectedPurchaseOrder && <p className="rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-600 md:col-span-2">{selectedPurchaseOrder.poNumber} · enter only what arrived today. Leave a row at zero when it was not delivered.</p>}
+          {selectedPurchaseOrder && <div className="overflow-x-auto rounded-xl border border-slate-200 md:col-span-2">
+            <table className="min-w-[720px] w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-3 py-2">Material</th><th className="px-3 py-2 text-right">Ordered</th><th className="px-3 py-2">Received now</th><th className="px-3 py-2">Actual price / unit</th><th className="px-3 py-2">Supplier lot</th></tr></thead><tbody className="divide-y divide-slate-100">{purchaseReceiptLines.map((line, index) => <tr key={line.rawMaterial}><td className="px-3 py-2"><p className="font-bold text-slate-900">{line.name}</p><p className="text-xs text-slate-500">{line.code || "—"}</p></td><td className="px-3 py-2 text-right font-semibold">{line.orderedQuantity.toLocaleString()} {line.unit}</td><td className="px-3 py-2"><input value={line.receivedQuantity} onChange={(event) => setPurchaseReceiptLines((current) => current.map((item, position) => position === index ? { ...item, receivedQuantity: event.target.value } : item))} inputMode="decimal" placeholder={`0 ${line.unit}`} className="h-9 w-28 rounded-lg border border-slate-200 px-2 text-sm" /></td><td className="px-3 py-2"><input value={line.unitCost} onChange={(event) => setPurchaseReceiptLines((current) => current.map((item, position) => position === index ? { ...item, unitCost: event.target.value } : item))} inputMode="decimal" placeholder="Actual price" className="h-9 w-32 rounded-lg border border-slate-200 px-2 text-sm" /></td><td className="px-3 py-2"><input value={line.lotNumber} onChange={(event) => setPurchaseReceiptLines((current) => current.map((item, position) => position === index ? { ...item, lotNumber: event.target.value } : item))} placeholder="Optional" className="h-9 w-32 rounded-lg border border-slate-200 px-2 text-sm" /></td></tr>)}</tbody></table>
+          </div>}
+          {!selectedPurchaseOrder && <input
             value={form.lotNumber}
             onChange={(event) =>
             setForm({ ...form, lotNumber: event.target.value })
             }
             placeholder="Supplier lot number (optional)"
             className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
-          />
-          <select required value={form.supplier} onChange={(event) => setForm({ ...form, supplier: event.target.value })} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm">
+          />}
+          <select required disabled={Boolean(selectedPurchaseOrder)} value={form.supplier} onChange={(event) => setForm({ ...form, supplier: event.target.value })} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm disabled:bg-slate-50 disabled:text-slate-500">
             <option value="">Select supplier that delivered this lot</option>
             {suppliers.map((supplier) => <option key={supplier._id} value={supplier._id}>{supplier.name} · {supplier.code}</option>)}
           </select>
-          {materialPackSizes.length > 0 && <label className="text-sm font-semibold text-gray-700">Receive by
+          {!selectedPurchaseOrder && materialPackSizes.length > 0 && <label className="text-sm font-semibold text-gray-700">Receive by
             <select value={entryMode} onChange={(event) => setEntryMode(event.target.value as "pack" | "kg")} className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"><option value="pack">Number of packs</option><option value="kg">Kilograms</option></select>
           </label>}
-          {receivesByPack && <label className="text-sm font-semibold text-gray-700">Package size
+          {!selectedPurchaseOrder && receivesByPack && <label className="text-sm font-semibold text-gray-700">Package size
             <select value={packSize} onChange={(event) => setPackSize(event.target.value)} className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm">{materialPackSizes.map((size) => <option key={size} value={size}>{size.toLocaleString()} kg per pack</option>)}</select>
           </label>}
-          <label className="text-sm font-semibold text-gray-700">
+          {!selectedPurchaseOrder && <label className="text-sm font-semibold text-gray-700">
             {receivesByPack ? "Packs received" : `Received quantity (${selectedMaterial?.unit || "kg"})`}
             <input
-              required
+              required={!selectedPurchaseOrder}
               type="text"
               inputMode="decimal"
               value={receivesByPack ? packCount : form.receivedQuantity}
@@ -321,10 +338,10 @@ export default function RawMaterialLotsPage() {
               className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
             />
             {receivesByPack && <span className="mt-1 block text-xs font-normal text-slate-500">Will receive {((Number(packCount) || 0) * selectedPackSize).toLocaleString()} kg.</span>}
-          </label>
-          <label className="text-sm font-semibold text-gray-700">Actual unit cost (RWF / {materials.find((item) => item._id === materialId)?.unit || "kg"})
+          </label>}
+          {!selectedPurchaseOrder && <label className="text-sm font-semibold text-gray-700">Actual unit cost (RWF / {materials.find((item) => item._id === materialId)?.unit || "kg"})
             <input type="text" inputMode="decimal" value={form.unitCost === "0" ? "" : form.unitCost} onChange={(event) => setForm({ ...form, unitCost: event.target.value || "0" })} placeholder="Use PO / latest price" className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" />
-          </label>
+          </label>}
           <select
             value={form.status}
             onChange={(event) =>
@@ -337,7 +354,7 @@ export default function RawMaterialLotsPage() {
               Quarantined (does not add stock)
             </option>
           </select>
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 md:col-span-2"><input type="checkbox" checked={form.updateSupplierPrice} disabled={Number(form.unitCost || 0) <= 0} onChange={(event) => setForm({ ...form, updateSupplierPrice: event.target.checked })} className="h-4 w-4 accent-red-700 disabled:opacity-40" />Use this actual price as the supplier’s reference price for future purchase orders.</label>
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 md:col-span-2"><input type="checkbox" checked={form.updateSupplierPrice} onChange={(event) => setForm({ ...form, updateSupplierPrice: event.target.checked })} className="h-4 w-4 accent-red-700" />{selectedPurchaseOrder ? "Use these received prices as the supplier reference prices for future purchase orders." : "Use this actual price as the supplier reference price for future purchase orders."}</label>
           <label className="text-sm text-gray-600">
             Received date
             <input

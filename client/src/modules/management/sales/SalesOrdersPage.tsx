@@ -4,6 +4,7 @@ import { Eye, Plus, Printer, RefreshCw, ShoppingCart, X } from "lucide-react";
 import CustomerForm from "../users/CustomerForm";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
+import { useConfirmation } from "@/context/confirmationContext";
 import { printCanaDocument } from "../utils/printCanaDocument";
 
 type Order = {
@@ -226,6 +227,7 @@ export default function SalesOrdersPage({
   view?: "orders" | "fulfilment";
 }) {
   const { toast } = useToast();
+  const { confirm } = useConfirmation();
   const [addingCustomer, setAddingCustomer] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -277,6 +279,14 @@ export default function SalesOrdersPage({
       }),
     [orders, statusFilter, fulfilmentView, dateFrom, dateTo, search],
   );
+  const orderStats = useMemo(
+    () => ({
+      processing: orders.filter((order) => ["confirmed", "in_production"].includes(order.status)).length,
+      ready: orders.filter((order) => order.status === "ready_for_delivery").length,
+      delivered: orders.filter((order) => order.status === "delivered").length,
+    }),
+    [orders],
+  );
   const load = async () => {
     setLoading(true);
     setError("");
@@ -311,6 +321,16 @@ export default function SalesOrdersPage({
   }, []);
   const transition = async (id: string, status: string) => {
     if (saving) return;
+    const order = orders.find((item) => item._id === id);
+    const orderLabel = order?.orderNumber || "this sales order";
+    const messages: Record<string, string> = {
+      confirmed: `Confirm ${orderLabel}? The agreed prices will be locked for fulfilment.`,
+      in_production: `Move ${orderLabel} to production?`,
+      ready_for_delivery: `Mark ${orderLabel} ready for delivery? Stock availability will be checked.`,
+      delivered: `Confirm delivery of ${orderLabel}? Finished goods or raw materials will be deducted from stock and an invoice will be issued automatically.`,
+      cancelled: `Cancel ${orderLabel}? This cannot be undone after confirmation.`,
+    };
+    if (!(await confirm({ title: status === "delivered" ? "Confirm delivery" : `Mark order ${status.replaceAll("_", " ")}`, description: messages[status] || `Update ${orderLabel}?`, confirmLabel: status === "delivered" ? "Confirm delivery" : status.replaceAll("_", " "), tone: status === "cancelled" ? "danger" : "warning" }))) return;
     setSaving(true);
     setError("");
     try {
@@ -321,7 +341,7 @@ export default function SalesOrdersPage({
       setOrders((current) =>
         current.map((order) => (order._id === id ? response.data.data : order)),
       );
-      toast("Sales order status updated.", "success");
+      toast(status === "delivered" ? "Order delivered, stock updated, and invoice issued." : "Sales order status updated.", "success");
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Unable to update sales order.",
@@ -455,10 +475,10 @@ export default function SalesOrdersPage({
     }
   };
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+    <div className="mx-auto max-w-7xl space-y-4 pb-6">
+      <header className="flex flex-col justify-between gap-3 border-b-2 border-slate-950 pb-4 sm:flex-row sm:items-center">
         <div className="flex gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-950 text-white">
             <ShoppingCart size={21} />
           </div>
           <div>
@@ -472,7 +492,7 @@ export default function SalesOrdersPage({
           {!fulfilmentView && (
             <button
               onClick={() => setCreating(true)}
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
+              className="inline-flex items-center gap-2 rounded-md bg-red-700 px-3 py-2 text-sm font-bold text-white transition hover:bg-red-800"
             >
               <Plus size={16} />
               New sales order
@@ -481,7 +501,7 @@ export default function SalesOrdersPage({
           {fulfilmentView && (
             <Link
               to="/management/sales/orders"
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white hover:bg-slate-800"
+              className="inline-flex items-center gap-2 rounded-md bg-red-700 px-3 py-2 text-sm font-bold text-white hover:bg-red-800"
             >
               <Plus size={16} />
               New sales order
@@ -489,16 +509,34 @@ export default function SalesOrdersPage({
           )}
           <button
             onClick={() => void load()}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold"
+            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             <RefreshCw size={16} />
             Refresh
           </button>
         </div>
-      </div>
+      </header>
       {error && (
         <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
       )}
+      <section className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-4">
+        {[
+          ["All orders", orders.length, ""],
+          ["In progress", orderStats.processing, "confirmed"],
+          ["Ready to deliver", orderStats.ready, "ready_for_delivery"],
+          ["Delivered", orderStats.delivered, "delivered"],
+        ].map(([label, value, filter]) => (
+          <button
+            key={String(label)}
+            type="button"
+            onClick={() => setStatusFilter(String(filter))}
+            className={`border-t-2 bg-white px-3 py-3 text-left transition ${statusFilter === filter ? "border-red-700" : "border-transparent hover:bg-slate-50"}`}
+          >
+            <p className="text-[10px] font-extrabold uppercase tracking-[.12em] text-slate-500">{label}</p>
+            <p className="mt-1 text-lg font-extrabold tracking-tight text-slate-950">{value}</p>
+          </button>
+        ))}
+      </section>
       {!fulfilmentView && addingCustomer && (
         <CustomerForm
           onCancel={() => setAddingCustomer(false)}
@@ -758,7 +796,7 @@ export default function SalesOrdersPage({
           </Link>
         </div>
       )}
-      <section className="cana-panel flex flex-wrap items-end gap-3 p-3">
+      <section className="flex flex-wrap items-end gap-3 border border-slate-200 bg-slate-50 p-3">
         <label className="min-w-52 flex-1 text-xs font-bold text-slate-500">
           Search
           <input
@@ -887,9 +925,9 @@ export default function SalesOrdersPage({
           </p>
         )}
       </section>
-      <div className="hidden overflow-x-auto md:block cana-panel">
+      <div className="hidden overflow-x-auto border border-slate-200 bg-white md:block">
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <thead className="bg-slate-950 text-xs uppercase tracking-wide text-white">
             <tr>
               <th className="px-5 py-3">Order</th>
               <th className="px-5 py-3">Customer</th>
@@ -913,10 +951,10 @@ export default function SalesOrdersPage({
                   onClick={() => setDetailsOrder(order)}
                   className="cursor-pointer transition hover:bg-slate-50"
                 >
-                  <td className="px-5 py-4 font-semibold">
+                  <td className="px-5 py-3.5 font-bold text-slate-950">
                     {order.orderNumber}
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-5 py-3.5">
                     <p className="font-semibold text-slate-900">
                       {order.customer?.businessName ||
                         order.customer?.fullName ||
@@ -928,7 +966,7 @@ export default function SalesOrdersPage({
                       </p>
                     )}
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="max-w-72 truncate px-5 py-3.5 text-slate-600">
                     {order.items
                       .map(
                         (item) =>
@@ -936,8 +974,8 @@ export default function SalesOrdersPage({
                       )
                       .join(", ")}
                   </td>
-                  <td className="px-5 py-4">{money(order.total)} RWF</td>
-                  <td className="px-5 py-4">
+                  <td className="whitespace-nowrap px-5 py-3.5 font-bold text-slate-950">{money(order.total)} RWF</td>
+                  <td className="px-5 py-3.5">
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}
                     >
@@ -945,7 +983,7 @@ export default function SalesOrdersPage({
                     </span>
                   </td>
                   <td
-                    className="px-5 py-4"
+                    className="whitespace-nowrap px-5 py-3.5"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <OrderActions
