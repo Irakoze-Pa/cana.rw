@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   CheckCircle2,
+  ClipboardList,
   Factory,
   FileText,
   Hash,
@@ -8,6 +9,7 @@ import {
   User,
   X,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import type { ProductionBatch } from "../types/productionBatch.types";
 
@@ -17,9 +19,7 @@ interface ProductionBatchDetailsModalProps {
   batch: ProductionBatch | null;
 }
 
-function formatDate(
-  value?: string
-) {
+function formatDate(value?: string) {
   if (!value) {
     return "—";
   }
@@ -30,19 +30,14 @@ function formatDate(
     return "—";
   }
 
-  return date.toLocaleDateString(
-    "en-GB",
-    {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }
-  );
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
-function formatDateTime(
-  value?: string
-) {
+function formatDateTime(value?: string) {
   if (!value) {
     return "—";
   }
@@ -53,23 +48,19 @@ function formatDateTime(
     return "—";
   }
 
-  return date.toLocaleString(
-    "en-GB",
-    {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  );
+  return date.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-const money = (value?: number) => `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 })} RWF`;
+const money = (value?: number) =>
+  `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 })} RWF`;
 
-function getStatusClass(
-  status: ProductionBatch["status"]
-) {
+function getStatusClass(status: ProductionBatch["status"]) {
   switch (status) {
     case "Completed":
       return "bg-green-50 text-green-700";
@@ -102,28 +93,14 @@ export default function ProductionBatchDetailsModal({
 
   const progress =
     batch.plannedQuantity > 0
-      ? Math.min(
-          100,
-          (batch.actualQuantity /
-            batch.plannedQuantity) *
-            100
-        )
+      ? Math.min(100, (batch.actualQuantity / batch.plannedQuantity) * 100)
       : 0;
-
-  const productionOrderId =
-    typeof batch.productionOrder ===
-    "string"
-      ? batch.productionOrder
-      : batch.productionOrder._id;
 
   return (
     <div
       className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
       onMouseDown={(event) => {
-        if (
-          event.currentTarget ===
-            event.target
-        ) {
+        if (event.currentTarget === event.target) {
           onClose();
         }
       }}
@@ -137,9 +114,46 @@ export default function ProductionBatchDetailsModal({
 
             {batch.costedAt && (
               <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-red-700">Completed batch cost</p><h3 className="mt-1 text-lg font-extrabold text-slate-950">{money(batch.totalActualCost)}</h3></div><p className="text-xs text-slate-500">Frozen {formatDateTime(batch.costedAt)}</p></div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3"><CostItem label="Issued materials" value={money(batch.actualMaterialCost)} /><CostItem label="Labour & energy" value={money(Number(batch.allocatedLaborCost || 0) + Number(batch.allocatedEnergyCost || 0))} /><CostItem label="Other cost" value={money(batch.allocatedOtherCost)} /></div>
-                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-200 pt-3 text-sm"><span><strong>{money(batch.costPerKg)}</strong> / kg</span>{Number(batch.costPerPack || 0) > 0 && <span><strong>{money(batch.costPerPack)}</strong> / pack</span>}</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[.14em] text-red-700">
+                      Completed batch cost
+                    </p>
+                    <h3 className="mt-1 text-lg font-extrabold text-slate-950">
+                      {money(batch.totalActualCost)}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Frozen {formatDateTime(batch.costedAt)}
+                  </p>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <CostItem
+                    label="Issued materials"
+                    value={money(batch.actualMaterialCost)}
+                  />
+                  <CostItem
+                    label="Labour & energy"
+                    value={money(
+                      Number(batch.allocatedLaborCost || 0) +
+                        Number(batch.allocatedEnergyCost || 0),
+                    )}
+                  />
+                  <CostItem
+                    label="Other cost"
+                    value={money(batch.allocatedOtherCost)}
+                  />
+                </div>
+                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-200 pt-3 text-sm">
+                  <span>
+                    <strong>{money(batch.costPerKg)}</strong> / kg
+                  </span>
+                  {Number(batch.costPerPack || 0) > 0 && (
+                    <span>
+                      <strong>{money(batch.costPerPack)}</strong> / pack
+                    </span>
+                  )}
+                </div>
               </section>
             )}
 
@@ -151,7 +165,7 @@ export default function ProductionBatchDetailsModal({
 
                 <span
                   className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClass(
-                    batch.status
+                    batch.status,
                   )}`}
                 >
                   {batch.status}
@@ -175,6 +189,14 @@ export default function ProductionBatchDetailsModal({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
+            <Link
+              to={`/management/production/consumption?batch=${batch._id}`}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+            >
+              <ClipboardList size={16} />
+              View material consumption
+            </Link>
+
             {/* PROGRESS */}
             <div className="rounded-2xl border border-gray-200 p-5">
               <div className="flex items-center justify-between">
@@ -184,13 +206,8 @@ export default function ProductionBatchDetailsModal({
                   </p>
 
                   <p className="mt-1 text-sm text-gray-500">
-                    {Number(
-                      batch.actualQuantity
-                    ).toLocaleString()}{" "}
-                    /{" "}
-                    {Number(
-                      batch.plannedQuantity
-                    ).toLocaleString()}{" "}
+                    {Number(batch.actualQuantity).toLocaleString()} /{" "}
+                    {Number(batch.plannedQuantity).toLocaleString()}{" "}
                     {batch.unit}
                   </p>
                 </div>
@@ -211,14 +228,12 @@ export default function ProductionBatchDetailsModal({
             </div>
 
             {/* MAIN INFO */}
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-5 md:grid-cols-3">
               <div className="rounded-2xl border border-gray-200 p-5">
                 <div className="mb-4 flex items-center gap-2">
                   <Package className="text-red-600" />
 
-                  <h3 className="font-semibold">
-                    Product
-                  </h3>
+                  <h3 className="font-semibold">Product</h3>
                 </div>
 
                 <p className="font-semibold text-gray-900">
@@ -226,9 +241,7 @@ export default function ProductionBatchDetailsModal({
                 </p>
 
                 <p className="mt-1 text-sm text-gray-500">
-                  Code:{" "}
-                  {batch.productCode ||
-                    "—"}
+                  Code: {batch.productCode || "—"}
                 </p>
               </div>
 
@@ -236,9 +249,7 @@ export default function ProductionBatchDetailsModal({
                 <div className="mb-4 flex items-center gap-2">
                   <Hash className="text-red-600" />
 
-                  <h3 className="font-semibold">
-                    Formula
-                  </h3>
+                  <h3 className="font-semibold">Formula</h3>
                 </div>
 
                 <p className="font-semibold text-gray-900">
@@ -246,27 +257,7 @@ export default function ProductionBatchDetailsModal({
                 </p>
 
                 <p className="mt-1 text-sm text-gray-500">
-                  {batch.formulaCode} · v
-                  {batch.formulaVersion}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <Factory className="text-red-600" />
-
-                  <h3 className="font-semibold">
-                    Production Order
-                  </h3>
-                </div>
-
-                <p className="font-semibold text-gray-900">
-                  {typeof batch.productionOrder ===
-                  "string"
-                    ? productionOrderId
-                    : batch
-                        .productionOrder
-                        .productionOrderNo}
+                  {batch.formulaCode} · v{batch.formulaVersion}
                 </p>
               </div>
 
@@ -274,41 +265,21 @@ export default function ProductionBatchDetailsModal({
                 <div className="mb-4 flex items-center gap-2">
                   <User className="text-red-600" />
 
-                  <h3 className="font-semibold">
-                    Supervisor
-                  </h3>
+                  <h3 className="font-semibold">Supervisor</h3>
                 </div>
 
                 <p className="font-semibold text-gray-900">
-                  {batch.supervisorName ||
-                    "Not assigned"}
+                  {batch.supervisorName || "Not assigned"}
                 </p>
               </div>
             </div>
 
-            {/* BATCH / LOT */}
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="rounded-2xl border border-gray-200 p-5">
-                <p className="text-xs text-gray-500">
-                  Batch Number
-                </p>
+            <div className="rounded-2xl border border-gray-200 p-5">
+              <p className="text-xs text-gray-500">Production Lot</p>
 
-                <p className="mt-1 font-semibold text-gray-900">
-                  {batch.batchNumber ||
-                    "—"}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 p-5">
-                <p className="text-xs text-gray-500">
-                  Lot Number
-                </p>
-
-                <p className="mt-1 font-semibold text-gray-900">
-                  {batch.lotNumber ||
-                    "—"}
-                </p>
-              </div>
+              <p className="mt-1 font-semibold text-gray-900">
+                {batch.lotNumber || "—"}
+              </p>
             </div>
 
             {/* DATES */}
@@ -316,57 +287,39 @@ export default function ProductionBatchDetailsModal({
               <div className="mb-4 flex items-center gap-2">
                 <CalendarDays className="text-red-600" />
 
-                <h3 className="font-semibold">
-                  Production Dates
-                </h3>
+                <h3 className="font-semibold">Production Dates</h3>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                  <p className="text-xs text-gray-500">
-                    Start Date
-                  </p>
+                  <p className="text-xs text-gray-500">Start Date</p>
 
                   <p className="mt-1 text-sm font-medium">
-                    {formatDate(
-                      batch.startDate
-                    )}
+                    {formatDate(batch.startDate)}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-gray-500">
-                    End Date
-                  </p>
+                  <p className="text-xs text-gray-500">End Date</p>
 
                   <p className="mt-1 text-sm font-medium">
-                    {formatDate(
-                      batch.endDate
-                    )}
+                    {formatDate(batch.endDate)}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-gray-500">
-                    Created
-                  </p>
+                  <p className="text-xs text-gray-500">Created</p>
 
                   <p className="mt-1 text-sm font-medium">
-                    {formatDateTime(
-                      batch.createdAt
-                    )}
+                    {formatDateTime(batch.createdAt)}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-gray-500">
-                    Updated
-                  </p>
+                  <p className="text-xs text-gray-500">Updated</p>
 
                   <p className="mt-1 text-sm font-medium">
-                    {formatDateTime(
-                      batch.updatedAt
-                    )}
+                    {formatDateTime(batch.updatedAt)}
                   </p>
                 </div>
               </div>
@@ -377,25 +330,20 @@ export default function ProductionBatchDetailsModal({
               <div className="mb-4 flex items-center gap-2">
                 <FileText className="text-red-600" />
 
-                <h3 className="font-semibold">
-                  Notes
-                </h3>
+                <h3 className="font-semibold">Notes</h3>
               </div>
 
               <p className="text-sm leading-6 text-gray-600">
-                {batch.notes?.trim() ||
-                  "No notes available."}
+                {batch.notes?.trim() || "No notes available."}
               </p>
             </div>
 
-            {batch.status ===
-              "Completed" && (
+            {batch.status === "Completed" && (
               <div className="flex items-center gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-green-700">
                 <CheckCircle2 size={20} />
 
                 <p className="text-sm font-medium">
-                  This production batch has been
-                  completed.
+                  This production batch has been completed.
                 </p>
               </div>
             )}
@@ -417,5 +365,10 @@ export default function ProductionBatchDetailsModal({
 }
 
 function CostItem({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs font-semibold text-slate-500">{label}</p><p className="mt-1 font-extrabold text-slate-900">{value}</p></div>;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-1 font-extrabold text-slate-900">{value}</p>
+    </div>
+  );
 }

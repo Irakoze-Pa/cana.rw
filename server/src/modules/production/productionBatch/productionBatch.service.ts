@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 
 import ProductionBatch from "./productionBatch.model";
 import ProductionOrder from "../productionOrder/productionOrder.model";
+import { createProductionOrder } from "../productionOrder/productionOrder.service";
+import Formula from "../../formula/formula.model";
 import Product from "../../product/product.model";
 import FinishedGoodsStoreBalance from "../../finishedGoods/storeBalance.model";
 import InventoryTransaction from "../../inventory/inventoryTransaction.model";
@@ -17,7 +19,12 @@ import {
 // =====================================================
 
 export interface CreateProductionBatchData {
-  productionOrder: string;
+  /** Existing order is retained for legacy/planned workflows. */
+  productionOrder?: string;
+
+  /** Direct production workflow: select product and formula instead of an order. */
+  product?: string;
+  formula?: string;
 
   plannedQuantity?: number;
 
@@ -40,12 +47,7 @@ export interface UpdateProductionBatchData {
   actualQuantity?: number;
 
   status?:
-    | "Planned"
-    | "Ready"
-    | "In Progress"
-    | "Paused"
-    | "Completed"
-    | "Cancelled";
+    "Planned" | "Ready" | "In Progress" | "Paused" | "Completed" | "Cancelled";
 
   batchNumber?: string;
 
@@ -69,17 +71,12 @@ export interface UpdateProductionBatchData {
 export class ProductionBatchServiceError extends Error {
   statusCode: number;
 
-  constructor(
-    message: string,
-    statusCode = 400
-  ) {
+  constructor(message: string, statusCode = 400) {
     super(message);
 
-    this.name =
-      "ProductionBatchServiceError";
+    this.name = "ProductionBatchServiceError";
 
-    this.statusCode =
-      statusCode;
+    this.statusCode = statusCode;
   }
 }
 
@@ -87,19 +84,32 @@ async function snapshotCompletedBatchCost(batch: any, productionOrder: any) {
   if (batch.costedAt) return;
 
   const [transactions, product] = await Promise.all([
-    InventoryTransaction.find({ productionBatch: batch._id, type: { $in: ["Production Issue", "Production Return"] } }).select("type totalCost").lean(),
+    InventoryTransaction.find({
+      productionBatch: batch._id,
+      type: { $in: ["Production Issue", "Production Return"] },
+    })
+      .select("type totalCost")
+      .lean(),
     Product.findById(batch.product).select("packSizeKg baseUnit").lean(),
   ]);
-  const materialCost = transactions.reduce((total, transaction) => total + (transaction.type === "Production Return" ? -1 : 1) * Number(transaction.totalCost || 0), 0);
+  const materialCost = transactions.reduce(
+    (total, transaction) =>
+      total +
+      (transaction.type === "Production Return" ? -1 : 1) *
+        Number(transaction.totalCost || 0),
+    0,
+  );
   const orderQuantity = Number(productionOrder.quantity || 0);
-  const allocation = orderQuantity > 0 ? Number(batch.plannedQuantity || 0) / orderQuantity : 1;
+  const allocation =
+    orderQuantity > 0 ? Number(batch.plannedQuantity || 0) / orderQuantity : 1;
   const labor = Number(productionOrder.laborCost || 0) * allocation;
   const energy = Number(productionOrder.energyCost || 0) * allocation;
   const other = Number(productionOrder.otherCost || 0) * allocation;
   const total = Math.max(0, materialCost + labor + energy + other);
   const output = Number(batch.actualQuantity || 0);
   const perKg = output > 0 ? total / output : 0;
-  const packSizeKg = product?.baseUnit === "kg" ? Number(product.packSizeKg || 0) : 0;
+  const packSizeKg =
+    product?.baseUnit === "kg" ? Number(product.packSizeKg || 0) : 0;
 
   batch.actualMaterialCost = roundNumber(Math.max(0, materialCost));
   batch.allocatedLaborCost = roundNumber(labor);
@@ -117,12 +127,7 @@ async function snapshotCompletedBatchCost(batch: any, productionOrder: any) {
 // =====================================================
 
 export type ProductionBatchStatus =
-  | "Planned"
-  | "Ready"
-  | "In Progress"
-  | "Paused"
-  | "Completed"
-  | "Cancelled";
+  "Planned" | "Ready" | "In Progress" | "Paused" | "Completed" | "Cancelled";
 
 // =====================================================
 // STATUS TRANSITIONS
@@ -132,56 +137,26 @@ const allowedStatusTransitions: Record<
   ProductionBatchStatus,
   ProductionBatchStatus[]
 > = {
-  Planned: [
-    "Planned",
-    "Ready",
-    "Cancelled",
-  ],
+  Planned: ["Planned", "Ready", "Cancelled"],
 
-  Ready: [
-    "Ready",
-    "In Progress",
-    "Cancelled",
-  ],
+  Ready: ["Ready", "In Progress", "Cancelled"],
 
-  "In Progress": [
-    "In Progress",
-    "Paused",
-    "Completed",
-  ],
+  "In Progress": ["In Progress", "Paused", "Completed"],
 
-  Paused: [
-    "Paused",
-    "In Progress",
-    "Completed",
-    "Cancelled",
-  ],
+  Paused: ["Paused", "In Progress", "Completed", "Cancelled"],
 
-  Completed: [
-    "Completed",
-  ],
+  Completed: ["Completed"],
 
-  Cancelled: [
-    "Cancelled",
-  ],
+  Cancelled: ["Cancelled"],
 };
 
 // =====================================================
 // OBJECT ID
 // =====================================================
 
-function validateObjectId(
-  id: string,
-  fieldName: string
-) {
-  if (
-    !id ||
-    !mongoose.Types.ObjectId.isValid(id)
-  ) {
-    throw new ProductionBatchServiceError(
-      `Invalid ${fieldName}.`,
-      400
-    );
+function validateObjectId(id: string, fieldName: string) {
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    throw new ProductionBatchServiceError(`Invalid ${fieldName}.`, 400);
   }
 }
 
@@ -189,19 +164,10 @@ function validateObjectId(
 // ROUND
 // =====================================================
 
-function roundNumber(
-  value: number,
-  decimals = 4
-) {
-  const factor =
-    Math.pow(10, decimals);
+function roundNumber(value: number, decimals = 4) {
+  const factor = Math.pow(10, decimals);
 
-  return (
-    Math.round(
-      (value + Number.EPSILON) *
-        factor
-    ) / factor
-  );
+  return Math.round((value + Number.EPSILON) * factor) / factor;
 }
 
 /**
@@ -214,23 +180,23 @@ function getOrderCommittedQuantity(
     status?: string;
     plannedQuantity?: number;
     actualQuantity?: number;
-  }>
+  }>,
 ) {
   return roundNumber(
-    batches.reduce(
-      (total, batch) => {
-        if (batch.status === "Cancelled") {
-          return total;
-        }
+    batches.reduce((total, batch) => {
+      if (batch.status === "Cancelled") {
+        return total;
+      }
 
-        return total + Number(
+      return (
+        total +
+        Number(
           batch.status === "Completed"
             ? batch.actualQuantity || 0
-            : batch.plannedQuantity || 0
-        );
-      },
-      0
-    )
+            : batch.plannedQuantity || 0,
+        )
+      );
+    }, 0),
   );
 }
 
@@ -238,33 +204,15 @@ function getOrderCommittedQuantity(
 // DATE
 // =====================================================
 
-function parseDate(
-  value:
-    | string
-    | Date
-    | undefined,
-  fieldName: string
-) {
-  if (
-    value === undefined ||
-    value === null ||
-    value === ""
-  ) {
+function parseDate(value: string | Date | undefined, fieldName: string) {
+  if (value === undefined || value === null || value === "") {
     return undefined;
   }
 
-  const date =
-    new Date(value);
+  const date = new Date(value);
 
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    throw new ProductionBatchServiceError(
-      `Invalid ${fieldName}.`,
-      400
-    );
+  if (Number.isNaN(date.getTime())) {
+    throw new ProductionBatchServiceError(`Invalid ${fieldName}.`, 400);
   }
 
   return date;
@@ -276,20 +224,14 @@ function parseDate(
 
 function validateStatusTransition(
   current: ProductionBatchStatus,
-  next: ProductionBatchStatus
+  next: ProductionBatchStatus,
 ) {
-  const allowed =
-    allowedStatusTransitions[
-      current
-    ];
+  const allowed = allowedStatusTransitions[current];
 
-  if (
-    !allowed ||
-    !allowed.includes(next)
-  ) {
+  if (!allowed || !allowed.includes(next)) {
     throw new ProductionBatchServiceError(
       `Invalid production batch status transition: ${current} → ${next}.`,
-      400
+      400,
     );
   }
 }
@@ -299,71 +241,93 @@ function validateStatusTransition(
 // =====================================================
 
 async function generateBatchNo() {
-  const year =
-    new Date().getFullYear();
+  const year = new Date().getFullYear();
 
-  const latestBatch =
-    await ProductionBatch.findOne({
-      batchNo: {
-        $regex: `^PB-${year}-`,
-      },
+  const latestBatch = await ProductionBatch.findOne({
+    batchNo: {
+      $regex: `^PB-${year}-`,
+    },
+  })
+    .sort({
+      batchNo: -1,
     })
-      .sort({
-        batchNo: -1,
-      })
-      .select("batchNo")
-      .lean();
+    .select("batchNo")
+    .lean();
 
   let nextNumber = 1;
 
-  if (
-    latestBatch?.batchNo
-  ) {
-    const match =
-      latestBatch.batchNo.match(
-        /PB-\d{4}-(\d+)$/
-      );
+  if (latestBatch?.batchNo) {
+    const match = latestBatch.batchNo.match(/PB-\d{4}-(\d+)$/);
 
     if (match) {
-      nextNumber =
-        Number(match[1]) + 1;
+      nextNumber = Number(match[1]) + 1;
     }
   }
 
-  return `PB-${year}-${String(
-    nextNumber
-  ).padStart(4, "0")}`;
+  return `PB-${year}-${String(nextNumber).padStart(4, "0")}`;
 }
 
 // =====================================================
 // CREATE BATCH
 // =====================================================
 
-export async function createProductionBatch(
-  data: CreateProductionBatchData
-) {
+export async function createProductionBatch(data: CreateProductionBatchData) {
   if (!data) {
     throw new ProductionBatchServiceError(
       "Production batch data is required.",
-      400
+      400,
     );
   }
 
-  validateObjectId(
-    data.productionOrder,
-    "production order ID"
-  );
+  let productionOrder: any;
 
-  const productionOrder =
-    await ProductionOrder.findById(
-      data.productionOrder
-    );
+  if (data.productionOrder) {
+    validateObjectId(data.productionOrder, "production order ID");
+    productionOrder = await ProductionOrder.findById(data.productionOrder);
+  } else {
+    validateObjectId(String(data.product || ""), "product ID");
+    validateObjectId(String(data.formula || ""), "formula ID");
+
+    const formula = await Formula.findById(data.formula)
+      .select("batchSize status")
+      .lean();
+
+    if (!formula) {
+      throw new ProductionBatchServiceError("Formula not found.", 404);
+    }
+
+    if (formula.status !== "Active") {
+      throw new ProductionBatchServiceError(
+        "Select an active formula before starting production.",
+        400,
+      );
+    }
+
+    const formulaBatchSize = Number(formula.batchSize || 0);
+    if (!Number.isFinite(formulaBatchSize) || formulaBatchSize <= 0) {
+      throw new ProductionBatchServiceError(
+        "The selected formula needs a valid batch size.",
+        400,
+      );
+    }
+
+    // The production order remains an internal audit record only. Operators
+    // start directly from a product and formula, then enter the actual output
+    // at batch completion.
+    productionOrder = await createProductionOrder({
+      product: String(data.product),
+      formula: String(data.formula),
+      quantity: formulaBatchSize,
+      plannedDate: data.startDate || new Date(),
+      status: "Released",
+      directBatchRecord: true,
+      notes:
+        `System record for direct production batch. ${data.notes?.trim() || ""}`.trim(),
+    });
+  }
 
   if (!productionOrder) {
-    throw new ProductionBatchServiceError(
-      "Production order not found.",
-      404
-    );
+    throw new ProductionBatchServiceError("Production order not found.", 404);
   }
 
   // ---------------------------------------------------
@@ -371,18 +335,14 @@ export async function createProductionBatch(
   // ---------------------------------------------------
 
   if (
-    productionOrder.status !==
-      "Draft" &&
-    productionOrder.status !==
-      "Planned" &&
-    productionOrder.status !==
-      "Released" &&
-    productionOrder.status !==
-      "In Production"
+    productionOrder.status !== "Draft" &&
+    productionOrder.status !== "Planned" &&
+    productionOrder.status !== "Released" &&
+    productionOrder.status !== "In Production"
   ) {
     throw new ProductionBatchServiceError(
       `A production batch can only be created for a Draft, Planned, Released or In Production production order. Current status: ${productionOrder.status}.`,
-      409
+      409,
     );
   }
 
@@ -394,7 +354,7 @@ export async function createProductionBatch(
   ) {
     throw new ProductionBatchServiceError(
       "A production order must have raw-material requirements before its first batch can be created.",
-      400
+      400,
     );
   }
 
@@ -402,20 +362,12 @@ export async function createProductionBatch(
   // ORDER MUST HAVE POSITIVE QUANTITY
   // ---------------------------------------------------
 
-  const orderQuantity =
-    Number(
-      productionOrder.quantity
-    );
+  const orderQuantity = Number(productionOrder.quantity);
 
-  if (
-    !Number.isFinite(
-      orderQuantity
-    ) ||
-    orderQuantity <= 0
-  ) {
+  if (!Number.isFinite(orderQuantity) || orderQuantity <= 0) {
     throw new ProductionBatchServiceError(
       "Production order quantity must be greater than 0.",
-      400
+      400,
     );
   }
 
@@ -423,21 +375,12 @@ export async function createProductionBatch(
   // PLANNED QUANTITY
   // ---------------------------------------------------
 
-  const plannedQuantity =
-    Number(
-      data.plannedQuantity ??
-        orderQuantity
-    );
+  const plannedQuantity = Number(data.plannedQuantity ?? orderQuantity);
 
-  if (
-    !Number.isFinite(
-      plannedQuantity
-    ) ||
-    plannedQuantity <= 0
-  ) {
+  if (!Number.isFinite(plannedQuantity) || plannedQuantity <= 0) {
     throw new ProductionBatchServiceError(
       "Batch planned quantity must be greater than 0.",
-      400
+      400,
     );
   }
 
@@ -445,44 +388,30 @@ export async function createProductionBatch(
   // EXISTING BATCHES
   // ---------------------------------------------------
 
-  const existingBatches =
-    await ProductionBatch.find({
-      productionOrder:
-        productionOrder._id,
-      status: {
-        $ne: "Cancelled",
-      },
-    })
-      .select(
-        "plannedQuantity actualQuantity status"
-      )
-      .lean();
+  const existingBatches = await ProductionBatch.find({
+    productionOrder: productionOrder._id,
+    status: {
+      $ne: "Cancelled",
+    },
+  })
+    .select("plannedQuantity actualQuantity status")
+    .lean();
 
-  const plannedAlready =
-    getOrderCommittedQuantity(existingBatches);
+  const plannedAlready = getOrderCommittedQuantity(existingBatches);
 
-  const remainingQuantity =
-    roundNumber(
-      orderQuantity -
-        plannedAlready
-    );
+  const remainingQuantity = roundNumber(orderQuantity - plannedAlready);
 
-  if (
-    remainingQuantity <= 0
-  ) {
+  if (remainingQuantity <= 0) {
     throw new ProductionBatchServiceError(
       "No remaining quantity is available for another production batch.",
-      409
+      409,
     );
   }
 
-  if (
-    plannedQuantity >
-    remainingQuantity
-  ) {
+  if (plannedQuantity > remainingQuantity) {
     throw new ProductionBatchServiceError(
       `Batch quantity (${plannedQuantity}) exceeds the remaining production order quantity (${remainingQuantity}).`,
-      409
+      409,
     );
   }
 
@@ -490,87 +419,60 @@ export async function createProductionBatch(
   // BATCH NUMBER
   // ---------------------------------------------------
 
-  const batchNo =
-    await generateBatchNo();
+  const batchNo = await generateBatchNo();
 
   // ---------------------------------------------------
   // START DATE
   // ---------------------------------------------------
 
-  const startDate =
-    parseDate(
-      data.startDate,
-      "start date"
-    );
+  const startDate = parseDate(data.startDate, "start date");
 
   // ---------------------------------------------------
   // CREATE
   // ---------------------------------------------------
 
   try {
-    const batch =
-      await ProductionBatch.create({
-        batchNo,
+    const batch = await ProductionBatch.create({
+      batchNo,
 
-        productionOrder:
-          productionOrder._id,
+      productionOrder: productionOrder._id,
 
-        product:
-          productionOrder.product,
+      product: productionOrder.product,
 
-        productName:
-          productionOrder.productName,
+      productName: productionOrder.productName,
 
-        productCode:
-          productionOrder.productCode,
+      productCode: productionOrder.productCode,
 
-        formula:
-          productionOrder.formula,
+      formula: productionOrder.formula,
 
-        formulaName:
-          productionOrder.formulaName,
+      formulaName: productionOrder.formulaName,
 
-        formulaCode:
-          productionOrder.formulaCode,
+      formulaCode: productionOrder.formulaCode,
 
-        formulaVersion:
-          productionOrder.formulaVersion,
+      formulaVersion: productionOrder.formulaVersion,
 
-        plannedQuantity,
+      plannedQuantity,
 
-        actualQuantity: 0,
+      actualQuantity: 0,
 
-        unit:
-          productionOrder.unit,
+      unit: productionOrder.unit,
 
-        status:
-          "Planned",
+      status: "Planned",
 
-        batchNumber:
-          data.batchNumber?.trim() ||
-          batchNo,
+      batchNumber: data.batchNumber?.trim() || batchNo,
 
-        lotNumber:
-          data.lotNumber?.trim() ||
-          batchNo,
+      lotNumber: data.lotNumber?.trim() || batchNo,
 
-        startDate,
+      startDate,
 
-        supervisor:
-          data.supervisor
-            ? new mongoose.Types.ObjectId(
-                data.supervisor
-              )
-            : undefined,
+      supervisor: data.supervisor
+        ? new mongoose.Types.ObjectId(data.supervisor)
+        : undefined,
 
-        supervisorName:
-          data.supervisorName?.trim() ||
-          "",
+      supervisorName: data.supervisorName?.trim() || "",
 
-        notes:
-          data.notes?.trim() ||
-          "",
-      });
+      notes: data.notes?.trim() || "",
+    });
 
     // -------------------------------------------------
     // DRAFT / PLANNED → RELEASED
@@ -583,20 +485,17 @@ export async function createProductionBatch(
       productionOrder.status === "Draft" ||
       productionOrder.status === "Planned"
     ) {
-      productionOrder.status =
-        "Released";
+      productionOrder.status = "Released";
 
       await productionOrder.save();
     }
 
     return batch;
   } catch (error: any) {
-    if (
-      error?.code === 11000
-    ) {
+    if (error?.code === 11000) {
       throw new ProductionBatchServiceError(
         "A production batch with the same batch number already exists.",
-        409
+        409,
       );
     }
 
@@ -612,16 +511,10 @@ export async function getProductionBatches() {
   return ProductionBatch.find()
     .populate(
       "productionOrder",
-      "productionOrderNo productName productCode quantity unit status"
+      "productionOrderNo productName productCode quantity unit status",
     )
-    .populate(
-      "product",
-      "name code category unit"
-    )
-    .populate(
-      "formula",
-      "name code version batchSize batchUnit"
-    )
+    .populate("product", "name code category unit")
+    .populate("formula", "name code version batchSize batchUnit")
     .sort({
       createdAt: -1,
     });
@@ -631,46 +524,27 @@ export async function getProductionBatches() {
 // GET BY ID
 // =====================================================
 
-export async function getProductionBatchById(
-  id: string
-) {
-  validateObjectId(
-    id,
-    "production batch ID"
-  );
+export async function getProductionBatchById(id: string) {
+  validateObjectId(id, "production batch ID");
 
-  return ProductionBatch.findById(
-    id
-  )
+  return ProductionBatch.findById(id)
     .populate(
       "productionOrder",
-      "productionOrderNo productName productCode quantity unit status"
+      "productionOrderNo productName productCode quantity unit status",
     )
-    .populate(
-      "product",
-      "name code category unit"
-    )
-    .populate(
-      "formula",
-      "name code version batchSize batchUnit"
-    );
+    .populate("product", "name code category unit")
+    .populate("formula", "name code version batchSize batchUnit");
 }
 
 // =====================================================
 // GET BY ORDER
 // =====================================================
 
-export async function getBatchesByProductionOrder(
-  productionOrderId: string
-) {
-  validateObjectId(
-    productionOrderId,
-    "production order ID"
-  );
+export async function getBatchesByProductionOrder(productionOrderId: string) {
+  validateObjectId(productionOrderId, "production order ID");
 
   return ProductionBatch.find({
-    productionOrder:
-      productionOrderId,
+    productionOrder: productionOrderId,
   }).sort({
     createdAt: -1,
   });
@@ -683,22 +557,14 @@ export async function getBatchesByProductionOrder(
 export async function getActiveProductionBatches() {
   return ProductionBatch.find({
     status: {
-      $in: [
-        "Planned",
-        "Ready",
-        "In Progress",
-        "Paused",
-      ],
+      $in: ["Planned", "Ready", "In Progress", "Paused"],
     },
   })
     .populate(
       "productionOrder",
-      "productionOrderNo productName productCode quantity unit status"
+      "productionOrderNo productName productCode quantity unit status",
     )
-    .populate(
-      "product",
-      "name code category unit"
-    )
+    .populate("product", "name code category unit")
     .sort({
       createdAt: -1,
     });
@@ -710,41 +576,28 @@ export async function getActiveProductionBatches() {
 
 export async function updateProductionBatch(
   id: string,
-  data: UpdateProductionBatchData
+  data: UpdateProductionBatchData,
 ) {
-  validateObjectId(
-    id,
-    "production batch ID"
-  );
+  validateObjectId(id, "production batch ID");
 
-  const batch =
-    await ProductionBatch.findById(id);
+  const batch = await ProductionBatch.findById(id);
 
   if (!batch) {
-    throw new ProductionBatchServiceError(
-      "Production batch not found.",
-      404
-    );
+    throw new ProductionBatchServiceError("Production batch not found.", 404);
   }
 
   const wasCompleted = batch.status === "Completed";
 
-  const currentStatus =
-    batch.status as ProductionBatchStatus;
+  const currentStatus = batch.status as ProductionBatchStatus;
 
   // ---------------------------------------------------
   // TERMINAL STATES
   // ---------------------------------------------------
 
-  if (
-    currentStatus ===
-      "Completed" ||
-    currentStatus ===
-      "Cancelled"
-  ) {
+  if (currentStatus === "Completed" || currentStatus === "Cancelled") {
     throw new ProductionBatchServiceError(
       `A ${currentStatus} production batch cannot be modified.`,
-      409
+      409,
     );
   }
 
@@ -752,38 +605,31 @@ export async function updateProductionBatch(
   // CALCULATE NEXT STATUS
   // ---------------------------------------------------
 
-  const nextStatus =
-    (data.status ??
-      currentStatus) as ProductionBatchStatus;
+  const nextStatus = (data.status ?? currentStatus) as ProductionBatchStatus;
 
-  validateStatusTransition(
-    currentStatus,
-    nextStatus
-  );
+  validateStatusTransition(currentStatus, nextStatus);
 
-  const isCompletingBatch =
-    nextStatus === "Completed";
+  const isCompletingBatch = nextStatus === "Completed";
 
   let consumptionToFinalize: any = null;
 
   if (isCompletingBatch) {
-    consumptionToFinalize =
-      await RawMaterialConsumption.findOne({
-        productionBatch: batch._id,
-        status: { $ne: "Cancelled" },
-      });
+    consumptionToFinalize = await RawMaterialConsumption.findOne({
+      productionBatch: batch._id,
+      status: { $ne: "Cancelled" },
+    });
 
     if (!consumptionToFinalize) {
       throw new ProductionBatchServiceError(
         "Raw materials have not been issued for this batch. Start the batch first, then issue materials before recording finished output.",
-        409
+        409,
       );
     }
 
     if (consumptionToFinalize.status === "Draft") {
       throw new ProductionBatchServiceError(
         "Issue the raw materials for this batch before completing it.",
-        409
+        409,
       );
     }
   }
@@ -792,16 +638,10 @@ export async function updateProductionBatch(
   // LOAD ORDER
   // ---------------------------------------------------
 
-  const productionOrder =
-    await ProductionOrder.findById(
-      batch.productionOrder
-    );
+  const productionOrder = await ProductionOrder.findById(batch.productionOrder);
 
   if (!productionOrder) {
-    throw new ProductionBatchServiceError(
-      "Production order not found.",
-      404
-    );
+    throw new ProductionBatchServiceError("Production order not found.", 404);
   }
 
   // ---------------------------------------------------
@@ -809,143 +649,93 @@ export async function updateProductionBatch(
   // ---------------------------------------------------
 
   const canEditPlannedQuantity =
-    currentStatus ===
-      "Planned" ||
-    currentStatus ===
-      "Ready";
+    currentStatus === "Planned" || currentStatus === "Ready";
 
   const canEditActualQuantity =
-    currentStatus ===
-      "In Progress" ||
-    currentStatus ===
-      "Paused";
+    currentStatus === "In Progress" || currentStatus === "Paused";
 
   const productionStarted =
-    currentStatus ===
-      "In Progress" ||
-    currentStatus ===
-      "Paused";
+    currentStatus === "In Progress" || currentStatus === "Paused";
 
   // ---------------------------------------------------
   // PLANNED QUANTITY
   // ---------------------------------------------------
 
-  if (
-    data.plannedQuantity !==
-    undefined
-  ) {
-    if (
-      !canEditPlannedQuantity
-    ) {
+  if (data.plannedQuantity !== undefined) {
+    if (!canEditPlannedQuantity) {
       throw new ProductionBatchServiceError(
         "Planned batch quantity can only be changed while the batch is Planned or Ready.",
-        409
+        409,
       );
     }
 
-    const quantity =
-      Number(
-        data.plannedQuantity
-      );
+    const quantity = Number(data.plannedQuantity);
 
-    if (
-      !Number.isFinite(
-        quantity
-      ) ||
-      quantity <= 0
-    ) {
+    if (!Number.isFinite(quantity) || quantity <= 0) {
       throw new ProductionBatchServiceError(
         "Planned quantity must be greater than 0.",
-        400
+        400,
       );
     }
 
-    const otherBatches =
-      await ProductionBatch.find({
-        productionOrder:
-          batch.productionOrder,
+    const otherBatches = await ProductionBatch.find({
+      productionOrder: batch.productionOrder,
 
-        _id: {
-          $ne: batch._id,
-        },
+      _id: {
+        $ne: batch._id,
+      },
 
-        status: {
-          $ne: "Cancelled",
-        },
-      })
-        .select(
-          "plannedQuantity actualQuantity status"
-        )
-        .lean();
+      status: {
+        $ne: "Cancelled",
+      },
+    })
+      .select("plannedQuantity actualQuantity status")
+      .lean();
 
-    const otherPlanned =
-      getOrderCommittedQuantity(otherBatches);
+    const otherPlanned = getOrderCommittedQuantity(otherBatches);
 
-    const remainingForThisBatch =
-      roundNumber(
-        Number(
-          productionOrder.quantity
-        ) -
-          otherPlanned
-      );
+    const remainingForThisBatch = roundNumber(
+      Number(productionOrder.quantity) - otherPlanned,
+    );
 
-    if (
-      quantity >
-      remainingForThisBatch
-    ) {
+    if (quantity > remainingForThisBatch) {
       throw new ProductionBatchServiceError(
         `The new batch quantity (${quantity}) exceeds the remaining production order quantity (${remainingForThisBatch}).`,
-        409
+        409,
       );
     }
 
-    batch.plannedQuantity =
-      quantity;
+    batch.plannedQuantity = quantity;
   }
 
   // ---------------------------------------------------
   // ACTUAL QUANTITY
   // ---------------------------------------------------
 
-  if (
-    data.actualQuantity !==
-    undefined
-  ) {
-    if (
-      !canEditActualQuantity
-    ) {
+  if (data.actualQuantity !== undefined) {
+    if (!canEditActualQuantity) {
       throw new ProductionBatchServiceError(
         "Actual produced quantity can only be recorded while the batch is In Progress or Paused.",
-        409
+        409,
       );
     }
 
-    const actual =
-      Number(
-        data.actualQuantity
-      );
+    const actual = Number(data.actualQuantity);
 
-    if (
-      !Number.isFinite(
-        actual
-      ) ||
-      actual < 0
-    ) {
+    if (!Number.isFinite(actual) || actual < 0) {
       throw new ProductionBatchServiceError(
         "Actual produced quantity cannot be negative.",
-        400
+        400,
       );
     }
 
     if (
-      actual >
-      Number(
-        batch.plannedQuantity
-      )
+      !productionOrder.directBatchRecord &&
+      actual > Number(batch.plannedQuantity)
     ) {
       throw new ProductionBatchServiceError(
         "Actual produced quantity cannot exceed planned batch quantity.",
-        400
+        400,
       );
     }
 
@@ -953,107 +743,67 @@ export async function updateProductionBatch(
     // ORDER TOTAL SAFETY
     // -------------------------------------------------
 
-    const otherActualBatches =
-      await ProductionBatch.find({
-        productionOrder:
-          batch.productionOrder,
+    const otherActualBatches = await ProductionBatch.find({
+      productionOrder: batch.productionOrder,
 
-        _id: {
-          $ne: batch._id,
-        },
+      _id: {
+        $ne: batch._id,
+      },
 
-        status: {
-          $ne: "Cancelled",
-        },
-      })
-        .select(
-          "actualQuantity"
-        )
-        .lean();
+      status: {
+        $ne: "Cancelled",
+      },
+    })
+      .select("actualQuantity")
+      .lean();
 
-    const otherActual =
-      otherActualBatches.reduce(
-        (
-          total,
-          item
-        ) =>
-          total +
-          Number(
-            item.actualQuantity ||
-              0
-          ),
-        0
-      );
+    const otherActual = otherActualBatches.reduce(
+      (total, item) => total + Number(item.actualQuantity || 0),
+      0,
+    );
 
-    const maximumAllowedActual =
-      roundNumber(
-        Number(
-          productionOrder.quantity
-        ) -
-          otherActual
-      );
+    const maximumAllowedActual = roundNumber(
+      Number(productionOrder.quantity) - otherActual,
+    );
 
-    if (
-      actual >
-      maximumAllowedActual
-    ) {
+    if (!productionOrder.directBatchRecord && actual > maximumAllowedActual) {
       throw new ProductionBatchServiceError(
         `Actual produced quantity cannot exceed the remaining production order quantity (${maximumAllowedActual}).`,
-        409
+        409,
       );
     }
 
-    batch.actualQuantity =
-      actual;
+    batch.actualQuantity = actual;
   }
 
   // ---------------------------------------------------
   // COMPLETION VALIDATION
   // ---------------------------------------------------
 
-  if (
-    nextStatus ===
-    "Completed"
-  ) {
+  if (nextStatus === "Completed") {
     const finalActual =
-      data.actualQuantity !==
-      undefined
-        ? Number(
-            data.actualQuantity
-          )
-        : Number(
-            batch.actualQuantity
-          );
+      data.actualQuantity !== undefined
+        ? Number(data.actualQuantity)
+        : Number(batch.actualQuantity);
 
-    if (
-      !Number.isFinite(
-        finalActual
-      ) ||
-      finalActual <= 0
-    ) {
+    if (!Number.isFinite(finalActual) || finalActual <= 0) {
       throw new ProductionBatchServiceError(
         "A completed batch must have actual produced quantity greater than 0.",
-        400
+        400,
       );
     }
 
-    batch.endDate =
-      new Date();
+    batch.endDate = new Date();
   }
 
   // ---------------------------------------------------
   // STATUS
   // ---------------------------------------------------
 
-  batch.status =
-    nextStatus;
+  batch.status = nextStatus;
 
-  if (
-    nextStatus === "In Progress" &&
-    productionOrder.status === "Released"
-  ) {
-    productionOrder.status =
-      "In Production";
+  if (nextStatus === "In Progress" && productionOrder.status === "Released") {
+    productionOrder.status = "In Production";
   }
 
   if (
@@ -1068,37 +818,25 @@ export async function updateProductionBatch(
   // START DATE
   // ---------------------------------------------------
 
-  if (
-    data.startDate !==
-    undefined
-  ) {
-    if (
-      productionStarted
-    ) {
+  if (data.startDate !== undefined) {
+    if (productionStarted) {
       throw new ProductionBatchServiceError(
         "Start date cannot be changed after production starts.",
-        409
+        409,
       );
     }
 
-    batch.startDate =
-      parseDate(
-        data.startDate,
-        "start date"
-      );
+    batch.startDate = parseDate(data.startDate, "start date");
   }
 
   // ---------------------------------------------------
   // END DATE
   // ---------------------------------------------------
 
-  if (
-    data.endDate !==
-    undefined
-  ) {
+  if (data.endDate !== undefined) {
     throw new ProductionBatchServiceError(
       "End date is managed automatically by the production batch workflow.",
-      409
+      409,
     );
   }
 
@@ -1106,123 +844,85 @@ export async function updateProductionBatch(
   // BATCH NUMBER
   // ---------------------------------------------------
 
-  if (
-    data.batchNumber !==
-    undefined
-  ) {
-    if (
-      productionStarted
-    ) {
+  if (data.batchNumber !== undefined) {
+    if (productionStarted) {
       throw new ProductionBatchServiceError(
         "Batch number cannot be changed after production starts.",
-        409
+        409,
       );
     }
 
-    const value =
-      data.batchNumber.trim();
+    const value = data.batchNumber.trim();
 
     if (!value) {
       throw new ProductionBatchServiceError(
         "Batch number cannot be empty.",
-        400
+        400,
       );
     }
 
-    batch.batchNumber =
-      value;
+    batch.batchNumber = value;
   }
 
   // ---------------------------------------------------
   // LOT NUMBER
   // ---------------------------------------------------
 
-  if (
-    data.lotNumber !==
-    undefined
-  ) {
-    if (
-      productionStarted
-    ) {
+  if (data.lotNumber !== undefined) {
+    if (productionStarted) {
       throw new ProductionBatchServiceError(
         "Lot number cannot be changed after production starts.",
-        409
+        409,
       );
     }
 
-    const value =
-      data.lotNumber.trim();
+    const value = data.lotNumber.trim();
 
     if (!value) {
-      throw new ProductionBatchServiceError(
-        "Lot number cannot be empty.",
-        400
-      );
+      throw new ProductionBatchServiceError("Lot number cannot be empty.", 400);
     }
 
-    batch.lotNumber =
-      value;
+    batch.lotNumber = value;
   }
 
   // ---------------------------------------------------
   // SUPERVISOR
   // ---------------------------------------------------
 
-  if (
-    data.supervisor !==
-    undefined
-  ) {
-    if (
-      productionStarted
-    ) {
+  if (data.supervisor !== undefined) {
+    if (productionStarted) {
       throw new ProductionBatchServiceError(
         "Supervisor cannot be changed after production starts.",
-        409
+        409,
       );
     }
 
-    validateObjectId(
-      data.supervisor,
-      "supervisor ID"
-    );
+    validateObjectId(data.supervisor, "supervisor ID");
 
-    batch.supervisor =
-      new mongoose.Types.ObjectId(
-        data.supervisor
-      );
+    batch.supervisor = new mongoose.Types.ObjectId(data.supervisor);
   }
 
   // ---------------------------------------------------
   // SUPERVISOR NAME
   // ---------------------------------------------------
 
-  if (
-    data.supervisorName !==
-    undefined
-  ) {
-    if (
-      productionStarted
-    ) {
+  if (data.supervisorName !== undefined) {
+    if (productionStarted) {
       throw new ProductionBatchServiceError(
         "Supervisor cannot be changed after production starts.",
-        409
+        409,
       );
     }
 
-    batch.supervisorName =
-      data.supervisorName.trim();
+    batch.supervisorName = data.supervisorName.trim();
   }
 
   // ---------------------------------------------------
   // NOTES
   // ---------------------------------------------------
 
-  if (
-    data.notes !==
-    undefined
-  ) {
-    batch.notes =
-      data.notes.trim();
+  if (data.notes !== undefined) {
+    batch.notes = data.notes.trim();
   }
 
   // ---------------------------------------------------
@@ -1236,15 +936,11 @@ export async function updateProductionBatch(
   // Create the formula-based material issue list when actual production starts.
   // This is intentionally done once per batch and remains Draft until the
   // storekeeper selects receipt lots and issues the materials.
-  if (
-    nextStatus === "In Progress" &&
-    currentStatus !== "In Progress"
-  ) {
-    const existingConsumption =
-      await RawMaterialConsumption.exists({
-        productionBatch: batch._id,
-        status: { $ne: "Cancelled" },
-      });
+  if (nextStatus === "In Progress" && currentStatus !== "In Progress") {
+    const existingConsumption = await RawMaterialConsumption.exists({
+      productionBatch: batch._id,
+      status: { $ne: "Cancelled" },
+    });
 
     if (!existingConsumption) {
       await createMaterialConsumption({
@@ -1259,41 +955,42 @@ export async function updateProductionBatch(
   // as used unless the operator recorded a specific waste or return amount.
   // The resulting consumption record is locked as an audit trail.
   if (isCompletingBatch && consumptionToFinalize) {
-    const consumptionItems =
-      Array.isArray(consumptionToFinalize.items)
-        ? consumptionToFinalize.items
-        : [];
+    const consumptionItems = Array.isArray(consumptionToFinalize.items)
+      ? consumptionToFinalize.items
+      : [];
 
-    await updateMaterialConsumption(
-      String(consumptionToFinalize._id),
-      {
-        items: consumptionItems.map((item: any) => ({
-          actualQuantity: Math.max(
-            0,
-            Number(item.issuedQuantity || 0) -
-              Number(item.wasteQuantity || 0) -
-              Number(item.returnQuantity || 0),
-          ),
-        })),
-      },
-    );
+    await updateMaterialConsumption(String(consumptionToFinalize._id), {
+      items: consumptionItems.map((item: any) => ({
+        actualQuantity: Math.max(
+          0,
+          Number(item.issuedQuantity || 0) -
+            Number(item.wasteQuantity || 0) -
+            Number(item.returnQuantity || 0),
+        ),
+      })),
+    });
 
-    await completeMaterialConsumption(
-      String(consumptionToFinalize._id),
-      {
-        notes: `Closed automatically when production batch ${batch.batchNo} was completed.`,
-      },
-    );
+    await completeMaterialConsumption(String(consumptionToFinalize._id), {
+      notes: `Closed automatically when production batch ${batch.batchNo} was completed.`,
+    });
   }
 
-  if (batch.status === "Completed" && !wasCompleted && !batch.finishedGoodsPostedAt) {
+  if (
+    batch.status === "Completed" &&
+    !wasCompleted &&
+    !batch.finishedGoodsPostedAt
+  ) {
     const product = await Product.findById(batch.product);
     if (!product) {
       throw new ProductionBatchServiceError("Finished product not found.", 404);
     }
     product.stock = Number((product.stock + batch.actualQuantity).toFixed(4));
     await product.save();
-    await FinishedGoodsStoreBalance.findOneAndUpdate({ product: product._id, store: "production" }, { $inc: { quantity: Number(batch.actualQuantity) } }, { upsert: true, new: true, setDefaultsOnInsert: true });
+    await FinishedGoodsStoreBalance.findOneAndUpdate(
+      { product: product._id, store: "production" },
+      { $inc: { quantity: Number(batch.actualQuantity) } },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
     batch.finishedGoodsPostedAt = new Date();
     await batch.save();
   }
@@ -1306,11 +1003,7 @@ export async function updateProductionBatch(
   // SYNC ORDER
   // ---------------------------------------------------
 
-  await syncProductionOrderFromBatches(
-    String(
-      batch.productionOrder
-    )
-  );
+  await syncProductionOrderFromBatches(String(batch.productionOrder));
 
   return batch;
 }
@@ -1320,76 +1013,51 @@ export async function updateProductionBatch(
 // =====================================================
 
 export async function syncProductionOrderFromBatches(
-  productionOrderId: string
+  productionOrderId: string,
 ) {
-  validateObjectId(
-    productionOrderId,
-    "production order ID"
-  );
+  validateObjectId(productionOrderId, "production order ID");
 
-  const productionOrder =
-    await ProductionOrder.findById(
-      productionOrderId
-    );
+  const productionOrder = await ProductionOrder.findById(productionOrderId);
 
   if (!productionOrder) {
-    throw new ProductionBatchServiceError(
-      "Production order not found.",
-      404
-    );
+    throw new ProductionBatchServiceError("Production order not found.", 404);
   }
 
-  const batches =
-    await ProductionBatch.find({
-      productionOrder:
-        productionOrderId,
+  const batches = await ProductionBatch.find({
+    productionOrder: productionOrderId,
 
-      status: {
-        $ne: "Cancelled",
-      },
-    })
-      .select(
-        "actualQuantity status"
-      )
-      .lean();
+    status: {
+      $ne: "Cancelled",
+    },
+  })
+    .select("actualQuantity status")
+    .lean();
 
-  const actualProducedQuantity =
-    batches.reduce(
-      (total, batch) =>
-        batch.status === "Completed"
-          ? total + Number(batch.actualQuantity || 0)
-          : total,
-      0
-    );
+  const actualProducedQuantity = batches.reduce(
+    (total, batch) =>
+      batch.status === "Completed"
+        ? total + Number(batch.actualQuantity || 0)
+        : total,
+    0,
+  );
 
-  const actualProduced =
-    roundNumber(
-      actualProducedQuantity
-    );
+  const actualProduced = roundNumber(actualProducedQuantity);
 
-  productionOrder.actualProducedQuantity =
-    actualProduced;
+  productionOrder.actualProducedQuantity = actualProduced;
 
-  const hasCompletedBatch =
-    batches.some(
-      (batch) =>
-        batch.status ===
-        "Completed"
-    );
+  const hasCompletedBatch = batches.some(
+    (batch) => batch.status === "Completed",
+  );
 
   // ---------------------------------------------------
   // ORDER COMPLETION
   // ---------------------------------------------------
 
   if (
-    actualProduced ===
-      Number(
-        productionOrder.quantity
-      ) &&
+    actualProduced === Number(productionOrder.quantity) &&
     hasCompletedBatch
   ) {
-    productionOrder.status =
-      "Completed";
+    productionOrder.status = "Completed";
   }
 
   await productionOrder.save();
@@ -1401,41 +1069,27 @@ export async function syncProductionOrderFromBatches(
 // DELETE
 // =====================================================
 
-export async function deleteProductionBatch(
-  id: string
-) {
-  validateObjectId(
-    id,
-    "production batch ID"
-  );
+export async function deleteProductionBatch(id: string) {
+  validateObjectId(id, "production batch ID");
 
-  const batch =
-    await ProductionBatch.findById(id);
+  const batch = await ProductionBatch.findById(id);
 
   if (!batch) {
-    throw new ProductionBatchServiceError(
-      "Production batch not found.",
-      404
-    );
+    throw new ProductionBatchServiceError("Production batch not found.", 404);
   }
 
   // ---------------------------------------------------
   // ONLY PLANNED CAN BE DELETED
   // ---------------------------------------------------
 
-  if (
-    batch.status !==
-    "Planned"
-  ) {
+  if (batch.status !== "Planned") {
     throw new ProductionBatchServiceError(
       "Only Planned production batches can be deleted. Cancelled batches must remain in the system for audit history.",
-      409
+      409,
     );
   }
 
-  await ProductionBatch.findByIdAndDelete(
-    id
-  );
+  await ProductionBatch.findByIdAndDelete(id);
 
   return batch;
 }

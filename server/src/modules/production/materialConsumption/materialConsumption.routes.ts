@@ -6,6 +6,7 @@ import {
   getMaterialConsumptionByIdController,
   getMaterialConsumptionByBatchController,
   updateMaterialConsumptionController,
+  saveBatchRecipeAsFormulaVersionController,
   cancelMaterialConsumptionController,
   getMaterialConsumptionStatsController,
   issueMaterialConsumptionController,
@@ -24,29 +25,25 @@ const router = Router();
 // GET /api/material-consumptions/batch/:productionBatchId
 router.get(
   "/batch/:productionBatchId",
-  getMaterialConsumptionByBatchController
+  getMaterialConsumptionByBatchController,
 );
 
 // GET /api/material-consumptions/stats
-router.get(
-  "/stats",
-  getMaterialConsumptionStatsController
-);
+router.get("/stats", getMaterialConsumptionStatsController);
 
 // =========================================================
 // MAIN COLLECTION ROUTES
 // =========================================================
 
 // GET /api/material-consumptions
-router.get(
-  "/",
-  getMaterialConsumptionsController
-);
+router.get("/", getMaterialConsumptionsController);
 
 // POST /api/material-consumptions
+router.post("/", createMaterialConsumptionController);
+
 router.post(
-  "/",
-  createMaterialConsumptionController
+  "/:id/save-formula-version",
+  saveBatchRecipeAsFormulaVersionController,
 );
 
 // =========================================================
@@ -54,39 +51,21 @@ router.post(
 // =========================================================
 
 // GET /api/material-consumptions/:id
-router.get(
-  "/:id",
-  getMaterialConsumptionByIdController
-);
+router.get("/:id", getMaterialConsumptionByIdController);
 
 // PUT /api/material-consumptions/:id
-router.put(
-  "/:id",
-  updateMaterialConsumptionController
-);
+router.put("/:id", updateMaterialConsumptionController);
 
 // Issue deducts the selected raw-material lots from inventory.
-router.post(
-  "/:id/issue",
-  issueMaterialConsumptionController
-);
+router.post("/:id/issue", issueMaterialConsumptionController);
 
 // Returns put unused issued material back into inventory.
-router.post(
-  "/:id/return",
-  returnMaterialConsumptionController
-);
+router.post("/:id/return", returnMaterialConsumptionController);
 
 // Completion locks the final production-material reconciliation.
-router.post(
-  "/:id/complete",
-  completeMaterialConsumptionController
-);
+router.post("/:id/complete", completeMaterialConsumptionController);
 
 // PATCH /api/material-consumptions/:id/cancel
-router.patch(
-  "/:id/cancel",
-  cancelMaterialConsumptionController
-);
+router.patch("/:id/cancel", cancelMaterialConsumptionController);
 
 export default router;

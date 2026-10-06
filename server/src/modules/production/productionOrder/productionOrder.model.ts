@@ -1,8 +1,4 @@
-import mongoose, {
-  Document,
-  Schema,
-  Types,
-} from "mongoose";
+import mongoose, { Document, Schema, Types } from "mongoose";
 
 // =====================================================
 // TYPES
@@ -17,11 +13,7 @@ export type ProductionOrderStatus =
   | "Cancelled"
   | "On Hold";
 
-export type ProductionOrderPriority =
-  | "Low"
-  | "Normal"
-  | "High"
-  | "Urgent";
+export type ProductionOrderPriority = "Low" | "Normal" | "High" | "Urgent";
 
 // =====================================================
 // PRODUCTION ORDER ITEM
@@ -55,8 +47,7 @@ export interface IProductionOrderItem {
 // PRODUCTION ORDER
 // =====================================================
 
-export interface IProductionOrder
-  extends Document {
+export interface IProductionOrder extends Document {
   productionOrderNo: string;
 
   // Product
@@ -82,6 +73,8 @@ export interface IProductionOrder
   // Order information
   priority: ProductionOrderPriority;
   status: ProductionOrderStatus;
+  /** Internal traceability record created from the direct-batch workflow. */
+  directBatchRecord: boolean;
 
   // Dates
   plannedDate: Date;
@@ -111,305 +104,304 @@ export interface IProductionOrder
 // PRODUCTION ORDER ITEM SCHEMA
 // =====================================================
 
-const productionOrderItemSchema =
-  new Schema<IProductionOrderItem>(
-    {
-      rawMaterial: {
-        type: Schema.Types.ObjectId,
-        ref: "RawMaterial",
-        required: true,
-      },
-
-      rawMaterialName: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      rawMaterialCode: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      quantity: {
-        type: Number,
-        required: true,
-        min: 0,
-      },
-
-      unit: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      wastePercentage: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0,
-        max: 100,
-      },
-
-      requiredQuantity: {
-        type: Number,
-        required: true,
-        min: 0,
-      },
-
-      estimatedCost: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0,
-      },
-
-      actualQuantity: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0,
-      },
-
-      variance: {
-        type: Number,
-        required: true,
-        default: 0,
-      },
-
-      notes: {
-        type: String,
-        trim: true,
-      },
+const productionOrderItemSchema = new Schema<IProductionOrderItem>(
+  {
+    rawMaterial: {
+      type: Schema.Types.ObjectId,
+      ref: "RawMaterial",
+      required: true,
     },
-    {
-      _id: false,
-    }
-  );
+
+    rawMaterialName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    rawMaterialCode: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    quantity: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    unit: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    wastePercentage: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+
+    requiredQuantity: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    estimatedCost: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+    },
+
+    actualQuantity: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+    },
+
+    variance: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+
+    notes: {
+      type: String,
+      trim: true,
+    },
+  },
+  {
+    _id: false,
+  },
+);
 
 // =====================================================
 // PRODUCTION ORDER SCHEMA
 // =====================================================
 
-const productionOrderSchema =
-  new Schema<IProductionOrder>(
-    {
-      // -------------------------------------------------
-      // PRODUCTION ORDER NUMBER
-      // -------------------------------------------------
+const productionOrderSchema = new Schema<IProductionOrder>(
+  {
+    // -------------------------------------------------
+    // PRODUCTION ORDER NUMBER
+    // -------------------------------------------------
 
-      productionOrderNo: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true,
-        index: true,
-      },
-
-      // -------------------------------------------------
-      // PRODUCT
-      // -------------------------------------------------
-
-      product: {
-        type: Schema.Types.ObjectId,
-        ref: "Product",
-        required: true,
-        index: true,
-      },
-
-      productName: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      productCode: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      // -------------------------------------------------
-      // FORMULA
-      // -------------------------------------------------
-
-      formula: {
-        type: Schema.Types.ObjectId,
-        ref: "Formula",
-        required: true,
-        index: true,
-      },
-
-      formulaName: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      formulaCode: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      formulaVersion: {
-        type: Number,
-        required: true,
-        min: 1,
-      },
-
-      // -------------------------------------------------
-      // PRODUCTION QUANTITY
-      // -------------------------------------------------
-
-      quantity: {
-        type: Number,
-        required: true,
-        min: 0.01,
-      },
-
-      unit: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      // -------------------------------------------------
-      // FORMULA BATCH
-      // -------------------------------------------------
-
-      formulaBatchSize: {
-        type: Number,
-        required: true,
-        min: 0.01,
-      },
-
-      formulaBatchUnit: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      scalingFactor: {
-        type: Number,
-        required: true,
-        min: 0,
-      },
-
-      // -------------------------------------------------
-      // PRIORITY
-      // -------------------------------------------------
-
-      priority: {
-        type: String,
-        enum: [
-          "Low",
-          "Normal",
-          "High",
-          "Urgent",
-        ],
-        default: "Normal",
-      },
-
-      // -------------------------------------------------
-      // STATUS
-      // -------------------------------------------------
-
-      status: {
-        type: String,
-        enum: [
-          "Draft",
-          "Planned",
-          "Released",
-          "In Production",
-          "Completed",
-          "Cancelled",
-          "On Hold",
-        ],
-        default: "Draft",
-        index: true,
-      },
-
-      // -------------------------------------------------
-      // DATES
-      // -------------------------------------------------
-
-      plannedDate: {
-        type: Date,
-        required: true,
-      },
-
-      expectedCompletionDate: {
-        type: Date,
-      },
-
-      // -------------------------------------------------
-      // RAW MATERIAL REQUIREMENTS
-      // -------------------------------------------------
-
-      items: {
-        type: [productionOrderItemSchema],
-        default: [],
-      },
-
-      // -------------------------------------------------
-      // COSTS
-      // -------------------------------------------------
-
-      estimatedMaterialCost: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-
-      laborCost: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-
-      energyCost: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-
-      otherCost: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-
-      estimatedTotalCost: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-
-      // -------------------------------------------------
-      // ACTUAL PRODUCTION
-      // -------------------------------------------------
-
-      actualProducedQuantity: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-
-      // -------------------------------------------------
-      // NOTES
-      // -------------------------------------------------
-
-      notes: {
-        type: String,
-        trim: true,
-      },
+    productionOrderNo: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      index: true,
     },
-    {
-      timestamps: true,
-    }
-  );
+
+    // -------------------------------------------------
+    // PRODUCT
+    // -------------------------------------------------
+
+    product: {
+      type: Schema.Types.ObjectId,
+      ref: "Product",
+      required: true,
+      index: true,
+    },
+
+    productName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    productCode: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    // -------------------------------------------------
+    // FORMULA
+    // -------------------------------------------------
+
+    formula: {
+      type: Schema.Types.ObjectId,
+      ref: "Formula",
+      required: true,
+      index: true,
+    },
+
+    formulaName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    formulaCode: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    formulaVersion: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+
+    // -------------------------------------------------
+    // PRODUCTION QUANTITY
+    // -------------------------------------------------
+
+    quantity: {
+      type: Number,
+      required: true,
+      min: 0.01,
+    },
+
+    unit: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    // -------------------------------------------------
+    // FORMULA BATCH
+    // -------------------------------------------------
+
+    formulaBatchSize: {
+      type: Number,
+      required: true,
+      min: 0.01,
+    },
+
+    formulaBatchUnit: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    scalingFactor: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    // -------------------------------------------------
+    // PRIORITY
+    // -------------------------------------------------
+
+    priority: {
+      type: String,
+      enum: ["Low", "Normal", "High", "Urgent"],
+      default: "Normal",
+    },
+
+    // -------------------------------------------------
+    // STATUS
+    // -------------------------------------------------
+
+    status: {
+      type: String,
+      enum: [
+        "Draft",
+        "Planned",
+        "Released",
+        "In Production",
+        "Completed",
+        "Cancelled",
+        "On Hold",
+      ],
+      default: "Draft",
+      index: true,
+    },
+
+    directBatchRecord: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    // -------------------------------------------------
+    // DATES
+    // -------------------------------------------------
+
+    plannedDate: {
+      type: Date,
+      required: true,
+    },
+
+    expectedCompletionDate: {
+      type: Date,
+    },
+
+    // -------------------------------------------------
+    // RAW MATERIAL REQUIREMENTS
+    // -------------------------------------------------
+
+    items: {
+      type: [productionOrderItemSchema],
+      default: [],
+    },
+
+    // -------------------------------------------------
+    // COSTS
+    // -------------------------------------------------
+
+    estimatedMaterialCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    laborCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    energyCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    otherCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    estimatedTotalCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    // -------------------------------------------------
+    // ACTUAL PRODUCTION
+    // -------------------------------------------------
+
+    actualProducedQuantity: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    // -------------------------------------------------
+    // NOTES
+    // -------------------------------------------------
+
+    notes: {
+      type: String,
+      trim: true,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
 
 // =====================================================
 // INDEXES
@@ -434,10 +426,9 @@ productionOrderSchema.index({
 // MODEL
 // =====================================================
 
-const ProductionOrder =
-  mongoose.model<IProductionOrder>(
-    "ProductionOrder",
-    productionOrderSchema
-  );
+const ProductionOrder = mongoose.model<IProductionOrder>(
+  "ProductionOrder",
+  productionOrderSchema,
+);
 
 export default ProductionOrder;

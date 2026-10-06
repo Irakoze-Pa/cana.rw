@@ -17,7 +17,11 @@ Invoice.findById = () => {
   const query = { session(value) { assert.equal(value, session); return this; }, populate() { return this; }, lean() { return Promise.resolve(invoice); }, then(resolve, reject) { return Promise.resolve(invoice).then(resolve, reject); } };
   return query;
 };
-Payment.countDocuments = async () => receipts.length;
+Payment.findOne = () => ({
+  sort() { return this; },
+  select() { return this; },
+  lean() { return Promise.resolve(receipts.length ? receipts[receipts.length - 1] : null); },
+});
 Payment.create = async (rows, options) => { assert.equal(options.session, session); receipts.push(...rows); return rows; };
 async function run() {
   receipts = [];

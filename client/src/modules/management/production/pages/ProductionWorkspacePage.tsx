@@ -67,7 +67,9 @@ const statusStyle: Record<Batch["status"], string> = {
 
 export default function ProductionWorkspacePage({ view }: { view: View }) {
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [finishedGoodsBalances, setFinishedGoodsBalances] = useState<FinishedGoodsBalance[]>([]);
+  const [finishedGoodsBalances, setFinishedGoodsBalances] = useState<
+    FinishedGoodsBalance[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const meta = pageMeta[view];
@@ -121,13 +123,24 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
     }),
     [batches],
   );
-  const replenishmentAlerts = useMemo(() =>
-    finishedGoodsBalances
-      .filter((balance) => balance.product && Number(balance.minimumQuantity || 0) > 0 && Number(balance.quantity || 0) <= Number(balance.minimumQuantity || 0))
-      .map((balance) => ({
-        ...balance,
-        shortfall: Math.max(0, Number(balance.minimumQuantity || 0) - Number(balance.quantity || 0)),
-      })),
+  const replenishmentAlerts = useMemo(
+    () =>
+      finishedGoodsBalances
+        .filter(
+          (balance) =>
+            balance.product &&
+            Number(balance.minimumQuantity || 0) > 0 &&
+            Number(balance.quantity || 0) <=
+              Number(balance.minimumQuantity || 0),
+        )
+        .map((balance) => ({
+          ...balance,
+          shortfall: Math.max(
+            0,
+            Number(balance.minimumQuantity || 0) -
+              Number(balance.quantity || 0),
+          ),
+        })),
     [finishedGoodsBalances],
   );
   return (
@@ -139,20 +152,41 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
           </span>
           <div>
             <p className="cana-section-kicker">Production control</p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{meta.title}</h1>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
+              {meta.title}
+            </h1>
             <p className="mt-1 text-sm text-gray-500">{meta.description}</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2"><Link to="/management/production/orders" className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-800">Production orders</Link><Link to="/management/production/batches" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">Production batches</Link><Link to="/management/reports" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">Period report</Link><button
-          onClick={() => void load()}
-          disabled={loading}
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 disabled:opacity-60"
-        >
-          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-          Refresh
-        </button></div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/management/production/batches"
+            className="inline-flex items-center gap-2 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-800"
+          >
+            Start production batch
+          </Link>
+          <Link
+            to="/management/reports"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+          >
+            Period report
+          </Link>
+          <button
+            onClick={() => void load()}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 disabled:opacity-60"
+          >
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            Refresh
+          </button>
+        </div>
       </header>
-      <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-sm sm:grid-cols-4"><WorkflowStep number="1" label="Create production order" /><WorkflowStep number="2" label="Create batch" /><WorkflowStep number="3" label="Issue lots to batch" /><WorkflowStep number="4" label="Complete & post output" /></div>
+      <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-sm sm:grid-cols-4">
+        <WorkflowStep number="1" label="Start batch" />
+        <WorkflowStep number="2" label="Enter batch recipe" />
+        <WorkflowStep number="3" label="Issue lots to batch" />
+        <WorkflowStep number="4" label="Enter output & complete" />
+      </div>
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
@@ -184,17 +218,45 @@ export default function ProductionWorkspacePage({ view }: { view: View }) {
       {view === "overview" && replenishmentAlerts.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-red-200 bg-white">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-red-100 bg-red-50 px-5 py-3">
-            <div className="flex items-center gap-2 text-red-800"><AlertTriangle size={17} /><h2 className="text-sm font-extrabold">Finished-goods replenishment alerts</h2></div>
-            <span className="text-xs font-semibold text-red-700">{replenishmentAlerts.length} item{replenishmentAlerts.length === 1 ? "" : "s"} need production planning</span>
+            <div className="flex items-center gap-2 text-red-800">
+              <AlertTriangle size={17} />
+              <h2 className="text-sm font-extrabold">
+                Finished-goods replenishment alerts
+              </h2>
+            </div>
+            <span className="text-xs font-semibold text-red-700">
+              {replenishmentAlerts.length} item
+              {replenishmentAlerts.length === 1 ? "" : "s"} need production
+              planning
+            </span>
           </div>
           <div className="divide-y divide-slate-100">
             {replenishmentAlerts.map((alert) => (
-              <div key={alert._id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div
+                key={alert._id}
+                className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+              >
                 <div>
-                  <p className="font-bold text-slate-950">{alert.product?.name}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{alert.product?.code || "Product"} · {alert.store === "sales" ? "Sales Store" : "Production Store"} · {qty(alert.quantity)} {alert.product?.unit || "kg"} available / minimum {qty(Number(alert.minimumQuantity || 0))}</p>
+                  <p className="font-bold text-slate-950">
+                    {alert.product?.name}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {alert.product?.code || "Product"} ·{" "}
+                    {alert.store === "sales"
+                      ? "Sales Store"
+                      : "Production Store"}{" "}
+                    · {qty(alert.quantity)} {alert.product?.unit || "kg"}{" "}
+                    available / minimum{" "}
+                    {qty(Number(alert.minimumQuantity || 0))}
+                  </p>
                 </div>
-                <Link to={`/management/production/orders?replenish=${alert.product?._id}&quantity=${alert.shortfall}`} className="inline-flex shrink-0 items-center justify-center rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white hover:bg-red-800">Create production order · {qty(alert.shortfall)} {alert.product?.unit || "kg"}</Link>
+                <Link
+                  to="/management/production/batches"
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white hover:bg-red-800"
+                >
+                  Start production batch · {qty(alert.shortfall)}{" "}
+                  {alert.product?.unit || "kg"}
+                </Link>
               </div>
             ))}
           </div>
@@ -323,11 +385,20 @@ function Metric({
         {icon}
       </span>
       <p className="mt-4 text-sm text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{value}</p>
+      <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
+        {value}
+      </p>
     </article>
   );
 }
 
 function WorkflowStep({ number, label }: { number: string; label: string }) {
-  return <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5"><span className="grid h-6 w-6 place-items-center rounded-full bg-slate-900 text-xs font-extrabold text-white">{number}</span><span className="text-xs font-bold text-slate-700">{label}</span></div>;
+  return (
+    <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+      <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-900 text-xs font-extrabold text-white">
+        {number}
+      </span>
+      <span className="text-xs font-bold text-slate-700">{label}</span>
+    </div>
+  );
 }

@@ -20,6 +20,7 @@ export interface CreateProductionOrderData {
   plannedDate: string | Date;
   expectedCompletionDate?: string | Date;
   status?: ProductionOrderStatus;
+  directBatchRecord?: boolean;
   notes?: string;
 }
 
@@ -53,7 +54,7 @@ function getModel<T = any>(name: string) {
   } catch {
     throw new ProductionOrderServiceError(
       `${name} model is not registered.`,
-      500
+      500,
     );
   }
 }
@@ -62,15 +63,9 @@ function getModel<T = any>(name: string) {
 // VALIDATE OBJECT ID
 // =====================================================
 
-function validateObjectId(
-  id: string,
-  fieldName: string
-): void {
+function validateObjectId(id: string, fieldName: string): void {
   if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-    throw new ProductionOrderServiceError(
-      `Invalid ${fieldName}.`,
-      400
-    );
+    throw new ProductionOrderServiceError(`Invalid ${fieldName}.`, 400);
   }
 }
 
@@ -78,25 +73,17 @@ function validateObjectId(
 // ROUND NUMBER
 // =====================================================
 
-function roundNumber(
-  value: number,
-  decimals = 4
-): number {
+function roundNumber(value: number, decimals = 4): number {
   const factor = Math.pow(10, decimals);
 
-  return (
-    Math.round((value + Number.EPSILON) * factor) /
-    factor
-  );
+  return Math.round((value + Number.EPSILON) * factor) / factor;
 }
 
 // =====================================================
 // GET OBJECT ID
 // =====================================================
 
-function getObjectId(
-  value: unknown
-): string | null {
+function getObjectId(value: unknown): string | null {
   if (!value) {
     return null;
   }
@@ -105,11 +92,7 @@ function getObjectId(
     return value;
   }
 
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "_id" in value
-  ) {
+  if (typeof value === "object" && value !== null && "_id" in value) {
     const id = (
       value as {
         _id?: unknown;
@@ -135,36 +118,23 @@ function getProductCode(product: any): string {
   ];
 
   for (const value of possibleCodes) {
-    if (
-      value !== undefined &&
-      value !== null &&
-      String(value).trim() !== ""
-    ) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
       return String(value).trim();
     }
   }
 
   if (product?._id) {
-    return `PRD-${String(product._id)
-      .slice(-8)
-      .toUpperCase()}`;
+    return `PRD-${String(product._id).slice(-8).toUpperCase()}`;
   }
 
   return "PRD-UNKNOWN";
 }
 
 function getProductName(product: any): string {
-  const possibleNames = [
-    product?.name,
-    product?.productName,
-  ];
+  const possibleNames = [product?.name, product?.productName];
 
   for (const value of possibleNames) {
-    if (
-      value !== undefined &&
-      value !== null &&
-      String(value).trim() !== ""
-    ) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
       return String(value).trim();
     }
   }
@@ -177,43 +147,26 @@ function getProductName(product: any): string {
 // =====================================================
 
 function getFormulaCode(formula: any): string {
-  const possibleCodes = [
-    formula?.code,
-    formula?.formulaCode,
-    formula?.sku,
-  ];
+  const possibleCodes = [formula?.code, formula?.formulaCode, formula?.sku];
 
   for (const value of possibleCodes) {
-    if (
-      value !== undefined &&
-      value !== null &&
-      String(value).trim() !== ""
-    ) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
       return String(value).trim();
     }
   }
 
   if (formula?._id) {
-    return `FOR-${String(formula._id)
-      .slice(-8)
-      .toUpperCase()}`;
+    return `FOR-${String(formula._id).slice(-8).toUpperCase()}`;
   }
 
   return "FOR-UNKNOWN";
 }
 
 function getFormulaName(formula: any): string {
-  const possibleNames = [
-    formula?.name,
-    formula?.formulaName,
-  ];
+  const possibleNames = [formula?.name, formula?.formulaName];
 
   for (const value of possibleNames) {
-    if (
-      value !== undefined &&
-      value !== null &&
-      String(value).trim() !== ""
-    ) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
       return String(value).trim();
     }
   }
@@ -233,19 +186,13 @@ function getRawMaterialCode(rawMaterial: any): string {
   ];
 
   for (const value of possibleCodes) {
-    if (
-      value !== undefined &&
-      value !== null &&
-      String(value).trim() !== ""
-    ) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
       return String(value).trim();
     }
   }
 
   if (rawMaterial?._id) {
-    return `RM-${String(rawMaterial._id)
-      .slice(-8)
-      .toUpperCase()}`;
+    return `RM-${String(rawMaterial._id).slice(-8).toUpperCase()}`;
   }
 
   return "RM-UNKNOWN";
@@ -258,18 +205,11 @@ function getRawMaterialCode(rawMaterial: any): string {
 function parseDate(
   value: string | Date | undefined,
   fieldName: string,
-  required = false
+  required = false,
 ): Date | undefined {
-  if (
-    value === undefined ||
-    value === null ||
-    value === ""
-  ) {
+  if (value === undefined || value === null || value === "") {
     if (required) {
-      throw new ProductionOrderServiceError(
-        `${fieldName} is required.`,
-        400
-      );
+      throw new ProductionOrderServiceError(`${fieldName} is required.`, 400);
     }
 
     return undefined;
@@ -278,10 +218,7 @@ function parseDate(
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    throw new ProductionOrderServiceError(
-      `Invalid ${fieldName}.`,
-      400
-    );
+    throw new ProductionOrderServiceError(`Invalid ${fieldName}.`, 400);
   }
 
   return date;
@@ -295,58 +232,31 @@ const allowedStatusTransitions: Record<
   ProductionOrderStatus,
   ProductionOrderStatus[]
 > = {
-  Draft: [
-    "Draft",
-    "Planned",
-    "Cancelled",
-  ],
+  Draft: ["Draft", "Planned", "Cancelled"],
 
-  Planned: [
-    "Planned",
-    "Released",
-    "On Hold",
-    "Cancelled",
-  ],
+  Planned: ["Planned", "Released", "On Hold", "Cancelled"],
 
-  Released: [
-    "Released",
-    "In Production",
-    "On Hold",
-    "Cancelled",
-  ],
+  Released: ["Released", "In Production", "On Hold", "Cancelled"],
 
-  "In Production": [
-    "In Production",
-    "Completed",
-    "On Hold",
-  ],
+  "In Production": ["In Production", "Completed", "On Hold"],
 
-  Completed: [
-    "Completed",
-  ],
+  Completed: ["Completed"],
 
-  Cancelled: [
-    "Cancelled",
-  ],
+  Cancelled: ["Cancelled"],
 
-  "On Hold": [
-    "On Hold",
-    "Released",
-    "Cancelled",
-  ],
+  "On Hold": ["On Hold", "Released", "Cancelled"],
 };
 
 function validateStatusTransition(
   current: ProductionOrderStatus,
-  next: ProductionOrderStatus
+  next: ProductionOrderStatus,
 ) {
-  const allowed =
-    allowedStatusTransitions[current] || [];
+  const allowed = allowedStatusTransitions[current] || [];
 
   if (!allowed.includes(next)) {
     throw new ProductionOrderServiceError(
       `Invalid production order status transition: ${current} → ${next}.`,
-      400
+      400,
     );
   }
 }
@@ -355,162 +265,103 @@ function validateStatusTransition(
 // BUILD MATERIAL REQUIREMENTS
 // =====================================================
 
-function buildMaterialRequirements(
-  formula: any,
-  productionQuantity: number
-) {
-  const batchSize =
-    Number(formula.batchSize);
+function buildMaterialRequirements(formula: any, productionQuantity: number) {
+  const batchSize = Number(formula.batchSize);
 
-  if (
-    !Number.isFinite(batchSize) ||
-    batchSize <= 0
-  ) {
+  if (!Number.isFinite(batchSize) || batchSize <= 0) {
     throw new ProductionOrderServiceError(
       "Formula batch size must be greater than 0.",
-      400
+      400,
     );
   }
 
-  if (
-    !Array.isArray(formula.items) ||
-    formula.items.length === 0
-  ) {
+  if (!Array.isArray(formula.items) || formula.items.length === 0) {
     throw new ProductionOrderServiceError(
       "The selected formula has no raw materials.",
-      400
+      400,
     );
   }
 
-  const scalingFactor =
-    productionQuantity / batchSize;
+  const scalingFactor = productionQuantity / batchSize;
 
-  const items = formula.items.map(
-    (formulaItem: any) => {
-      const rawMaterial =
-        formulaItem.rawMaterial;
+  const items = formula.items.map((formulaItem: any) => {
+    const rawMaterial = formulaItem.rawMaterial;
 
-      if (!rawMaterial) {
-        throw new ProductionOrderServiceError(
-          "A raw material in the selected formula could not be loaded.",
-          400
-        );
-      }
-
-      const rawMaterialId =
-        getObjectId(rawMaterial);
-
-      if (!rawMaterialId) {
-        throw new ProductionOrderServiceError(
-          "Invalid raw material reference in formula.",
-          400
-        );
-      }
-
-      const baseQuantity =
-        Number(formulaItem.quantity);
-
-      if (
-        !Number.isFinite(baseQuantity) ||
-        baseQuantity <= 0
-      ) {
-        throw new ProductionOrderServiceError(
-          `Invalid quantity for raw material ${
-            rawMaterial.name || "Unknown"
-          }.`,
-          400
-        );
-      }
-
-      const wastePercentage =
-        Number(
-          formulaItem.wastePercentage ?? 0
-        );
-
-      if (
-        !Number.isFinite(wastePercentage) ||
-        wastePercentage < 0 ||
-        wastePercentage > 100
-      ) {
-        throw new ProductionOrderServiceError(
-          `Invalid waste percentage for ${
-            rawMaterial.name || "Unknown"
-          }.`,
-          400
-        );
-      }
-
-      const quantity =
-        baseQuantity * scalingFactor;
-
-      const requiredQuantity =
-        quantity *
-        (1 + wastePercentage / 100);
-
-      const costPerUnit =
-        Number(
-          rawMaterial.costPerUnit ?? 0
-        );
-
-      const estimatedCost =
-        requiredQuantity * costPerUnit;
-
-      return {
-        rawMaterial: rawMaterialId,
-
-        rawMaterialName:
-          String(
-            rawMaterial.name || "Unknown"
-          ),
-
-        rawMaterialCode:
-          getRawMaterialCode(
-            rawMaterial
-          ),
-
-        quantity:
-          roundNumber(quantity),
-
-        unit:
-          String(
-            formulaItem.unit ||
-              rawMaterial.unit ||
-              formula.batchUnit ||
-              "kg"
-          ),
-
-        wastePercentage:
-          roundNumber(
-            wastePercentage
-          ),
-
-        requiredQuantity:
-          roundNumber(
-            requiredQuantity
-          ),
-
-        estimatedCost:
-          roundNumber(
-            estimatedCost
-          ),
-
-        actualQuantity: 0,
-
-        variance: 0,
-
-        notes:
-          formulaItem.notes
-            ? String(
-                formulaItem.notes
-              )
-            : "",
-      };
+    if (!rawMaterial) {
+      throw new ProductionOrderServiceError(
+        "A raw material in the selected formula could not be loaded.",
+        400,
+      );
     }
-  );
+
+    const rawMaterialId = getObjectId(rawMaterial);
+
+    if (!rawMaterialId) {
+      throw new ProductionOrderServiceError(
+        "Invalid raw material reference in formula.",
+        400,
+      );
+    }
+
+    const baseQuantity = Number(formulaItem.quantity);
+
+    if (!Number.isFinite(baseQuantity) || baseQuantity <= 0) {
+      throw new ProductionOrderServiceError(
+        `Invalid quantity for raw material ${rawMaterial.name || "Unknown"}.`,
+        400,
+      );
+    }
+
+    const wastePercentage = Number(formulaItem.wastePercentage ?? 0);
+
+    if (
+      !Number.isFinite(wastePercentage) ||
+      wastePercentage < 0 ||
+      wastePercentage > 100
+    ) {
+      throw new ProductionOrderServiceError(
+        `Invalid waste percentage for ${rawMaterial.name || "Unknown"}.`,
+        400,
+      );
+    }
+
+    const quantity = baseQuantity * scalingFactor;
+
+    const requiredQuantity = quantity * (1 + wastePercentage / 100);
+
+    const costPerUnit = Number(rawMaterial.costPerUnit ?? 0);
+
+    const estimatedCost = requiredQuantity * costPerUnit;
+
+    return {
+      rawMaterial: rawMaterialId,
+
+      rawMaterialName: String(rawMaterial.name || "Unknown"),
+
+      rawMaterialCode: getRawMaterialCode(rawMaterial),
+
+      quantity: roundNumber(quantity),
+
+      unit: String(
+        formulaItem.unit || rawMaterial.unit || formula.batchUnit || "kg",
+      ),
+
+      wastePercentage: roundNumber(wastePercentage),
+
+      requiredQuantity: roundNumber(requiredQuantity),
+
+      estimatedCost: roundNumber(estimatedCost),
+
+      actualQuantity: 0,
+
+      variance: 0,
+
+      notes: formulaItem.notes ? String(formulaItem.notes) : "",
+    };
+  });
 
   return {
-    scalingFactor:
-      roundNumber(scalingFactor),
+    scalingFactor: roundNumber(scalingFactor),
 
     items,
   };
@@ -520,60 +371,36 @@ function buildMaterialRequirements(
 // CALCULATE COSTS
 // =====================================================
 
-function calculateCosts(
-  formula: any,
-  items: any[],
-  scalingFactor: number
-) {
-  const estimatedMaterialCost =
-    items.reduce(
-      (
-        total: number,
-        item: {
-          estimatedCost: number;
-        }
-      ) =>
-        total + Number(item.estimatedCost || 0),
-      0
-    );
+function calculateCosts(formula: any, items: any[], scalingFactor: number) {
+  const estimatedMaterialCost = items.reduce(
+    (
+      total: number,
+      item: {
+        estimatedCost: number;
+      },
+    ) => total + Number(item.estimatedCost || 0),
+    0,
+  );
 
-  const laborCost =
-    Number(formula.laborCost || 0) *
-    scalingFactor;
+  const laborCost = Number(formula.laborCost || 0) * scalingFactor;
 
-  const energyCost =
-    Number(formula.energyCost || 0) *
-    scalingFactor;
+  const energyCost = Number(formula.energyCost || 0) * scalingFactor;
 
-  const otherCost =
-    Number(formula.otherCost || 0) *
-    scalingFactor;
+  const otherCost = Number(formula.otherCost || 0) * scalingFactor;
 
   const estimatedTotalCost =
-    estimatedMaterialCost +
-    laborCost +
-    energyCost +
-    otherCost;
+    estimatedMaterialCost + laborCost + energyCost + otherCost;
 
   return {
-    estimatedMaterialCost:
-      roundNumber(
-        estimatedMaterialCost
-      ),
+    estimatedMaterialCost: roundNumber(estimatedMaterialCost),
 
-    laborCost:
-      roundNumber(laborCost),
+    laborCost: roundNumber(laborCost),
 
-    energyCost:
-      roundNumber(energyCost),
+    energyCost: roundNumber(energyCost),
 
-    otherCost:
-      roundNumber(otherCost),
+    otherCost: roundNumber(otherCost),
 
-    estimatedTotalCost:
-      roundNumber(
-        estimatedTotalCost
-      ),
+    estimatedTotalCost: roundNumber(estimatedTotalCost),
   };
 }
 
@@ -581,21 +408,13 @@ function calculateCosts(
 // LOAD PRODUCT
 // =====================================================
 
-async function loadProduct(
-  productId: string
-) {
+async function loadProduct(productId: string) {
   const Product = getModel("Product");
 
-  const product =
-    await Product.findById(
-      productId
-    ).lean();
+  const product = await Product.findById(productId).lean();
 
   if (!product) {
-    throw new ProductionOrderServiceError(
-      "Product not found.",
-      404
-    );
+    throw new ProductionOrderServiceError("Product not found.", 404);
   }
 
   return product;
@@ -605,25 +424,15 @@ async function loadProduct(
 // LOAD FORMULA
 // =====================================================
 
-async function loadFormula(
-  formulaId: string
-) {
+async function loadFormula(formulaId: string) {
   const Formula = getModel("Formula");
 
-  const formula =
-    await Formula.findById(
-      formulaId
-    )
-      .populate(
-        "items.rawMaterial"
-      )
-      .lean();
+  const formula = await Formula.findById(formulaId)
+    .populate("items.rawMaterial")
+    .lean();
 
   if (!formula) {
-    throw new ProductionOrderServiceError(
-      "Formula not found.",
-      404
-    );
+    throw new ProductionOrderServiceError("Formula not found.", 404);
   }
 
   return formula;
@@ -636,32 +445,23 @@ async function loadFormula(
 function validateFormulaForProduct(
   formula: any,
   product: any,
-  status?: ProductionOrderStatus
+  status?: ProductionOrderStatus,
 ) {
-  const formulaProductId =
-    getObjectId(formula.product);
+  const formulaProductId = getObjectId(formula.product);
 
-  if (
-    !formulaProductId ||
-    formulaProductId !==
-      String(product._id)
-  ) {
+  if (!formulaProductId || formulaProductId !== String(product._id)) {
     throw new ProductionOrderServiceError(
       "The selected formula does not belong to the selected product.",
-      400
+      400,
     );
   }
 
-  const formulaStatus =
-    String(formula.status || "");
+  const formulaStatus = String(formula.status || "");
 
-  if (
-    formulaStatus !== "Active" &&
-    status !== "Draft"
-  ) {
+  if (formulaStatus !== "Active" && status !== "Draft") {
     throw new ProductionOrderServiceError(
       "Only an active formula can be used for a production order.",
-      400
+      400,
     );
   }
 }
@@ -671,93 +471,63 @@ function validateFormulaForProduct(
 // =====================================================
 
 async function generateProductionOrderNo() {
-  const year =
-    new Date().getFullYear();
+  const year = new Date().getFullYear();
 
-  const latestOrder =
-    await ProductionOrder.findOne({
-      productionOrderNo: {
-        $regex: `^PO-${year}-`,
-      },
+  const latestOrder = await ProductionOrder.findOne({
+    productionOrderNo: {
+      $regex: `^PO-${year}-`,
+    },
+  })
+    .sort({
+      productionOrderNo: -1,
     })
-      .sort({
-        productionOrderNo: -1,
-      })
-      .select(
-        "productionOrderNo"
-      )
-      .lean();
+    .select("productionOrderNo")
+    .lean();
 
   let nextNumber = 1;
 
-  if (
-    latestOrder?.productionOrderNo
-  ) {
-    const match =
-      latestOrder.productionOrderNo.match(
-        /PO-\d{4}-(\d+)$/
-      );
+  if (latestOrder?.productionOrderNo) {
+    const match = latestOrder.productionOrderNo.match(/PO-\d{4}-(\d+)$/);
 
     if (match) {
-      nextNumber =
-        Number(match[1]) + 1;
+      nextNumber = Number(match[1]) + 1;
     }
   }
 
-  return `PO-${year}-${String(
-    nextNumber
-  ).padStart(4, "0")}`;
+  return `PO-${year}-${String(nextNumber).padStart(4, "0")}`;
 }
 
 // =====================================================
 // CREATE PRODUCTION ORDER
 // =====================================================
 
-export async function createProductionOrder(
-  data: CreateProductionOrderData
-) {
+export async function createProductionOrder(data: CreateProductionOrderData) {
   if (!data) {
     throw new ProductionOrderServiceError(
       "Production order data is required.",
-      400
+      400,
     );
   }
 
-  validateObjectId(
-    data.product,
-    "product ID"
-  );
+  validateObjectId(data.product, "product ID");
 
-  validateObjectId(
-    data.formula,
-    "formula ID"
-  );
+  validateObjectId(data.formula, "formula ID");
 
-  const quantity =
-    Number(data.quantity);
+  const quantity = Number(data.quantity);
 
-  if (
-    !Number.isFinite(quantity) ||
-    quantity <= 0
-  ) {
+  if (!Number.isFinite(quantity) || quantity <= 0) {
     throw new ProductionOrderServiceError(
       "Production quantity must be greater than 0.",
-      400
+      400,
     );
   }
 
-  const plannedDate =
-    parseDate(
-      data.plannedDate,
-      "planned date",
-      true
-    );
+  const plannedDate = parseDate(data.plannedDate, "planned date", true);
 
-  const expectedCompletionDate =
-    parseDate(
-      data.expectedCompletionDate,
-      "expected completion date"
-    );
+  const expectedCompletionDate = parseDate(
+    data.expectedCompletionDate,
+    "expected completion date",
+  );
 
   if (
     expectedCompletionDate &&
@@ -766,101 +536,72 @@ export async function createProductionOrder(
   ) {
     throw new ProductionOrderServiceError(
       "Expected completion date cannot be before planned date.",
-      400
+      400,
     );
   }
 
-  const product =
-    await loadProduct(data.product);
+  const product = await loadProduct(data.product);
 
-  const formula =
-    await loadFormula(data.formula);
+  const formula = await loadFormula(data.formula);
 
-  validateFormulaForProduct(
-    formula,
-    product,
-    data.status
-  );
+  validateFormulaForProduct(formula, product, data.status);
 
-  const {
-    scalingFactor,
-    items,
-  } =
-    buildMaterialRequirements(
-      formula,
-      quantity
-    );
+  const { scalingFactor, items } = buildMaterialRequirements(formula, quantity);
 
-  const costs =
-    calculateCosts(
-      formula,
-      items,
-      scalingFactor
-    );
+  const costs = calculateCosts(formula, items, scalingFactor);
 
-  const productionOrderNo =
-    await generateProductionOrderNo();
+  const productionOrderNo = await generateProductionOrderNo();
 
   try {
-    const productionOrder =
-      await ProductionOrder.create({
-        productionOrderNo,
+    const productionOrder = await ProductionOrder.create({
+      productionOrderNo,
 
-        product: product._id,
-        productName:
-          getProductName(product),
-        productCode:
-          getProductCode(product),
+      product: product._id,
+      productName: getProductName(product),
+      productCode: getProductCode(product),
 
-        formula: formula._id,
-        formulaName:
-          getFormulaName(formula),
-        formulaCode:
-          getFormulaCode(formula),
-        formulaVersion:
-          Number(formula.version ?? 1),
+      formula: formula._id,
+      formulaName: getFormulaName(formula),
+      formulaCode: getFormulaCode(formula),
+      formulaVersion: Number(formula.version ?? 1),
 
-        quantity,
+      quantity,
 
-        // Production output is measured in kilograms. Product.unit is the
-        // customer pack label and must never drive formula scaling.
-        unit: "kg",
+      // Production output is measured in kilograms. Product.unit is the
+      // customer pack label and must never drive formula scaling.
+      unit: "kg",
 
-        formulaBatchSize:
-          Number(formula.batchSize),
+      formulaBatchSize: Number(formula.batchSize),
 
-        formulaBatchUnit: "kg",
+      formulaBatchUnit: "kg",
 
-        scalingFactor,
+      scalingFactor,
 
-        priority:
-          data.priority || "Normal",
+      priority: data.priority || "Normal",
 
-        status:
-          data.status || "Draft",
+      status: data.status || "Draft",
 
-        plannedDate,
+      directBatchRecord: Boolean(data.directBatchRecord),
 
-        expectedCompletionDate,
+      plannedDate,
 
-        items,
+      expectedCompletionDate,
 
-        ...costs,
+      items,
 
-        actualProducedQuantity: 0,
+      ...costs,
 
-        notes:
-          data.notes?.trim() || "",
-      });
+      actualProducedQuantity: 0,
+
+      notes: data.notes?.trim() || "",
+    });
 
     return productionOrder;
   } catch (error: any) {
-    if (
-      error?.code === 11000
-    ) {
+    if (error?.code === 11000) {
       throw new ProductionOrderServiceError(
         "A production order with this number already exists. Please try again.",
-        409
+        409,
       );
     }
 
@@ -874,17 +615,14 @@ export async function createProductionOrder(
 
 export async function getProductionOrders() {
   return ProductionOrder.find()
-    .populate(
-      "product",
-      "name code productCode sku category unit"
-    )
+    .populate("product", "name code productCode sku category unit")
     .populate(
       "formula",
-      "name code formulaCode version batchSize batchUnit status"
+      "name code formulaCode version batchSize batchUnit status",
     )
     .populate(
       "items.rawMaterial",
-      "name code rawMaterialCode sku category unit costPerUnit"
+      "name code rawMaterialCode sku category unit costPerUnit",
     )
     .sort({
       createdAt: -1,
@@ -895,26 +633,18 @@ export async function getProductionOrders() {
 // GET BY ID
 // =====================================================
 
-export async function getProductionOrderById(
-  id: string
-) {
-  validateObjectId(
-    id,
-    "production order ID"
-  );
+export async function getProductionOrderById(id: string) {
+  validateObjectId(id, "production order ID");
 
   return ProductionOrder.findById(id)
-    .populate(
-      "product",
-      "name code productCode sku category unit"
-    )
+    .populate("product", "name code productCode sku category unit")
     .populate(
       "formula",
-      "name code formulaCode version batchSize batchUnit status"
+      "name code formulaCode version batchSize batchUnit status",
     )
     .populate(
       "items.rawMaterial",
-      "name code rawMaterialCode sku category unit costPerUnit"
+      "name code rawMaterialCode sku category unit costPerUnit",
     );
 }
 
@@ -932,38 +662,37 @@ export async function getProductionOrderStats() {
     completed,
     cancelled,
     onHold,
-  ] =
-    await Promise.all([
-      ProductionOrder.countDocuments(),
+  ] = await Promise.all([
+    ProductionOrder.countDocuments(),
 
-      ProductionOrder.countDocuments({
-        status: "Draft",
-      }),
+    ProductionOrder.countDocuments({
+      status: "Draft",
+    }),
 
-      ProductionOrder.countDocuments({
-        status: "Planned",
-      }),
+    ProductionOrder.countDocuments({
+      status: "Planned",
+    }),
 
-      ProductionOrder.countDocuments({
-        status: "Released",
-      }),
+    ProductionOrder.countDocuments({
+      status: "Released",
+    }),
 
-      ProductionOrder.countDocuments({
-        status: "In Production",
-      }),
+    ProductionOrder.countDocuments({
+      status: "In Production",
+    }),
 
-      ProductionOrder.countDocuments({
-        status: "Completed",
-      }),
+    ProductionOrder.countDocuments({
+      status: "Completed",
+    }),
 
-      ProductionOrder.countDocuments({
-        status: "Cancelled",
-      }),
+    ProductionOrder.countDocuments({
+      status: "Cancelled",
+    }),
 
-      ProductionOrder.countDocuments({
-        status: "On Hold",
-      }),
-    ]);
+    ProductionOrder.countDocuments({
+      status: "On Hold",
+    }),
+  ]);
 
   return {
     total,
@@ -981,22 +710,13 @@ export async function getProductionOrderStats() {
 // CHECK EXISTING BATCHES
 // =====================================================
 
-async function hasProductionBatches(
-  productionOrderId: string
-) {
+async function hasProductionBatches(productionOrderId: string) {
   try {
-    const ProductionBatch =
-      mongoose.model(
-        "ProductionBatch"
-      );
+    const ProductionBatch = mongoose.model("ProductionBatch");
 
-    const count =
-      await ProductionBatch.countDocuments(
-        {
-          productionOrder:
-            productionOrderId,
-        }
-      );
+    const count = await ProductionBatch.countDocuments({
+      productionOrder: productionOrderId,
+    });
 
     return count > 0;
   } catch {
@@ -1012,37 +732,26 @@ async function hasProductionBatches(
 
 export async function updateProductionOrder(
   id: string,
-  data: UpdateProductionOrderData
+  data: UpdateProductionOrderData,
 ) {
-  validateObjectId(
-    id,
-    "production order ID"
-  );
+  validateObjectId(id, "production order ID");
 
-  const productionOrder =
-    await ProductionOrder.findById(id);
+  const productionOrder = await ProductionOrder.findById(id);
 
   if (!productionOrder) {
-    throw new ProductionOrderServiceError(
-      "Production order not found.",
-      404
-    );
+    throw new ProductionOrderServiceError("Production order not found.", 404);
   }
 
-  const currentStatus =
-    productionOrder.status;
+  const currentStatus = productionOrder.status;
 
   // ---------------------------------------------------
   // COMPLETED / CANCELLED
   // ---------------------------------------------------
 
-  if (
-    currentStatus === "Completed" ||
-    currentStatus === "Cancelled"
-  ) {
+  if (currentStatus === "Completed" || currentStatus === "Cancelled") {
     throw new ProductionOrderServiceError(
       `A ${currentStatus} production order cannot be modified.`,
-      409
+      409,
     );
   }
 
@@ -1050,28 +759,19 @@ export async function updateProductionOrder(
   // BATCH CHECK
   // ---------------------------------------------------
 
-  const hasBatches =
-    await hasProductionBatches(id);
+  const hasBatches = await hasProductionBatches(id);
 
   // ---------------------------------------------------
   // STATUS
   // ---------------------------------------------------
 
-  if (
-    data.status !== undefined
-  ) {
-    validateStatusTransition(
-      currentStatus,
-      data.status
-    );
+  if (data.status !== undefined) {
+    validateStatusTransition(currentStatus, data.status);
 
-    if (
-      data.status === "Released" &&
-      productionOrder.items.length === 0
-    ) {
+    if (data.status === "Released" && productionOrder.items.length === 0) {
       throw new ProductionOrderServiceError(
         "A production order must have raw-material requirements before it can be released.",
-        400
+        400,
       );
     }
 
@@ -1081,12 +781,11 @@ export async function updateProductionOrder(
     ) {
       throw new ProductionOrderServiceError(
         "A production order cannot be completed before production output is recorded.",
-        400
+        400,
       );
     }
 
-    productionOrder.status =
-      data.status;
+    productionOrder.status = data.status;
   }
 
   // ---------------------------------------------------
@@ -1096,33 +795,24 @@ export async function updateProductionOrder(
   // A released order can be amended until its first batch is created. Once a
   // batch exists, material requirements and stock movements must remain tied
   // to the original plan for traceability.
-  const isLocked =
-    currentStatus === "In Production" ||
-    hasBatches;
+  const isLocked = currentStatus === "In Production" || hasBatches;
 
-  if (
-    data.quantity !== undefined
-  ) {
-    const newQuantity =
-      Number(data.quantity);
+  if (data.quantity !== undefined) {
+    const newQuantity = Number(data.quantity);
 
-    if (
-      !Number.isFinite(newQuantity) ||
-      newQuantity <= 0
-    ) {
+    if (!Number.isFinite(newQuantity) || newQuantity <= 0) {
       throw new ProductionOrderServiceError(
         "Production quantity must be greater than 0.",
-        400
+        400,
       );
     }
 
-    const quantityChanged =
-      newQuantity !== Number(productionOrder.quantity);
+    const quantityChanged = newQuantity !== Number(productionOrder.quantity);
 
     if (isLocked && quantityChanged) {
       throw new ProductionOrderServiceError(
         "Production quantity is locked because this order already has a production batch or is in production. Create a new order for any additional quantity.",
-        409
+        409,
       );
     }
 
@@ -1130,69 +820,45 @@ export async function updateProductionOrder(
       // Keep accepting an unchanged value so partial updates from older
       // clients do not fail merely because they include the current quantity.
     } else {
+      // -------------------------------------------------
+      // RECALCULATE MATERIALS
+      // -------------------------------------------------
 
-    // -------------------------------------------------
-    // RECALCULATE MATERIALS
-    // -------------------------------------------------
+      const Formula = getModel("Formula");
 
-    const Formula =
-      getModel("Formula");
-
-    const formula =
-      await Formula.findById(
-        productionOrder.formula
-      )
-        .populate(
-          "items.rawMaterial"
-        )
+      const formula = await Formula.findById(productionOrder.formula)
+        .populate("items.rawMaterial")
         .lean();
 
-    if (!formula) {
-      throw new ProductionOrderServiceError(
-        "The formula linked to this production order no longer exists.",
-        404
-      );
-    }
+      if (!formula) {
+        throw new ProductionOrderServiceError(
+          "The formula linked to this production order no longer exists.",
+          404,
+        );
+      }
 
-    const {
-      scalingFactor,
-      items,
-    } =
-      buildMaterialRequirements(
+      const { scalingFactor, items } = buildMaterialRequirements(
         formula,
-        newQuantity
+        newQuantity,
       );
 
-    const costs =
-      calculateCosts(
-        formula,
-        items,
-        scalingFactor
-      );
+      const costs = calculateCosts(formula, items, scalingFactor);
 
-    productionOrder.quantity =
-      newQuantity;
+      productionOrder.quantity = newQuantity;
 
-    productionOrder.scalingFactor =
-      scalingFactor;
+      productionOrder.scalingFactor = scalingFactor;
 
-    productionOrder.items =
-      items;
+      productionOrder.items = items;
 
-    productionOrder.estimatedMaterialCost =
-      costs.estimatedMaterialCost;
+      productionOrder.estimatedMaterialCost = costs.estimatedMaterialCost;
 
-    productionOrder.laborCost =
-      costs.laborCost;
+      productionOrder.laborCost = costs.laborCost;
 
-    productionOrder.energyCost =
-      costs.energyCost;
+      productionOrder.energyCost = costs.energyCost;
 
-    productionOrder.otherCost =
-      costs.otherCost;
+      productionOrder.otherCost = costs.otherCost;
 
-      productionOrder.estimatedTotalCost =
-        costs.estimatedTotalCost;
+      productionOrder.estimatedTotalCost = costs.estimatedTotalCost;
     }
   }
 
@@ -1200,26 +866,22 @@ export async function updateProductionOrder(
   // UNIT
   // ---------------------------------------------------
 
-  if (
-    data.unit !== undefined
-  ) {
-    const unit =
-      data.unit.trim();
+  if (data.unit !== undefined) {
+    const unit = data.unit.trim();
 
     if (!unit) {
       throw new ProductionOrderServiceError(
         "Production unit cannot be empty.",
-        400
+        400,
       );
     }
 
-    const unitChanged =
-      unit !== productionOrder.unit;
+    const unitChanged = unit !== productionOrder.unit;
 
     if (isLocked && unitChanged) {
       throw new ProductionOrderServiceError(
         "Production unit cannot be changed after a production batch has been created or production has started.",
-        409
+        409,
       );
     }
 
@@ -1232,69 +894,46 @@ export async function updateProductionOrder(
   // PRIORITY
   // ---------------------------------------------------
 
-  if (
-    data.priority !== undefined
-  ) {
-    productionOrder.priority =
-      data.priority;
+  if (data.priority !== undefined) {
+    productionOrder.priority = data.priority;
   }
 
   // ---------------------------------------------------
   // PLANNED DATE
   // ---------------------------------------------------
 
-  if (
-    data.plannedDate !== undefined
-  ) {
-    const plannedDate =
-      parseDate(
-        data.plannedDate,
-        "planned date",
-        true
-      );
+  if (data.plannedDate !== undefined) {
+    const plannedDate = parseDate(data.plannedDate, "planned date", true);
 
-    productionOrder.plannedDate =
-      plannedDate!;
+    productionOrder.plannedDate = plannedDate!;
   }
 
   // ---------------------------------------------------
   // EXPECTED COMPLETION DATE
   // ---------------------------------------------------
 
-  if (
-    data.expectedCompletionDate !==
-    undefined
-  ) {
-    const expectedDate =
-      parseDate(
-        data.expectedCompletionDate,
-        "expected completion date"
-      );
+  if (data.expectedCompletionDate !== undefined) {
+    const expectedDate = parseDate(
+      data.expectedCompletionDate,
+      "expected completion date",
+    );
 
-    if (
-      expectedDate &&
-      expectedDate <
-        productionOrder.plannedDate
-    ) {
+    if (expectedDate && expectedDate < productionOrder.plannedDate) {
       throw new ProductionOrderServiceError(
         "Expected completion date cannot be before planned date.",
-        400
+        400,
       );
     }
 
-    productionOrder.expectedCompletionDate =
-      expectedDate;
+    productionOrder.expectedCompletionDate = expectedDate;
   }
 
   // ---------------------------------------------------
   // NOTES
   // ---------------------------------------------------
 
-  if (
-    data.notes !== undefined
-  ) {
-    productionOrder.notes =
-      data.notes.trim();
+  if (data.notes !== undefined) {
+    productionOrder.notes = data.notes.trim();
   }
 
   await productionOrder.save();
@@ -1306,22 +945,13 @@ export async function updateProductionOrder(
 // DELETE
 // =====================================================
 
-export async function deleteProductionOrder(
-  id: string
-) {
-  validateObjectId(
-    id,
-    "production order ID"
-  );
+export async function deleteProductionOrder(id: string) {
+  validateObjectId(id, "production order ID");
 
-  const productionOrder =
-    await ProductionOrder.findById(id);
+  const productionOrder = await ProductionOrder.findById(id);
 
   if (!productionOrder) {
-    throw new ProductionOrderServiceError(
-      "Production order not found.",
-      404
-    );
+    throw new ProductionOrderServiceError("Production order not found.", 404);
   }
 
   if (
@@ -1330,23 +960,20 @@ export async function deleteProductionOrder(
   ) {
     throw new ProductionOrderServiceError(
       "Only Draft or Cancelled production orders can be deleted.",
-      409
+      409,
     );
   }
 
-  const hasBatches =
-    await hasProductionBatches(id);
+  const hasBatches = await hasProductionBatches(id);
 
   if (hasBatches) {
     throw new ProductionOrderServiceError(
       "A production order with production batches cannot be deleted.",
-      409
+      409,
     );
   }
 
-  await ProductionOrder.findByIdAndDelete(
-    id
-  );
+  await ProductionOrder.findByIdAndDelete(id);
 
   return productionOrder;
 }

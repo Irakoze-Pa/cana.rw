@@ -22,6 +22,8 @@ import type {
 
 import {
   getMaterialConsumptionById,
+  saveBatchRecipeAsFormulaVersion,
+  updateBatchRecipe,
 } from "../services/materialConsumption.service";
 
 import IssueMaterialsModal from "../components/IssueMaterialsModal";
@@ -36,19 +38,14 @@ const safeNumber = (value: unknown): number => {
   return Number.isFinite(number) ? number : 0;
 };
 
-const formatNumber = (
-  value: unknown,
-  maximumFractionDigits = 2,
-): string => {
+const formatNumber = (value: unknown, maximumFractionDigits = 2): string => {
   return safeNumber(value).toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits,
   });
 };
 
-const formatDate = (
-  value?: string | Date | null,
-): string => {
+const formatDate = (value?: string | Date | null): string => {
   if (!value) return "-";
 
   const date = new Date(value);
@@ -64,9 +61,7 @@ const formatDate = (
   });
 };
 
-const formatDateTime = (
-  value?: string | Date | null,
-): string => {
+const formatDateTime = (value?: string | Date | null): string => {
   if (!value) return "-";
 
   const date = new Date(value);
@@ -93,12 +88,7 @@ const getBatchName = (
     return batch;
   }
 
-  return (
-    batch.batchNo ||
-    batch.batchNumber ||
-    batch._id ||
-    "-"
-  );
+  return batch.batchNo || batch.batchNumber || batch._id || "-";
 };
 
 const getProductionOrderName = (
@@ -110,16 +100,10 @@ const getProductionOrderName = (
     return order;
   }
 
-  return (
-    order.productionOrderNo ||
-    order._id ||
-    "-"
-  );
+  return order.productionOrderNo || order._id || "-";
 };
 
-const getStatusClasses = (
-  status: MaterialConsumption["status"],
-): string => {
+const getStatusClasses = (status: MaterialConsumption["status"]): string => {
   switch (status) {
     case "Draft":
       return "border-slate-200 bg-slate-100 text-slate-700";
@@ -150,16 +134,25 @@ export default function RawMaterialConsumptionDetailsPage() {
 
   const navigate = useNavigate();
 
-  const [consumption, setConsumption] =
-    useState<MaterialConsumption | null>(null);
+  const [consumption, setConsumption] = useState<MaterialConsumption | null>(
+    null,
+  );
 
-  const [loading, setLoading] =
-    useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const [issueModalOpen, setIssueModalOpen] =
+  const [issueModalOpen, setIssueModalOpen] = useState<boolean>(false);
+
+  const [recipeEditorOpen, setRecipeEditorOpen] = useState<boolean>(false);
+
+  const [recipeQuantities, setRecipeQuantities] = useState<string[]>([]);
+
+  const [savingRecipe, setSavingRecipe] = useState<boolean>(false);
+
+  const [recipeError, setRecipeError] = useState<string>("");
+
+  const [saveAsFormulaVersion, setSaveAsFormulaVersion] =
     useState<boolean>(false);
 
   /* ------------------------------------------------------------------------ */
@@ -168,9 +161,7 @@ export default function RawMaterialConsumptionDetailsPage() {
 
   const loadConsumption = useCallback(async () => {
     if (!id) {
-      setError(
-        "Material consumption ID is missing.",
-      );
+      setError("Material consumption ID is missing.");
 
       setLoading(false);
 
@@ -181,8 +172,7 @@ export default function RawMaterialConsumptionDetailsPage() {
       setLoading(true);
       setError(null);
 
-      const response =
-        await getMaterialConsumptionById(id);
+      const response = await getMaterialConsumptionById(id);
 
       /*
        * Supports:
@@ -192,21 +182,15 @@ export default function RawMaterialConsumptionDetailsPage() {
        * 2. { data: MaterialConsumption }
        */
 
-      const data =
-        (response as any)?.data ?? response;
+      const data = (response as any)?.data ?? response;
 
       if (!data) {
-        throw new Error(
-          "Material consumption was not found.",
-        );
+        throw new Error("Material consumption was not found.");
       }
 
       setConsumption(data);
     } catch (err: any) {
-      console.error(
-        "Load material consumption error:",
-        err,
-      );
+      console.error("Load material consumption error:", err);
 
       setError(
         err?.response?.data?.message ||
@@ -226,58 +210,29 @@ export default function RawMaterialConsumptionDetailsPage() {
   /* NORMALIZE ITEMS                                                          */
   /* ------------------------------------------------------------------------ */
 
-  const items = useMemo<MaterialConsumptionItem[]>(
-    () => {
-      if (
-        !consumption ||
-        !Array.isArray(consumption.items)
-      ) {
-        return [];
-      }
+  const items = useMemo<MaterialConsumptionItem[]>(() => {
+    if (!consumption || !Array.isArray(consumption.items)) {
+      return [];
+    }
 
-      return consumption.items.map(
-        (item) => ({
-          ...item,
+    return consumption.items.map((item) => ({
+      ...item,
 
-          standardQuantity:
-            safeNumber(
-              item.standardQuantity,
-            ),
+      standardQuantity: safeNumber(item.standardQuantity),
 
-          issuedQuantity:
-            safeNumber(
-              item.issuedQuantity,
-            ),
+      issuedQuantity: safeNumber(item.issuedQuantity),
 
-          actualQuantity:
-            safeNumber(
-              item.actualQuantity,
-            ),
+      actualQuantity: safeNumber(item.actualQuantity),
 
-          wasteQuantity:
-            safeNumber(
-              item.wasteQuantity,
-            ),
+      wasteQuantity: safeNumber(item.wasteQuantity),
 
-          returnQuantity:
-            safeNumber(
-              item.returnQuantity,
-            ),
+      returnQuantity: safeNumber(item.returnQuantity),
 
-          varianceQuantity:
-            safeNumber(
-              item.varianceQuantity,
-            ),
+      varianceQuantity: safeNumber(item.varianceQuantity),
 
-          variancePercentage:
-            safeNumber(
-              item.variancePercentage,
-            ),
-        }),
-      );
-    },
-    [consumption],
-  );
+      variancePercentage: safeNumber(item.variancePercentage),
+    }));
+  }, [consumption]);
 
   /* ------------------------------------------------------------------------ */
   /* LOADING                                                                  */
@@ -312,10 +267,7 @@ export default function RawMaterialConsumptionDetailsPage() {
           <div className="rounded-2xl border border-red-100 bg-white p-8 shadow-sm">
             <div className="flex flex-col items-center text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
-                <XCircle
-                  size={28}
-                  className="text-red-600"
-                />
+                <XCircle size={28} className="text-red-600" />
               </div>
 
               <h2 className="mt-4 text-lg font-bold text-slate-900">
@@ -323,18 +275,13 @@ export default function RawMaterialConsumptionDetailsPage() {
               </h2>
 
               <p className="mt-2 text-sm text-slate-500">
-                {error ||
-                  "Material consumption was not found."}
+                {error || "Material consumption was not found."}
               </p>
 
               <div className="mt-6 flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() =>
-                    navigate(
-                      "/management/production/consumption",
-                    )
-                  }
+                  onClick={() => navigate("/management/production/consumption")}
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   <ArrowLeft size={16} />
@@ -343,9 +290,7 @@ export default function RawMaterialConsumptionDetailsPage() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    void loadConsumption()
-                  }
+                  onClick={() => void loadConsumption()}
                   className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
                 >
                   <RefreshCw size={16} />
@@ -363,49 +308,80 @@ export default function RawMaterialConsumptionDetailsPage() {
   /* SUMMARY VALUES                                                           */
   /* ------------------------------------------------------------------------ */
 
-  const totalStandard = safeNumber(
-    consumption.totalStandardQuantity,
-  );
+  const totalStandard = safeNumber(consumption.totalStandardQuantity);
 
-  const totalIssued = safeNumber(
-    consumption.totalIssuedQuantity,
-  );
+  const totalIssued = safeNumber(consumption.totalIssuedQuantity);
 
-  const totalActual = safeNumber(
-    consumption.totalActualQuantity,
-  );
+  const totalActual = safeNumber(consumption.totalActualQuantity);
 
-  const totalWaste = safeNumber(
-    consumption.totalWasteQuantity,
-  );
+  const totalWaste = safeNumber(consumption.totalWasteQuantity);
 
-  const totalReturn = safeNumber(
-    consumption.totalReturnQuantity,
-  );
+  const totalReturn = safeNumber(consumption.totalReturnQuantity);
 
-  const totalVariance = safeNumber(
-    consumption.totalVarianceQuantity,
-  );
+  const totalVariance = safeNumber(consumption.totalVarianceQuantity);
 
-  const accountedQuantity =
-    totalActual +
-    totalWaste +
-    totalReturn;
+  const accountedQuantity = totalActual + totalWaste + totalReturn;
 
   const reconciliationPercentage =
     totalIssued > 0
-      ? Math.min(
-          100,
-          (accountedQuantity /
-            totalIssued) *
-            100,
-        )
+      ? Math.min(100, (accountedQuantity / totalIssued) * 100)
       : 0;
 
-  const isDraft =
-    consumption.status === "Draft";
+  const isDraft = consumption.status === "Draft";
 
   const canIssue = isDraft;
+
+  const openRecipeEditor = () => {
+    setRecipeError("");
+    setSaveAsFormulaVersion(false);
+    setRecipeQuantities(items.map((item) => String(item.standardQuantity)));
+    setRecipeEditorOpen(true);
+  };
+
+  const saveBatchRecipe = async () => {
+    const quantities = recipeQuantities.map((quantity) => Number(quantity));
+    if (
+      quantities.some((quantity) => !Number.isFinite(quantity) || quantity < 0)
+    ) {
+      setRecipeError("Each recipe quantity must be zero or greater.");
+      return;
+    }
+    if (!quantities.some((quantity) => quantity > 0)) {
+      setRecipeError("Enter a quantity for at least one raw material.");
+      return;
+    }
+    if (saveAsFormulaVersion && quantities.some((quantity) => quantity <= 0)) {
+      setRecipeError(
+        "A new formula version needs a positive quantity for every listed raw material. Keep this as a batch-only recipe if one material is not used.",
+      );
+      return;
+    }
+
+    try {
+      setSavingRecipe(true);
+      setRecipeError("");
+      const recipeItems = quantities.map((standardQuantity) => ({
+        standardQuantity,
+      }));
+      const updated = saveAsFormulaVersion
+        ? await saveBatchRecipeAsFormulaVersion(consumption._id, recipeItems)
+        : await updateBatchRecipe(consumption._id, recipeItems);
+      setConsumption(
+        saveAsFormulaVersion
+          ? (updated as any)?.consumption
+          : ((updated as any)?.data ?? updated),
+      );
+      setRecipeEditorOpen(false);
+    } catch (err) {
+      setRecipeError(
+        err instanceof Error
+          ? err.message
+          : "Could not update the batch recipe.",
+      );
+    } finally {
+      setSavingRecipe(false);
+    }
+  };
 
   /* ------------------------------------------------------------------------ */
   /* RENDER                                                                   */
@@ -414,7 +390,6 @@ export default function RawMaterialConsumptionDetailsPage() {
   return (
     <div className="min-h-full">
       <div className="mx-auto max-w-7xl space-y-4">
-
         {/* ================================================================ */}
         {/* HEADER                                                            */}
         {/* ================================================================ */}
@@ -431,8 +406,7 @@ export default function RawMaterialConsumptionDetailsPage() {
             <div>
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-                  {consumption.consumptionNo ||
-                    "Material Consumption"}
+                  {consumption.consumptionNo || "Material Consumption"}
                 </h1>
 
                 <span
@@ -443,37 +417,35 @@ export default function RawMaterialConsumptionDetailsPage() {
                   {consumption.status}
                 </span>
               </div>
-
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() =>
-                void loadConsumption()
-              }
+              onClick={() => void loadConsumption()}
               disabled={loading}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <RefreshCw
-                size={16}
-                className={
-                  loading
-                    ? "animate-spin"
-                    : ""
-                }
-              />
-
+              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
               Refresh
             </button>
 
             {canIssue && (
               <button
                 type="button"
-                onClick={() =>
-                  setIssueModalOpen(true)
-                }
+                onClick={openRecipeEditor}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
+              >
+                <ClipboardCheck size={17} />
+                Edit batch recipe
+              </button>
+            )}
+
+            {canIssue && (
+              <button
+                type="button"
+                onClick={() => setIssueModalOpen(true)}
                 className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
               >
                 <PackageCheck size={17} />
@@ -488,85 +460,44 @@ export default function RawMaterialConsumptionDetailsPage() {
         {/* ================================================================ */}
 
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-
           {/* PRODUCT */}
 
           <InfoCard
-            icon={
-              <Package
-                size={19}
-                className="text-red-600"
-              />
-            }
+            icon={<Package size={19} className="text-red-600" />}
             iconClass="bg-red-50"
             label="Product"
-            title={
-              consumption.productName ||
-              "-"
-            }
-            subtitle={
-              consumption.productCode ||
-              "-"
-            }
+            title={consumption.productName || "-"}
+            subtitle={consumption.productCode || "-"}
           />
 
           {/* BATCH */}
 
           <InfoCard
-            icon={
-              <Factory
-                size={19}
-                className="text-slate-600"
-              />
-            }
+            icon={<Factory size={19} className="text-slate-600" />}
             iconClass="bg-slate-50"
             label="Production Batch"
-            title={getBatchName(
-              consumption.productionBatch,
-            )}
-            subtitle={
-              consumption.batchNumber ||
-              "-"
-            }
+            title={getBatchName(consumption.productionBatch)}
+            subtitle={consumption.batchNumber || "-"}
           />
 
           {/* ORDER */}
 
           <InfoCard
-            icon={
-              <ClipboardList
-                size={19}
-                className="text-amber-600"
-              />
-            }
+            icon={<ClipboardList size={19} className="text-amber-600" />}
             iconClass="bg-amber-50"
             label="Production Order"
-            title={getProductionOrderName(
-              consumption.productionOrder,
-            )}
-            subtitle={
-              consumption.formulaName ||
-              "Formula not specified"
-            }
+            title={getProductionOrderName(consumption.productionOrder)}
+            subtitle={consumption.formulaName || "Formula not specified"}
           />
 
           {/* CREATED */}
 
           <InfoCard
-            icon={
-              <CalendarDays
-                size={19}
-                className="text-slate-600"
-              />
-            }
+            icon={<CalendarDays size={19} className="text-slate-600" />}
             iconClass="bg-slate-100"
             label="Created"
-            title={formatDate(
-              consumption.createdAt,
-            )}
-            subtitle={formatDateTime(
-              consumption.createdAt,
-            )}
+            title={formatDate(consumption.createdAt)}
+            subtitle={formatDateTime(consumption.createdAt)}
           />
         </div>
 
@@ -575,15 +506,15 @@ export default function RawMaterialConsumptionDetailsPage() {
         {/* ================================================================ */}
 
         <div>
-          <h2 className="mb-2 text-base font-bold text-slate-900">Quantities</h2>
+          <h2 className="mb-2 text-base font-bold text-slate-900">
+            Quantities
+          </h2>
 
           <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
             <SummaryCard
               label="Standard"
               value={totalStandard}
-              icon={
-                <ClipboardCheck size={17} />
-              }
+              icon={<ClipboardCheck size={17} />}
             />
 
             <SummaryCard
@@ -595,9 +526,7 @@ export default function RawMaterialConsumptionDetailsPage() {
             <SummaryCard
               label="Actual"
               value={totalActual}
-              icon={
-                <CheckCircle2 size={17} />
-              }
+              icon={<CheckCircle2 size={17} />}
             />
 
             <SummaryCard
@@ -615,9 +544,7 @@ export default function RawMaterialConsumptionDetailsPage() {
             <SummaryCard
               label="Variance"
               value={totalVariance}
-              icon={
-                <RefreshCw size={17} />
-              }
+              icon={<RefreshCw size={17} />}
             />
           </div>
         </div>
@@ -627,28 +554,20 @@ export default function RawMaterialConsumptionDetailsPage() {
         {/* ================================================================ */}
 
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-3"><h2 className="text-base font-bold text-slate-900">Reconciliation</h2></div>
+          <div className="border-b border-slate-100 px-5 py-3">
+            <h2 className="text-base font-bold text-slate-900">
+              Reconciliation
+            </h2>
+          </div>
 
           <div className="grid grid-cols-2 gap-2 p-4 md:grid-cols-4">
-            <ReconciliationCard
-              label="Issued"
-              value={totalIssued}
-            />
+            <ReconciliationCard label="Issued" value={totalIssued} />
 
-            <ReconciliationCard
-              label="Actual"
-              value={totalActual}
-            />
+            <ReconciliationCard label="Actual" value={totalActual} />
 
-            <ReconciliationCard
-              label="Waste"
-              value={totalWaste}
-            />
+            <ReconciliationCard label="Waste" value={totalWaste} />
 
-            <ReconciliationCard
-              label="Return"
-              value={totalReturn}
-            />
+            <ReconciliationCard label="Return" value={totalReturn} />
           </div>
 
           <div className="border-t border-slate-100 px-5 py-4">
@@ -658,9 +577,7 @@ export default function RawMaterialConsumptionDetailsPage() {
               </span>
 
               <span className="font-bold text-slate-900">
-                {formatNumber(
-                  accountedQuantity,
-                )}
+                {formatNumber(accountedQuantity)}
               </span>
             </div>
 
@@ -674,19 +591,9 @@ export default function RawMaterialConsumptionDetailsPage() {
             </div>
 
             <div className="mt-2 flex justify-between text-xs text-slate-500">
-              <span>
-                {formatNumber(
-                  accountedQuantity,
-                )}{" "}
-                accounted
-              </span>
+              <span>{formatNumber(accountedQuantity)} accounted</span>
 
-              <span>
-                {formatNumber(
-                  totalIssued,
-                )}{" "}
-                issued
-              </span>
+              <span>{formatNumber(totalIssued)} issued</span>
             </div>
           </div>
         </div>
@@ -697,13 +604,20 @@ export default function RawMaterialConsumptionDetailsPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 md:flex-row md:items-center md:justify-between">
-              <h2 className="text-base font-bold text-slate-900">Material items</h2>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Batch recipe
+              </h2>
+              {isDraft && (
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Review and adjust the quantities for this batch before issuing
+                  stock.
+                </p>
+              )}
+            </div>
 
             <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
-              {items.length}{" "}
-              {items.length === 1
-                ? "material"
-                : "materials"}
+              {items.length} {items.length === 1 ? "material" : "materials"}
             </div>
           </div>
 
@@ -711,16 +625,12 @@ export default function RawMaterialConsumptionDetailsPage() {
             <div className="flex min-h-[220px] items-center justify-center px-6 text-center">
               <div>
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
-                  <Package
-                    size={21}
-                    className="text-slate-500"
-                  />
+                  <Package size={21} className="text-slate-500" />
                 </div>
 
                 <h3 className="mt-3 text-sm font-bold text-slate-900">
                   No material items
                 </h3>
-
               </div>
             </div>
           ) : (
@@ -728,185 +638,115 @@ export default function RawMaterialConsumptionDetailsPage() {
               <table className="w-full min-w-[1100px]">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50">
-                    <TableHeader align="left">
-                      Raw Material
-                    </TableHeader>
+                    <TableHeader align="left">Raw Material</TableHeader>
 
-                    <TableHeader>
-                      Standard
-                    </TableHeader>
+                    <TableHeader>Standard</TableHeader>
 
-                    <TableHeader>
-                      Issued
-                    </TableHeader>
+                    <TableHeader>Issued</TableHeader>
 
-                    <TableHeader>
-                      Actual
-                    </TableHeader>
+                    <TableHeader>Actual</TableHeader>
 
-                    <TableHeader>
-                      Waste
-                    </TableHeader>
+                    <TableHeader>Waste</TableHeader>
 
-                    <TableHeader>
-                      Return
-                    </TableHeader>
+                    <TableHeader>Return</TableHeader>
 
-                    <TableHeader>
-                      Variance
-                    </TableHeader>
+                    <TableHeader>Variance</TableHeader>
 
-                    <TableHeader>
-                      Variance %
-                    </TableHeader>
+                    <TableHeader>Variance %</TableHeader>
 
-                    <TableHeader align="left">
-                      Lot
-                    </TableHeader>
+                    <TableHeader align="left">Lot</TableHeader>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
-                  {items.map(
-                    (
-                      item,
-                      index,
-                    ) => {
-                      const standard =
-                        safeNumber(
-                          item.standardQuantity,
-                        );
+                  {items.map((item, index) => {
+                    const standard = safeNumber(item.standardQuantity);
 
-                      const issued =
-                        safeNumber(
-                          item.issuedQuantity,
-                        );
+                    const issued = safeNumber(item.issuedQuantity);
 
-                      const actual =
-                        safeNumber(
-                          item.actualQuantity,
-                        );
+                    const actual = safeNumber(item.actualQuantity);
 
-                      const waste =
-                        safeNumber(
-                          item.wasteQuantity,
-                        );
+                    const waste = safeNumber(item.wasteQuantity);
 
-                      const returned =
-                        safeNumber(
-                          item.returnQuantity,
-                        );
+                    const returned = safeNumber(item.returnQuantity);
 
-                      const variance =
-                        safeNumber(
-                          item.varianceQuantity,
-                        );
+                    const variance = safeNumber(item.varianceQuantity);
 
-                      const variancePercentage =
-                        safeNumber(
-                          item.variancePercentage,
-                        );
+                    const variancePercentage = safeNumber(
+                      item.variancePercentage,
+                    );
 
-                      return (
-                        <tr
-                          key={
-                            item._id ||
-                            `${item.rawMaterial}-${index}`
-                          }
-                          className="transition hover:bg-slate-50"
-                        >
-                          <td className="px-5 py-4">
-                            <div className="font-semibold text-slate-900">
-                              {item.rawMaterialName ||
-                                "-"}
-                            </div>
+                    return (
+                      <tr
+                        key={item._id || `${item.rawMaterial}-${index}`}
+                        className="transition hover:bg-slate-50"
+                      >
+                        <td className="px-5 py-4">
+                          <div className="font-semibold text-slate-900">
+                            {item.rawMaterialName || "-"}
+                          </div>
 
-                            <div className="mt-0.5 text-xs text-slate-500">
-                              {item.rawMaterialCode ||
-                                "-"}
-                            </div>
-                          </td>
+                          <div className="mt-0.5 text-xs text-slate-500">
+                            {item.rawMaterialCode || "-"}
+                          </div>
+                        </td>
 
-                          <td className="px-5 py-4 text-right">
-                            <QuantityCell
-                              value={standard}
-                              unit={item.unit}
-                            />
-                          </td>
+                        <td className="px-5 py-4 text-right">
+                          <QuantityCell value={standard} unit={item.unit} />
+                        </td>
 
-                          <td className="px-5 py-4 text-right">
-                            <QuantityCell
-                              value={issued}
-                              unit={item.unit}
-                            />
-                          </td>
+                        <td className="px-5 py-4 text-right">
+                          <QuantityCell value={issued} unit={item.unit} />
+                        </td>
 
-                          <td className="px-5 py-4 text-right">
-                            <QuantityCell
-                              value={actual}
-                              unit={item.unit}
-                            />
-                          </td>
+                        <td className="px-5 py-4 text-right">
+                          <QuantityCell value={actual} unit={item.unit} />
+                        </td>
 
-                          <td className="px-5 py-4 text-right">
-                            <QuantityCell
-                              value={waste}
-                              unit={item.unit}
-                            />
-                          </td>
+                        <td className="px-5 py-4 text-right">
+                          <QuantityCell value={waste} unit={item.unit} />
+                        </td>
 
-                          <td className="px-5 py-4 text-right">
-                            <QuantityCell
-                              value={returned}
-                              unit={item.unit}
-                            />
-                          </td>
+                        <td className="px-5 py-4 text-right">
+                          <QuantityCell value={returned} unit={item.unit} />
+                        </td>
 
-                          <td className="px-5 py-4 text-right">
-                            <span
-                              className={
-                                variance > 0
-                                  ? "font-semibold text-red-600"
-                                  : variance < 0
-                                    ? "font-semibold text-emerald-600"
-                                    : "font-medium text-slate-700"
-                              }
-                            >
-                              {formatNumber(
-                                variance,
-                              )}
-                            </span>
-                          </td>
+                        <td className="px-5 py-4 text-right">
+                          <span
+                            className={
+                              variance > 0
+                                ? "font-semibold text-red-600"
+                                : variance < 0
+                                  ? "font-semibold text-emerald-600"
+                                  : "font-medium text-slate-700"
+                            }
+                          >
+                            {formatNumber(variance)}
+                          </span>
+                        </td>
 
-                          <td className="px-5 py-4 text-right">
-                            <span
-                              className={
-                                variancePercentage >
-                                0
-                                  ? "font-semibold text-red-600"
-                                  : variancePercentage <
-                                      0
-                                    ? "font-semibold text-emerald-600"
-                                    : "font-medium text-slate-700"
-                              }
-                            >
-                              {formatNumber(
-                                variancePercentage,
-                              )}
-                              %
-                            </span>
-                          </td>
+                        <td className="px-5 py-4 text-right">
+                          <span
+                            className={
+                              variancePercentage > 0
+                                ? "font-semibold text-red-600"
+                                : variancePercentage < 0
+                                  ? "font-semibold text-emerald-600"
+                                  : "font-medium text-slate-700"
+                            }
+                          >
+                            {formatNumber(variancePercentage)}%
+                          </span>
+                        </td>
 
-                          <td className="px-5 py-4">
-                            <span className="text-sm font-medium text-slate-700">
-                              {item.lotNumber ||
-                                "-"}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    },
-                  )}
+                        <td className="px-5 py-4">
+                          <span className="text-sm font-medium text-slate-700">
+                            {item.lotNumber || "-"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -919,9 +759,7 @@ export default function RawMaterialConsumptionDetailsPage() {
 
         {consumption.notes && (
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-900">
-              Notes
-            </h2>
+            <h2 className="text-sm font-bold text-slate-900">Notes</h2>
 
             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
               {consumption.notes}
@@ -935,44 +773,29 @@ export default function RawMaterialConsumptionDetailsPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-5 py-4">
-            <h2 className="text-base font-bold text-slate-900">
-              Activity
-            </h2>
+            <h2 className="text-base font-bold text-slate-900">Activity</h2>
           </div>
 
           <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-3">
             <ActivityItem
-              icon={
-                <CalendarDays size={17} />
-              }
+              icon={<CalendarDays size={17} />}
               label="Created"
-              value={formatDateTime(
-                consumption.createdAt,
-              )}
+              value={formatDateTime(consumption.createdAt)}
             />
 
             <ActivityItem
-              icon={
-                <PackageCheck size={17} />
-              }
+              icon={<PackageCheck size={17} />}
               label="Issued At"
-              value={formatDateTime(
-                consumption.issuedAt,
-              )}
+              value={formatDateTime(consumption.issuedAt)}
             />
 
             <ActivityItem
-              icon={
-                <CheckCircle2 size={17} />
-              }
+              icon={<CheckCircle2 size={17} />}
               label="Consumed At"
-              value={formatDateTime(
-                consumption.consumedAt,
-              )}
+              value={formatDateTime(consumption.consumedAt)}
             />
           </div>
         </div>
-
       </div>
 
       {/* ================================================================== */}
@@ -982,17 +805,132 @@ export default function RawMaterialConsumptionDetailsPage() {
       <IssueMaterialsModal
         open={issueModalOpen}
         consumption={consumption}
-        onClose={() =>
-          setIssueModalOpen(false)
-        }
+        onClose={() => setIssueModalOpen(false)}
         onSuccess={(updatedConsumption) => {
-          setConsumption(
-            updatedConsumption,
-          );
+          setConsumption(updatedConsumption);
 
           setIssueModalOpen(false);
         }}
       />
+
+      {recipeEditorOpen && (
+        <div className="fixed inset-0 z-[120] grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="Edit batch recipe"
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+          >
+            <header className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-slate-500">
+                  This production batch only
+                </p>
+                <h2 className="mt-1 text-lg font-extrabold text-slate-950">
+                  Enter batch recipe
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Save a batch-only recipe, or promote it as the next formula
+                  version for future batches.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecipeEditorOpen(false)}
+                disabled={savingRecipe}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              >
+                <XCircle size={18} />
+              </button>
+            </header>
+            <div className="space-y-3 p-5">
+              {recipeError && (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {recipeError}
+                </p>
+              )}
+              {items.map((item, index) => (
+                <label
+                  key={`${item.rawMaterial}-${index}`}
+                  className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_10rem] sm:items-center"
+                >
+                  <span>
+                    <strong className="block text-sm text-slate-950">
+                      {item.rawMaterialName}
+                    </strong>
+                    <small className="text-slate-500">
+                      {item.rawMaterialCode}
+                    </small>
+                  </span>
+                  <span className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      value={recipeQuantities[index] ?? ""}
+                      onChange={(event) =>
+                        setRecipeQuantities((current) =>
+                          current.map((quantity, quantityIndex) =>
+                            quantityIndex === index
+                              ? event.target.value
+                              : quantity,
+                          ),
+                        )
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-sm font-semibold"
+                    />
+                    <small className="pointer-events-none absolute right-3 top-2.5 text-slate-500">
+                      {item.unit}
+                    </small>
+                  </span>
+                </label>
+              ))}
+              <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={saveAsFormulaVersion}
+                  onChange={(event) =>
+                    setSaveAsFormulaVersion(event.target.checked)
+                  }
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                />
+                <span>
+                  <strong className="block text-slate-950">
+                    Save as new formula version
+                  </strong>
+                  <small className="mt-0.5 block leading-5 text-slate-500">
+                    Use this only when the changed recipe should become the
+                    standard for future batches. The current formula remains in
+                    history and this becomes the next active version.
+                  </small>
+                </span>
+              </label>
+            </div>
+            <footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setRecipeEditorOpen(false)}
+                disabled={savingRecipe}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveBatchRecipe()}
+                disabled={savingRecipe}
+                className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+              >
+                {savingRecipe
+                  ? "Saving…"
+                  : saveAsFormulaVersion
+                    ? "Save new version"
+                    : "Save batch recipe"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -1032,9 +970,7 @@ function InfoCard({
             {title}
           </p>
 
-          <p className="mt-0.5 truncate text-xs text-slate-500">
-            {subtitle}
-          </p>
+          <p className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</p>
         </div>
       </div>
     </div>
@@ -1099,24 +1035,14 @@ function ReconciliationCard({
 /* QUANTITY CELL                                                              */
 /* ========================================================================== */
 
-function QuantityCell({
-  value,
-  unit,
-}: {
-  value: number;
-  unit?: string;
-}) {
+function QuantityCell({ value, unit }: { value: number; unit?: string }) {
   return (
     <div>
       <span className="font-semibold text-slate-800">
         {formatNumber(value)}
       </span>
 
-      {unit && (
-        <span className="ml-1 text-xs text-slate-400">
-          {unit}
-        </span>
-      )}
+      {unit && <span className="ml-1 text-xs text-slate-400">{unit}</span>}
     </div>
   );
 }
@@ -1165,9 +1091,7 @@ function ActivityItem({
           {label}
         </p>
 
-        <p className="mt-1 text-sm font-semibold text-slate-800">
-          {value}
-        </p>
+        <p className="mt-1 text-sm font-semibold text-slate-800">{value}</p>
       </div>
     </div>
   );
@@ -1178,25 +1102,13 @@ function ActivityItem({
 /* ========================================================================== */
 
 function ArrowUpIcon() {
-  return (
-    <span className="text-[18px] font-bold">
-      ↑
-    </span>
-  );
+  return <span className="text-[18px] font-bold">↑</span>;
 }
 
 function ArrowDownIcon() {
-  return (
-    <span className="text-[18px] font-bold">
-      ↓
-    </span>
-  );
+  return <span className="text-[18px] font-bold">↓</span>;
 }
 
 function TrashIcon() {
-  return (
-    <span className="text-[17px] font-bold">
-      ×
-    </span>
-  );
+  return <span className="text-[17px] font-bold">×</span>;
 }

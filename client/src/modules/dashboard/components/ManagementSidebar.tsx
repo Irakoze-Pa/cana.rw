@@ -50,27 +50,16 @@ type Group = {
 };
 const groups: Group[] = [
   {
-    label: "Product catalogue",
-    icon: Package,
-    companies: ["cana_paints", "cana_group"],
-    items: [
-      {
-        label: "Product catalogue",
-        to: "/management/products",
-        icon: Package,
-        departments: ["sales", "management"],
-      },
-    ],
-  },
-  {
-    label: "Inventory & stores",
+    label: "Inventory & procurement",
     icon: Boxes,
+    shortcutTo: "/management/inventory",
     companies: ["cana_paints", "cana_group"],
     items: [
       {
         label: "Raw Material Inventory",
         to: "/management/inventory",
         icon: Warehouse,
+        category: "Stock & stores",
         end: true,
         departments: ["procurement", "warehouse", "production", "management"],
       },
@@ -78,85 +67,63 @@ const groups: Group[] = [
         label: "Finished goods & transfers",
         to: "/management/inventory/finished-goods",
         icon: PackageCheck,
+        category: "Stock & stores",
         departments: ["sales", "warehouse", "production", "management"],
       },
       {
         label: "Stock movements",
         to: "/management/inventory/stock",
         icon: History,
+        category: "Stock & stores",
         departments: ["procurement", "warehouse", "production", "management"],
       },
       {
         label: "Goods receipts",
         to: "/management/inventory/receipts",
         icon: ArrowDownToLine,
+        category: "Stock & stores",
         departments: ["procurement", "warehouse", "management"],
       },
       {
         label: "Inventory reports",
         to: "/management/inventory/reports",
         icon: FileBarChart,
+        category: "Stock & stores",
         departments: ["procurement", "warehouse", "production", "management"],
       },
-    ],
-  },
-  {
-    label: "Procurement & materials",
-    icon: Truck,
-    companies: ["cana_paints", "cana_group"],
-    items: [
       {
         label: "Suppliers",
         to: "/management/suppliers",
         icon: Truck,
+        category: "Procurement",
         departments: ["procurement", "management"],
       },
       {
         label: "Materials Setup",
         to: "/management/raw-materials",
         icon: PackageOpen,
+        category: "Procurement",
         departments: ["procurement", "warehouse", "production", "management"],
       },
       {
         label: "Purchase orders",
         to: "/management/purchase-orders",
         icon: ClipboardList,
-        departments: ["procurement", "finance", "management"],
-      },
-      {
-        label: "Supplier payments",
-        to: "/management/supplier-payments",
-        icon: ClipboardList,
-        departments: ["procurement", "finance", "management"],
-      },
-      {
-        label: "Expenses",
-        to: "/management/expenses",
-        icon: ClipboardList,
-        departments: ["finance", "management"],
-      },
-      {
-        label: "General activity report",
-        to: "/management/general-report",
-        icon: FileBarChart,
-        departments: ["finance", "management"],
-      },
-      {
-        label: "Raw materials & payments report",
-        to: "/management/procurement-report",
-        icon: FileBarChart,
+        category: "Procurement",
         departments: ["procurement", "finance", "management"],
       },
       {
         label: "Supplier material offers",
         to: "/management/supplier-materials",
         icon: PackageOpen,
+        category: "Procurement",
         departments: ["procurement", "management"],
       },
       {
         label: "Material lots & traceability",
         to: "/management/raw-materials/lots",
         icon: Layers,
+        category: "Procurement",
         departments: ["procurement", "warehouse", "production", "management"],
       },
     ],
@@ -164,55 +131,57 @@ const groups: Group[] = [
   {
     label: "Production",
     icon: Factory,
+    shortcutTo: "/management/production",
     companies: ["cana_paints", "cana_group"],
     items: [
       {
         label: "Overview",
         to: "/management/production",
         icon: Factory,
+        category: "Production operations",
         end: true,
-        departments: ["production", "management"],
-      },
-      {
-        label: "Production orders",
-        to: "/management/production/orders",
-        icon: ClipboardList,
         departments: ["production", "management"],
       },
       {
         label: "Batches",
         to: "/management/production/batches",
         icon: Layers,
+        category: "Production operations",
         departments: ["production", "management"],
       },
       {
         label: "Formulas",
         to: "/management/production/formulas",
         icon: FlaskConical,
+        category: "Formulation & control",
         departments: ["production", "management"],
       },
       {
         label: "Material consumption",
         to: "/management/production/consumption",
         icon: PackageCheck,
+        category: "Formulation & control",
         departments: ["production", "management"],
       },
       {
         label: "Quality & release queue",
         to: "/management/production/quality",
         icon: ClipboardList,
+        category: "Formulation & control",
         departments: ["production", "management"],
       },
       {
         label: "Output variance",
         to: "/management/production/waste",
         icon: FileBarChart,
+        category: "Review & history",
         departments: ["production", "management"],
       },
       {
         label: "Production history",
         to: "/management/production/history",
         icon: History,
+        category: "Review & history",
         departments: ["production", "management"],
       },
     ],
@@ -222,6 +191,14 @@ const groups: Group[] = [
     icon: ShoppingCart,
     shortcutTo: "/management/sales",
     items: [
+      {
+        label: "Product catalogue",
+        to: "/management/products",
+        icon: Package,
+        category: "Catalogue",
+        companies: ["cana_paints", "cana_group"],
+        departments: ["sales", "management"],
+      },
       {
         label: "Customers",
         to: "/management/customers",
@@ -249,7 +226,13 @@ const groups: Group[] = [
         to: "/management/sales/fulfilment",
         icon: Truck,
         category: "Sales operations",
-        departments: ["sales", "customer_service", "production", "warehouse", "management"],
+        departments: [
+          "sales",
+          "customer_service",
+          "production",
+          "warehouse",
+          "management",
+        ],
       },
       {
         label: "Proforma builder",
@@ -265,12 +248,53 @@ const groups: Group[] = [
         category: "Billing & documents",
         departments: ["sales", "finance", "management"],
       },
+    ],
+  },
+  {
+    label: "Finance & reports",
+    icon: ReceiptText,
+    shortcutTo: "/management/general-report",
+    items: [
       {
-        label: "Sales & production report",
+        label: "Supplier payments",
+        to: "/management/supplier-payments",
+        icon: Banknote,
+        category: "Payables & expenses",
+        departments: ["procurement", "finance", "management"],
+      },
+      {
+        label: "Expenses",
+        to: "/management/expenses",
+        icon: ClipboardList,
+        category: "Payables & expenses",
+        departments: ["finance", "management"],
+      },
+      {
+        label: "General activity report",
+        to: "/management/general-report",
+        icon: FileBarChart,
+        category: "Reports",
+        departments: ["finance", "management"],
+      },
+      {
+        label: "Profit & loss",
         to: "/management/reports",
         icon: FileBarChart,
-        category: "Review",
-        departments: ["sales", "finance", "marketing", "production", "management"],
+        category: "Reports",
+        departments: [
+          "sales",
+          "finance",
+          "marketing",
+          "production",
+          "management",
+        ],
+      },
+      {
+        label: "Materials & payments report",
+        to: "/management/procurement-report",
+        icon: FileBarChart,
+        category: "Reports",
+        departments: ["procurement", "finance", "management"],
       },
     ],
   },
@@ -296,7 +320,12 @@ const groups: Group[] = [
     label: "Sites & field work",
     icon: MapPinned,
     items: [
-      { label: "Site management", to: "/management/sites", icon: MapPinned, departments: ["sales", "customer_service", "marketing", "management"] },
+      {
+        label: "Site management",
+        to: "/management/sites",
+        icon: MapPinned,
+        departments: ["sales", "customer_service", "marketing", "management"],
+      },
     ],
   },
   {
@@ -304,10 +333,31 @@ const groups: Group[] = [
     icon: ShieldCheck,
     companies: ["cana_paints", "cana_group"],
     items: [
-      { label: "Records overview", to: "/management/compliance", icon: ShieldCheck, end: true, departments: ["production", "management", "warehouse"] },
-      { label: "Daily cleaning register", to: "/management/compliance/cleaning", icon: ClipboardCheck, departments: ["production", "management", "warehouse"] },
-      { label: "Maintenance register", to: "/management/compliance/maintenance", icon: Wrench, departments: ["production", "management"] },
-      { label: "Safety & HSE register", to: "/management/compliance/safety", icon: HardHat, departments: ["production", "management", "warehouse"] },
+      {
+        label: "Records overview",
+        to: "/management/compliance",
+        icon: ShieldCheck,
+        end: true,
+        departments: ["production", "management", "warehouse"],
+      },
+      {
+        label: "Daily cleaning register",
+        to: "/management/compliance/cleaning",
+        icon: ClipboardCheck,
+        departments: ["production", "management", "warehouse"],
+      },
+      {
+        label: "Maintenance register",
+        to: "/management/compliance/maintenance",
+        icon: Wrench,
+        departments: ["production", "management"],
+      },
+      {
+        label: "Safety & HSE register",
+        to: "/management/compliance/safety",
+        icon: HardHat,
+        departments: ["production", "management", "warehouse"],
+      },
     ],
   },
 ];
@@ -334,13 +384,14 @@ export default function ManagementSidebar({
         )
         .map((group) => ({
           ...group,
-          items: group.items.filter(
-            (item) =>
-              item.roles
-                ? item.roles.includes(user?.role || "")
-                : isAdmin ||
-                  ((!item.companies || item.companies.includes(user?.company || "")) &&
-                    (!item.departments || item.departments.includes(user?.department || ""))),
+          items: group.items.filter((item) =>
+            item.roles
+              ? item.roles.includes(user?.role || "")
+              : isAdmin ||
+                ((!item.companies ||
+                  item.companies.includes(user?.company || "")) &&
+                  (!item.departments ||
+                    item.departments.includes(user?.department || ""))),
           ),
         }))
         .filter((group) => group.items.length > 0),
@@ -448,10 +499,17 @@ export default function ManagementSidebar({
                 <div className="ml-5 mt-1 space-y-1 border-l border-gray-200 pl-3">
                   {group.items.map((item, index) => {
                     const ChildIcon = item.icon;
-                    const showCategory = Boolean(item.category) && (index === 0 || group.items[index - 1]?.category !== item.category);
+                    const showCategory =
+                      Boolean(item.category) &&
+                      (index === 0 ||
+                        group.items[index - 1]?.category !== item.category);
                     return (
                       <div key={item.to}>
-                        {showCategory && <p className="px-3 pb-1 pt-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">{item.category}</p>}
+                        {showCategory && (
+                          <p className="px-3 pb-1 pt-2 text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                            {item.category}
+                          </p>
+                        )}
                         <NavLink
                           to={item.to}
                           end={item.end}
@@ -471,11 +529,15 @@ export default function ManagementSidebar({
           );
         })}
       </nav>
-      <footer className={`border-t border-slate-200 px-3 py-4 ${sidebarOpen ? "" : "text-center"}`}>
+      <footer
+        className={`border-t border-slate-200 px-3 py-4 ${sidebarOpen ? "" : "text-center"}`}
+      >
         <NavLink
           to="/management/profile"
           title={!sidebarOpen ? "My profile & settings" : undefined}
-          className={({ isActive }) => `mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${isActive ? "bg-red-600 text-white" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`}
+          className={({ isActive }) =>
+            `mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${isActive ? "bg-red-600 text-white" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`
+          }
         >
           <Settings size={19} />
           {sidebarOpen && "My profile & settings"}

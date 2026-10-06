@@ -14,6 +14,8 @@ import Inventory from "../../inventory/inventory.model";
 import InventoryTransaction from "../../inventory/inventoryTransaction.model";
 import RawMaterial from "../../raw-materials/rawMaterial.model";
 import RawMaterialLot from "../../raw-materials/rawMaterialLot.model";
+import Formula from "../../formula/formula.model";
+import { createNewFormulaVersion } from "../../formula/formula.service";
 
 // =====================================================
 // TYPES
@@ -26,6 +28,11 @@ interface CreateMaterialConsumptionInput {
 }
 
 interface MaterialConsumptionItemUpdate {
+  /**
+   * Batch-specific planned quantity. This is the editable recipe quantity
+   * before stock is issued; it never changes the master product formula.
+   */
+  standardQuantity?: number;
   actualQuantity?: number;
   wasteQuantity?: number;
   lotNumber?: string;
@@ -67,8 +74,7 @@ interface CompleteMaterialConsumptionInput {
   notes?: string;
 }
 
-type MaterialConsumptionItemData =
-  IMaterialConsumptionItem;
+type MaterialConsumptionItemData = IMaterialConsumptionItem;
 
 // =====================================================
 // CONSTANTS
@@ -81,7 +87,7 @@ const QUANTITY_TOLERANCE = 0.000001;
 // =====================================================
 
 const toObjectId = (
-  id: string | mongoose.Types.ObjectId
+  id: string | mongoose.Types.ObjectId,
 ): mongoose.Types.ObjectId => {
   if (id instanceof mongoose.Types.ObjectId) {
     return id;
@@ -98,25 +104,17 @@ const toObjectId = (
 // NUMBER
 // =====================================================
 
-const toNumber = (
-  value: unknown,
-  fallback = 0
-): number => {
+const toNumber = (value: unknown, fallback = 0): number => {
   const number = Number(value);
 
-  return Number.isFinite(number)
-    ? number
-    : fallback;
+  return Number.isFinite(number) ? number : fallback;
 };
 
 // =====================================================
 // ROUND
 // =====================================================
 
-const roundNumber = (
-  value: number,
-  decimals = 6
-): number => {
+const roundNumber = (value: number, decimals = 6): number => {
   const factor = Math.pow(10, decimals);
 
   return Math.round(value * factor) / factor;
@@ -124,8 +122,13 @@ const roundNumber = (
 
 const syncRawMaterialInventorySnapshot = async (
   rawMaterialId: mongoose.Types.ObjectId,
-  inventory: { quantity: number; reservedQuantity: number; availableQuantity: number; averageCostPerUnit: number },
-  session: mongoose.ClientSession
+  inventory: {
+    quantity: number;
+    reservedQuantity: number;
+    availableQuantity: number;
+    averageCostPerUnit: number;
+  },
+  session: mongoose.ClientSession,
 ) => {
   await RawMaterial.findByIdAndUpdate(
     rawMaterialId,
@@ -135,7 +138,7 @@ const syncRawMaterialInventorySnapshot = async (
       availableQuantity: inventory.availableQuantity,
       costPerUnit: inventory.averageCostPerUnit,
     },
-    { session }
+    { session },
   );
 };
 
@@ -144,7 +147,7 @@ const issueRawMaterialLot = async (
   lotNumber: string,
   quantity: number,
   unit: string,
-  session: mongoose.ClientSession
+  session: mongoose.ClientSession,
 ) => {
   const normalizedLotNumber = lotNumber.trim().toUpperCase();
   const now = new Date();
@@ -152,12 +155,18 @@ const issueRawMaterialLot = async (
     rawMaterial: rawMaterialId,
     status: "available",
     availableQuantity: { $gt: QUANTITY_TOLERANCE },
-    $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: now } }],
+    $or: [
+      { expiresAt: { $exists: false } },
+      { expiresAt: null },
+      { expiresAt: { $gt: now } },
+    ],
   }).session(session);
 
   if (!normalizedLotNumber) {
     if (availableLotCount > 0) {
-      throw new Error("Select an available receipt lot before issuing a lot-tracked raw material.");
+      throw new Error(
+        "Select an available receipt lot before issuing a lot-tracked raw material.",
+      );
     }
     return;
   }
@@ -168,35 +177,60 @@ const issueRawMaterialLot = async (
   }).session(session);
 
   if (!lot) {
-    throw new Error(`Lot ${normalizedLotNumber} was not found for this raw material.`);
+    throw new Error(
+      `Lot ${normalizedLotNumber} was not found for this raw material.`,
+    );
   }
 
   if (lot.status !== "available") {
-    throw new Error(`Lot ${normalizedLotNumber} is ${lot.status} and cannot be issued.`);
+    throw new Error(
+      `Lot ${normalizedLotNumber} is ${lot.status} and cannot be issued.`,
+    );
   }
 
   if (lot.expiresAt && lot.expiresAt <= now) {
-    await RawMaterialLot.findByIdAndUpdate(lot._id, { status: "expired" }, { session });
-    throw new Error(`Lot ${normalizedLotNumber} has expired and cannot be issued.`);
+    await RawMaterialLot.findByIdAndUpdate(
+      lot._id,
+      { status: "expired" },
+      { session },
+    );
+    throw new Error(
+      `Lot ${normalizedLotNumber} has expired and cannot be issued.`,
+    );
   }
 
   if (lot.unit.trim().toLowerCase() !== unit.trim().toLowerCase()) {
-    throw new Error(`Lot ${normalizedLotNumber} uses ${lot.unit}, but this consumption uses ${unit}.`);
+    throw new Error(
+      `Lot ${normalizedLotNumber} uses ${lot.unit}, but this consumption uses ${unit}.`,
+    );
   }
 
   if (Number(lot.availableQuantity) + QUANTITY_TOLERANCE < quantity) {
-    throw new Error(`Lot ${normalizedLotNumber} has only ${lot.availableQuantity} ${lot.unit} available.`);
+    throw new Error(
+      `Lot ${normalizedLotNumber} has only ${lot.availableQuantity} ${lot.unit} available.`,
+    );
   }
 
   const remaining = roundNumber(Number(lot.availableQuantity) - quantity);
   const updated = await RawMaterialLot.findOneAndUpdate(
-    { _id: lot._id, status: "available", availableQuantity: { $gte: quantity } },
-    { $inc: { availableQuantity: -quantity }, $set: { status: remaining <= QUANTITY_TOLERANCE ? "consumed" : "available" } },
-    { new: true, session, runValidators: true }
+    {
+      _id: lot._id,
+      status: "available",
+      availableQuantity: { $gte: quantity },
+    },
+    {
+      $inc: { availableQuantity: -quantity },
+      $set: {
+        status: remaining <= QUANTITY_TOLERANCE ? "consumed" : "available",
+      },
+    },
+    { new: true, session, runValidators: true },
   );
 
   if (!updated) {
-    throw new Error(`Lot ${normalizedLotNumber} changed before it could be issued. Please try again.`);
+    throw new Error(
+      `Lot ${normalizedLotNumber} changed before it could be issued. Please try again.`,
+    );
   }
 };
 
@@ -204,23 +238,30 @@ const returnRawMaterialLot = async (
   rawMaterialId: mongoose.Types.ObjectId,
   lotNumber: string,
   quantity: number,
-  session: mongoose.ClientSession
+  session: mongoose.ClientSession,
 ) => {
   const normalizedLotNumber = lotNumber.trim().toUpperCase();
   if (!normalizedLotNumber) return;
 
-  const lot = await RawMaterialLot.findOne({ rawMaterial: rawMaterialId, lotNumber: normalizedLotNumber }).session(session);
+  const lot = await RawMaterialLot.findOne({
+    rawMaterial: rawMaterialId,
+    lotNumber: normalizedLotNumber,
+  }).session(session);
   if (!lot) {
-    throw new Error(`Lot ${normalizedLotNumber} was not found for this raw material return.`);
+    throw new Error(
+      `Lot ${normalizedLotNumber} was not found for this raw material return.`,
+    );
   }
   if (lot.status === "quarantined" || lot.status === "expired") {
-    throw new Error(`Lot ${normalizedLotNumber} is ${lot.status}; it cannot receive returned production material.`);
+    throw new Error(
+      `Lot ${normalizedLotNumber} is ${lot.status}; it cannot receive returned production material.`,
+    );
   }
 
   await RawMaterialLot.findByIdAndUpdate(
     lot._id,
     { $inc: { availableQuantity: quantity }, $set: { status: "available" } },
-    { session, runValidators: true }
+    { session, runValidators: true },
   );
 };
 
@@ -228,9 +269,7 @@ const returnRawMaterialLot = async (
 // ITEMS
 // =====================================================
 
-const getConsumptionItems = (
-  items: unknown
-): IMaterialConsumptionItem[] => {
+const getConsumptionItems = (items: unknown): IMaterialConsumptionItem[] => {
   if (!Array.isArray(items)) {
     return [];
   }
@@ -242,59 +281,45 @@ const getConsumptionItems = (
 // GENERATE CONSUMPTION NUMBER
 // =====================================================
 
-const generateConsumptionNo =
-  async (): Promise<string> => {
-    const year = new Date().getFullYear();
+const generateConsumptionNo = async (): Promise<string> => {
+  const year = new Date().getFullYear();
 
-    const prefix = `MC-${year}-`;
+  const prefix = `MC-${year}-`;
 
-    const latest =
-      await RawMaterialConsumption.findOne({
-        consumptionNo: {
-          $regex: `^${prefix}`,
-        },
-      })
-        .sort({
-          consumptionNo: -1,
-        })
-        .lean();
+  const latest = await RawMaterialConsumption.findOne({
+    consumptionNo: {
+      $regex: `^${prefix}`,
+    },
+  })
+    .sort({
+      consumptionNo: -1,
+    })
+    .lean();
 
-    let nextNumber = 1;
+  let nextNumber = 1;
 
-    if (latest?.consumptionNo) {
-      const currentNumber = Number(
-        latest.consumptionNo.replace(
-          prefix,
-          ""
-        )
-      );
+  if (latest?.consumptionNo) {
+    const currentNumber = Number(latest.consumptionNo.replace(prefix, ""));
 
-      if (Number.isFinite(currentNumber)) {
-        nextNumber = currentNumber + 1;
-      }
+    if (Number.isFinite(currentNumber)) {
+      nextNumber = currentNumber + 1;
     }
+  }
 
-    return `${prefix}${String(nextNumber).padStart(4, "0")}`;
-  };
+  return `${prefix}${String(nextNumber).padStart(4, "0")}`;
+};
 
 // =====================================================
 // VALIDATE NON NEGATIVE
 // =====================================================
 
-const validateNonNegativeQuantity = (
-  name: string,
-  value: number
-) => {
+const validateNonNegativeQuantity = (name: string, value: number) => {
   if (!Number.isFinite(value)) {
-    throw new Error(
-      `${name} must be a valid number.`
-    );
+    throw new Error(`${name} must be a valid number.`);
   }
 
   if (value < 0) {
-    throw new Error(
-      `${name} cannot be negative.`
-    );
+    throw new Error(`${name} cannot be negative.`);
   }
 };
 
@@ -302,20 +327,13 @@ const validateNonNegativeQuantity = (
 // VALIDATE POSITIVE
 // =====================================================
 
-const validatePositiveQuantity = (
-  name: string,
-  value: number
-) => {
+const validatePositiveQuantity = (name: string, value: number) => {
   if (!Number.isFinite(value)) {
-    throw new Error(
-      `${name} must be a valid number.`
-    );
+    throw new Error(`${name} must be a valid number.`);
   }
 
   if (value <= 0) {
-    throw new Error(
-      `${name} must be greater than zero.`
-    );
+    throw new Error(`${name} must be greater than zero.`);
   }
 };
 
@@ -325,71 +343,46 @@ const validatePositiveQuantity = (
 
 const validateReconciliation = (
   item: MaterialConsumptionItemData,
-  requireComplete = false
+  requireComplete = false,
 ) => {
-  const issued = roundNumber(
-    toNumber(item.issuedQuantity)
-  );
+  const issued = roundNumber(toNumber(item.issuedQuantity));
 
-  const actual = roundNumber(
-    toNumber(item.actualQuantity)
-  );
+  const actual = roundNumber(toNumber(item.actualQuantity));
 
-  const waste = roundNumber(
-    toNumber(item.wasteQuantity)
-  );
+  const waste = roundNumber(toNumber(item.wasteQuantity));
 
-  const returned = roundNumber(
-    toNumber(item.returnQuantity)
-  );
+  const returned = roundNumber(toNumber(item.returnQuantity));
 
   validateNonNegativeQuantity(
     `${item.rawMaterialName} issued quantity`,
-    issued
+    issued,
   );
 
   validateNonNegativeQuantity(
     `${item.rawMaterialName} actual quantity`,
-    actual
+    actual,
   );
 
-  validateNonNegativeQuantity(
-    `${item.rawMaterialName} waste quantity`,
-    waste
-  );
+  validateNonNegativeQuantity(`${item.rawMaterialName} waste quantity`, waste);
 
   validateNonNegativeQuantity(
     `${item.rawMaterialName} return quantity`,
-    returned
+    returned,
   );
 
-  const accounted = roundNumber(
-    actual +
-      waste +
-      returned
-  );
+  const accounted = roundNumber(actual + waste + returned);
 
-  const remaining = roundNumber(
-    issued -
-      accounted
-  );
+  const remaining = roundNumber(issued - accounted);
 
-  if (
-    accounted >
-    issued + QUANTITY_TOLERANCE
-  ) {
+  if (accounted > issued + QUANTITY_TOLERANCE) {
     throw new Error(
-      `${item.rawMaterialName}: Actual (${actual}) + Waste (${waste}) + Return (${returned}) cannot exceed Issued (${issued}).`
+      `${item.rawMaterialName}: Actual (${actual}) + Waste (${waste}) + Return (${returned}) cannot exceed Issued (${issued}).`,
     );
   }
 
-  if (
-    requireComplete &&
-    Math.abs(remaining) >
-      QUANTITY_TOLERANCE
-  ) {
+  if (requireComplete && Math.abs(remaining) > QUANTITY_TOLERANCE) {
     throw new Error(
-      `${item.rawMaterialName}: ${remaining} ${item.unit} is still unaccounted for.`
+      `${item.rawMaterialName}: ${remaining} ${item.unit} is still unaccounted for.`,
     );
   }
 
@@ -408,78 +401,49 @@ const validateReconciliation = (
 // =====================================================
 
 const calculateLine = (
-  item: MaterialConsumptionItemData
+  item: MaterialConsumptionItemData,
 ): MaterialConsumptionItemData => {
-  const standard = roundNumber(
-    toNumber(item.standardQuantity)
-  );
+  const standard = roundNumber(toNumber(item.standardQuantity));
 
-  const issued = roundNumber(
-    toNumber(item.issuedQuantity)
-  );
+  const issued = roundNumber(toNumber(item.issuedQuantity));
 
-  const actual = roundNumber(
-    toNumber(item.actualQuantity)
-  );
+  const actual = roundNumber(toNumber(item.actualQuantity));
 
-  const waste = roundNumber(
-    toNumber(item.wasteQuantity)
-  );
+  const waste = roundNumber(toNumber(item.wasteQuantity));
 
-  const returned = roundNumber(
-    toNumber(item.returnQuantity)
-  );
+  const returned = roundNumber(toNumber(item.returnQuantity));
 
-  const varianceQuantity =
-    roundNumber(
-      actual - standard
-    );
+  const varianceQuantity = roundNumber(actual - standard);
 
   const variancePercentage =
-    standard > 0
-      ? roundNumber(
-          (varianceQuantity / standard) *
-            100
-        )
-      : 0;
+    standard > 0 ? roundNumber((varianceQuantity / standard) * 100) : 0;
 
   return {
-    rawMaterial:
-      item.rawMaterial,
+    rawMaterial: item.rawMaterial,
 
-    rawMaterialName:
-      item.rawMaterialName,
+    rawMaterialName: item.rawMaterialName,
 
-    rawMaterialCode:
-      item.rawMaterialCode,
+    rawMaterialCode: item.rawMaterialCode,
 
-    unit:
-      item.unit,
+    unit: item.unit,
 
-    standardQuantity:
-      standard,
+    standardQuantity: standard,
 
-    issuedQuantity:
-      issued,
+    issuedQuantity: issued,
 
-    actualQuantity:
-      actual,
+    actualQuantity: actual,
 
-    wasteQuantity:
-      waste,
+    wasteQuantity: waste,
 
-    returnQuantity:
-      returned,
+    returnQuantity: returned,
 
     varianceQuantity,
 
     variancePercentage,
 
-    lotNumber:
-      item.lotNumber?.trim() ?? "",
+    lotNumber: item.lotNumber?.trim() ?? "",
 
-    notes:
-      item.notes?.trim() ?? "",
+    notes: item.notes?.trim() ?? "",
   };
 };
 
@@ -487,28 +451,20 @@ const calculateLine = (
 // CALCULATE TOTALS
 // =====================================================
 
-const calculateTotals = (
-  items: MaterialConsumptionItemData[]
-) => {
+const calculateTotals = (items: MaterialConsumptionItemData[]) => {
   const totals = items.reduce(
     (acc, item) => {
-      acc.totalStandardQuantity +=
-        toNumber(item.standardQuantity);
+      acc.totalStandardQuantity += toNumber(item.standardQuantity);
 
-      acc.totalIssuedQuantity +=
-        toNumber(item.issuedQuantity);
+      acc.totalIssuedQuantity += toNumber(item.issuedQuantity);
 
-      acc.totalActualQuantity +=
-        toNumber(item.actualQuantity);
+      acc.totalActualQuantity += toNumber(item.actualQuantity);
 
-      acc.totalWasteQuantity +=
-        toNumber(item.wasteQuantity);
+      acc.totalWasteQuantity += toNumber(item.wasteQuantity);
 
-      acc.totalReturnQuantity +=
-        toNumber(item.returnQuantity);
+      acc.totalReturnQuantity += toNumber(item.returnQuantity);
 
-      acc.totalVarianceQuantity +=
-        toNumber(item.varianceQuantity);
+      acc.totalVarianceQuantity += toNumber(item.varianceQuantity);
 
       return acc;
     },
@@ -519,39 +475,21 @@ const calculateTotals = (
       totalWasteQuantity: 0,
       totalReturnQuantity: 0,
       totalVarianceQuantity: 0,
-    }
+    },
   );
 
   return {
-    totalStandardQuantity:
-      roundNumber(
-        totals.totalStandardQuantity
-      ),
+    totalStandardQuantity: roundNumber(totals.totalStandardQuantity),
 
-    totalIssuedQuantity:
-      roundNumber(
-        totals.totalIssuedQuantity
-      ),
+    totalIssuedQuantity: roundNumber(totals.totalIssuedQuantity),
 
-    totalActualQuantity:
-      roundNumber(
-        totals.totalActualQuantity
-      ),
+    totalActualQuantity: roundNumber(totals.totalActualQuantity),
 
-    totalWasteQuantity:
-      roundNumber(
-        totals.totalWasteQuantity
-      ),
+    totalWasteQuantity: roundNumber(totals.totalWasteQuantity),
 
-    totalReturnQuantity:
-      roundNumber(
-        totals.totalReturnQuantity
-      ),
+    totalReturnQuantity: roundNumber(totals.totalReturnQuantity),
 
-    totalVarianceQuantity:
-      roundNumber(
-        totals.totalVarianceQuantity
-      ),
+    totalVarianceQuantity: roundNumber(totals.totalVarianceQuantity),
   };
 };
 
@@ -574,126 +512,88 @@ const buildConsumptionItems = async (
     notes?: string;
   }>,
   orderQuantity: number,
-  batchPlannedQuantity: number
+  batchPlannedQuantity: number,
 ): Promise<MaterialConsumptionItemData[]> => {
-  const productionOrderQuantity =
-    toNumber(orderQuantity);
+  const productionOrderQuantity = toNumber(orderQuantity);
 
-  const batchQuantity =
-    toNumber(batchPlannedQuantity);
+  const batchQuantity = toNumber(batchPlannedQuantity);
 
-  if (
-    productionOrderQuantity <= 0
-  ) {
+  if (productionOrderQuantity <= 0) {
+    throw new Error("Production Order quantity must be greater than zero.");
+  }
+
+  if (batchQuantity <= 0) {
     throw new Error(
-      "Production Order quantity must be greater than zero."
+      "Production Batch planned quantity must be greater than zero.",
     );
   }
 
-  if (
-    batchQuantity <= 0
-  ) {
+  if (!orderItems?.length) {
+    throw new Error("Production Order has no raw material requirements.");
+  }
+
+  if (batchQuantity > productionOrderQuantity) {
     throw new Error(
-      "Production Batch planned quantity must be greater than zero."
+      "Production Batch planned quantity cannot exceed Production Order quantity.",
     );
   }
 
-  if (
-    !orderItems?.length
-  ) {
-    throw new Error(
-      "Production Order has no raw material requirements."
-    );
-  }
-
-  if (
-    batchQuantity >
-    productionOrderQuantity
-  ) {
-    throw new Error(
-      "Production Batch planned quantity cannot exceed Production Order quantity."
-    );
-  }
-
-  const scalingFactor =
-    batchQuantity /
-    productionOrderQuantity;
+  const scalingFactor = batchQuantity / productionOrderQuantity;
 
   const rawMaterials = await RawMaterial.find({
     _id: { $in: orderItems.map((item) => item.rawMaterial) },
-  }).select("_id unit").lean();
+  })
+    .select("_id unit")
+    .lean();
   const unitByMaterial = new Map(
     rawMaterials.map((material) => [material._id.toString(), material.unit]),
   );
 
-  return orderItems.map(
-    (item, index) => {
-      if (!item.rawMaterial) {
-        throw new Error(
-          `Raw material is missing at item ${index + 1}.`
-        );
-      }
-
-      const requiredQuantity =
-        toNumber(
-          item.requiredQuantity
-        );
-
-      if (
-        requiredQuantity < 0
-      ) {
-        throw new Error(
-          `${item.rawMaterialName}: required quantity cannot be negative.`
-        );
-      }
-
-      const standardQuantity =
-        roundNumber(
-          requiredQuantity *
-            scalingFactor
-        );
-
-      return {
-        rawMaterial:
-          item.rawMaterial,
-
-        rawMaterialName:
-          item.rawMaterialName,
-
-        rawMaterialCode:
-          item.rawMaterialCode,
-
-        // Inventory is the unit authority. This avoids drafting a kg issue for
-        // a liquid material whose stock is correctly controlled in litres.
-        unit:
-          unitByMaterial.get(item.rawMaterial.toString()) ?? item.unit,
-
-        standardQuantity,
-
-        issuedQuantity: 0,
-
-        actualQuantity: 0,
-
-        wasteQuantity: 0,
-
-        returnQuantity: 0,
-
-        varianceQuantity:
-          roundNumber(
-            -standardQuantity
-          ),
-
-        variancePercentage:
-          standardQuantity > 0
-            ? -100
-            : 0,
-
-        lotNumber: "",
-
-        notes: "",
-      };
+  return orderItems.map((item, index) => {
+    if (!item.rawMaterial) {
+      throw new Error(`Raw material is missing at item ${index + 1}.`);
     }
-  );
+
+    const requiredQuantity = toNumber(item.requiredQuantity);
+
+    if (requiredQuantity < 0) {
+      throw new Error(
+        `${item.rawMaterialName}: required quantity cannot be negative.`,
+      );
+    }
+
+    const standardQuantity = roundNumber(requiredQuantity * scalingFactor);
+
+    return {
+      rawMaterial: item.rawMaterial,
+
+      rawMaterialName: item.rawMaterialName,
+
+      rawMaterialCode: item.rawMaterialCode,
+
+      // Inventory is the unit authority. This avoids drafting a kg issue for
+      // a liquid material whose stock is correctly controlled in litres.
+      unit: unitByMaterial.get(item.rawMaterial.toString()) ?? item.unit,
+
+      standardQuantity,
+
+      issuedQuantity: 0,
+
+      actualQuantity: 0,
+
+      wasteQuantity: 0,
+
+      returnQuantity: 0,
+
+      varianceQuantity: roundNumber(-standardQuantity),
+
+      variancePercentage: standardQuantity > 0 ? -100 : 0,
+
+      lotNumber: "",
+
+      notes: "",
+    };
+  });
 };
 
 // =====================================================
@@ -701,33 +601,22 @@ const buildConsumptionItems = async (
 // =====================================================
 
 const determineConsumptionStatus = (
-  items: MaterialConsumptionItemData[]
+  items: MaterialConsumptionItemData[],
 ): MaterialConsumptionStatus => {
-  const hasIssued =
-    items.some(
-      (item) =>
-        toNumber(
-          item.issuedQuantity
-        ) > QUANTITY_TOLERANCE
-    );
+  const hasIssued = items.some(
+    (item) => toNumber(item.issuedQuantity) > QUANTITY_TOLERANCE,
+  );
 
   if (!hasIssued) {
     return "Draft";
   }
 
-  const hasActivity =
-    items.some(
-      (item) =>
-        toNumber(
-          item.actualQuantity
-        ) > QUANTITY_TOLERANCE ||
-        toNumber(
-          item.wasteQuantity
-        ) > QUANTITY_TOLERANCE ||
-        toNumber(
-          item.returnQuantity
-        ) > QUANTITY_TOLERANCE
-    );
+  const hasActivity = items.some(
+    (item) =>
+      toNumber(item.actualQuantity) > QUANTITY_TOLERANCE ||
+      toNumber(item.wasteQuantity) > QUANTITY_TOLERANCE ||
+      toNumber(item.returnQuantity) > QUANTITY_TOLERANCE,
+  );
 
   if (!hasActivity) {
     return "Issued";
@@ -740,30 +629,19 @@ const determineConsumptionStatus = (
 // POPULATE HELPER
 // =====================================================
 
-const populateConsumption = (
-  id: mongoose.Types.ObjectId
-) => {
+const populateConsumption = (id: mongoose.Types.ObjectId) => {
   return RawMaterialConsumption.findById(id)
     .populate(
       "productionOrder",
-      "productionOrderNo quantity unit status product productName productCode formula formulaName formulaCode formulaVersion"
+      "productionOrderNo quantity unit status product productName productCode formula formulaName formulaCode formulaVersion",
     )
     .populate(
       "productionBatch",
-      "batchNo batchNumber plannedQuantity actualQuantity unit status product productName productCode formula formulaName formulaCode formulaVersion"
+      "batchNo batchNumber plannedQuantity actualQuantity unit status product productName productCode formula formulaName formulaCode formulaVersion",
     )
-    .populate(
-      "product",
-      "name code"
-    )
-    .populate(
-      "formula",
-      "name code version"
-    )
-    .populate(
-      "items.rawMaterial",
-      "name code unit"
-    )
+    .populate("product", "name code")
+    .populate("formula", "name code version")
+    .populate("items.rawMaterial", "name code unit")
     .lean();
 };
 
@@ -771,998 +649,651 @@ const populateConsumption = (
 // CREATE MATERIAL CONSUMPTION
 // =====================================================
 
-export const createMaterialConsumption =
-  async (
-    input: CreateMaterialConsumptionInput
-  ) => {
-    if (
-      !input.productionOrder ||
-      !input.productionBatch
-    ) {
-      throw new Error(
-        "Production Order and Production Batch are required."
-      );
-    }
+export const createMaterialConsumption = async (
+  input: CreateMaterialConsumptionInput,
+) => {
+  if (!input.productionOrder || !input.productionBatch) {
+    throw new Error("Production Order and Production Batch are required.");
+  }
 
-    const productionOrderId =
-      toObjectId(
-        input.productionOrder
-      );
+  const productionOrderId = toObjectId(input.productionOrder);
 
-    const productionBatchId =
-      toObjectId(
-        input.productionBatch
-      );
+  const productionBatchId = toObjectId(input.productionBatch);
 
-    const order =
-      await ProductionOrder.findById(
-        productionOrderId
-      );
+  const order = await ProductionOrder.findById(productionOrderId);
 
-    if (!order) {
-      throw new Error(
-        "Production Order not found."
-      );
-    }
+  if (!order) {
+    throw new Error("Production Order not found.");
+  }
 
-    const batch =
-      await ProductionBatch.findById(
-        productionBatchId
-      );
+  const batch = await ProductionBatch.findById(productionBatchId);
 
-    if (!batch) {
-      throw new Error(
-        "Production Batch not found."
-      );
-    }
+  if (!batch) {
+    throw new Error("Production Batch not found.");
+  }
 
-    // =================================================
-    // OWNERSHIP
-    // =================================================
+  // =================================================
+  // OWNERSHIP
+  // =================================================
 
-    if (
-      batch.productionOrder.toString() !==
-      order._id.toString()
-    ) {
-      throw new Error(
-        "Production Batch does not belong to the selected Production Order."
-      );
-    }
-
-    // =================================================
-    // ONLY IN PROGRESS
-    // =================================================
-
-    if (
-      batch.status !==
-      "In Progress"
-    ) {
-      throw new Error(
-        `Material Consumption can only be created for an In Progress Production Batch. Current status: ${batch.status}.`
-      );
-    }
-
-    // =================================================
-    // QUANTITIES
-    // =================================================
-
-    const orderQuantity =
-      toNumber(
-        order.quantity
-      );
-
-    const batchPlannedQuantity =
-      toNumber(
-        batch.plannedQuantity
-      );
-
-    if (
-      orderQuantity <= 0
-    ) {
-      throw new Error(
-        "Production Order quantity must be greater than zero."
-      );
-    }
-
-    if (
-      batchPlannedQuantity <= 0
-    ) {
-      throw new Error(
-        "Production Batch planned quantity must be greater than zero."
-      );
-    }
-
-    if (
-      batchPlannedQuantity >
-      orderQuantity
-    ) {
-      throw new Error(
-        "Production Batch planned quantity cannot exceed Production Order quantity."
-      );
-    }
-
-    // =================================================
-    // EXISTING CONSUMPTION
-    // =================================================
-
-    const existing =
-      await RawMaterialConsumption.findOne({
-        productionBatch:
-          productionBatchId,
-
-        status: {
-          $ne: "Cancelled",
-        },
-      });
-
-    if (existing) {
-      throw new Error(
-        "Material Consumption already exists for this Production Batch."
-      );
-    }
-
-    // =================================================
-    // BUILD ITEMS
-    // =================================================
-
-    const items =
-      await buildConsumptionItems(
-        order.items,
-        orderQuantity,
-        batchPlannedQuantity
-      );
-
-    // =================================================
-    // NUMBER
-    // =================================================
-
-    const consumptionNo =
-      await generateConsumptionNo();
-
-    // =================================================
-    // TOTALS
-    // =================================================
-
-    const totals =
-      calculateTotals(items);
-
-    // =================================================
-    // CREATE
-    // =================================================
-
-    const consumption =
-      new RawMaterialConsumption({
-        consumptionNo,
-
-        productionOrder:
-          order._id,
-
-        productionBatch:
-          batch._id,
-
-        product:
-          batch.product,
-
-        productName:
-          batch.productName,
-
-        productCode:
-          batch.productCode,
-
-        formula:
-          batch.formula,
-
-        formulaName:
-          batch.formulaName,
-
-        formulaVersion:
-          String(
-            batch.formulaVersion ??
-              ""
-          ),
-
-        batchNumber:
-          batch.batchNumber ??
-          batch.batchNo,
-
-        status:
-          "Draft",
-
-        items,
-
-        ...totals,
-
-        notes:
-          input.notes?.trim() ??
-          "",
-      });
-
-    await consumption.save();
-
-    return populateConsumption(
-      consumption._id
+  if (batch.productionOrder.toString() !== order._id.toString()) {
+    throw new Error(
+      "Production Batch does not belong to the selected Production Order.",
     );
-  };
+  }
+
+  // =================================================
+  // ONLY IN PROGRESS
+  // =================================================
+
+  if (batch.status !== "In Progress") {
+    throw new Error(
+      `Material Consumption can only be created for an In Progress Production Batch. Current status: ${batch.status}.`,
+    );
+  }
+
+  // =================================================
+  // QUANTITIES
+  // =================================================
+
+  const orderQuantity = toNumber(order.quantity);
+
+  const batchPlannedQuantity = toNumber(batch.plannedQuantity);
+
+  if (orderQuantity <= 0) {
+    throw new Error("Production Order quantity must be greater than zero.");
+  }
+
+  if (batchPlannedQuantity <= 0) {
+    throw new Error(
+      "Production Batch planned quantity must be greater than zero.",
+    );
+  }
+
+  if (batchPlannedQuantity > orderQuantity) {
+    throw new Error(
+      "Production Batch planned quantity cannot exceed Production Order quantity.",
+    );
+  }
+
+  // =================================================
+  // EXISTING CONSUMPTION
+  // =================================================
+
+  const existing = await RawMaterialConsumption.findOne({
+    productionBatch: productionBatchId,
+
+    status: {
+      $ne: "Cancelled",
+    },
+  });
+
+  if (existing) {
+    throw new Error(
+      "Material Consumption already exists for this Production Batch.",
+    );
+  }
+
+  // =================================================
+  // BUILD ITEMS
+  // =================================================
+
+  const items = await buildConsumptionItems(
+    order.items,
+    orderQuantity,
+    batchPlannedQuantity,
+  );
+
+  // =================================================
+  // NUMBER
+  // =================================================
+
+  const consumptionNo = await generateConsumptionNo();
+
+  // =================================================
+  // TOTALS
+  // =================================================
+
+  const totals = calculateTotals(items);
+
+  // =================================================
+  // CREATE
+  // =================================================
+
+  const consumption = new RawMaterialConsumption({
+    consumptionNo,
+
+    productionOrder: order._id,
+
+    productionBatch: batch._id,
+
+    product: batch.product,
+
+    productName: batch.productName,
+
+    productCode: batch.productCode,
+
+    formula: batch.formula,
+
+    formulaName: batch.formulaName,
+
+    formulaVersion: String(batch.formulaVersion ?? ""),
+
+    batchNumber: batch.batchNumber ?? batch.batchNo,
+
+    status: "Draft",
+
+    items,
+
+    ...totals,
+
+    notes: input.notes?.trim() ?? "",
+  });
+
+  await consumption.save();
+
+  return populateConsumption(consumption._id);
+};
 
 // =====================================================
 // ISSUE MATERIALS
 // =====================================================
 
-export const issueMaterialConsumption =
-  async (
-    id: string,
-    input: IssueMaterialConsumptionInput = {}
-  ) => {
-    const session =
-      await mongoose.startSession();
+export const issueMaterialConsumption = async (
+  id: string,
+  input: IssueMaterialConsumptionInput = {},
+) => {
+  const session = await mongoose.startSession();
 
-    try {
-      let result:
-        | unknown
-        | null = null;
+  try {
+    let result: unknown | null = null;
 
-      await session.withTransaction(
-        async () => {
-          const consumption =
-            await RawMaterialConsumption.findById(
-              toObjectId(id)
-            ).session(session);
+    await session.withTransaction(async () => {
+      const consumption = await RawMaterialConsumption.findById(
+        toObjectId(id),
+      ).session(session);
 
-          if (!consumption) {
+      if (!consumption) {
+        throw new Error("Material Consumption not found.");
+      }
+
+      if (consumption.status !== "Draft") {
+        throw new Error(
+          `Only Draft Material Consumption can be issued. Current status: ${consumption.status}.`,
+        );
+      }
+
+      const batch = await ProductionBatch.findById(
+        consumption.productionBatch,
+      ).session(session);
+
+      if (!batch) {
+        throw new Error("Production Batch not found.");
+      }
+
+      if (batch.status !== "In Progress") {
+        throw new Error(
+          `Materials can only be issued for an In Progress Production Batch. Current status: ${batch.status}.`,
+        );
+      }
+
+      const order = await ProductionOrder.findById(
+        consumption.productionOrder,
+      ).session(session);
+
+      if (!order) {
+        throw new Error("Production Order not found.");
+      }
+
+      if (batch.productionOrder.toString() !== order._id.toString()) {
+        throw new Error(
+          "Production Batch does not belong to the Production Order.",
+        );
+      }
+
+      const existingItems = getConsumptionItems(consumption.items);
+
+      if (existingItems.length === 0) {
+        throw new Error("Material Consumption has no raw materials to issue.");
+      }
+
+      // =================================================
+      // REQUEST MAP
+      // =================================================
+
+      const issueMap = new Map<string, IssueMaterialConsumptionItemInput>();
+
+      if (input.items) {
+        for (const requestedItem of input.items) {
+          if (!requestedItem.rawMaterial) {
+            throw new Error("Each issue item must contain a rawMaterial.");
+          }
+
+          const rawMaterialId = toObjectId(
+            requestedItem.rawMaterial,
+          ).toString();
+
+          if (issueMap.has(rawMaterialId)) {
             throw new Error(
-              "Material Consumption not found."
+              `Duplicate raw material in issue request: ${rawMaterialId}.`,
             );
           }
 
-          if (
-            consumption.status !==
-            "Draft"
-          ) {
-            throw new Error(
-              `Only Draft Material Consumption can be issued. Current status: ${consumption.status}.`
-            );
-          }
-
-          const batch =
-            await ProductionBatch.findById(
-              consumption.productionBatch
-            ).session(session);
-
-          if (!batch) {
-            throw new Error(
-              "Production Batch not found."
-            );
-          }
-
-          if (
-            batch.status !==
-            "In Progress"
-          ) {
-            throw new Error(
-              `Materials can only be issued for an In Progress Production Batch. Current status: ${batch.status}.`
-            );
-          }
-
-          const order =
-            await ProductionOrder.findById(
-              consumption.productionOrder
-            ).session(session);
-
-          if (!order) {
-            throw new Error(
-              "Production Order not found."
-            );
-          }
-
-          if (
-            batch.productionOrder.toString() !==
-            order._id.toString()
-          ) {
-            throw new Error(
-              "Production Batch does not belong to the Production Order."
-            );
-          }
-
-          const existingItems =
-            getConsumptionItems(
-              consumption.items
-            );
-
-          if (
-            existingItems.length ===
-            0
-          ) {
-            throw new Error(
-              "Material Consumption has no raw materials to issue."
-            );
-          }
-
-          // =================================================
-          // REQUEST MAP
-          // =================================================
-
-          const issueMap =
-            new Map<
-              string,
-              IssueMaterialConsumptionItemInput
-            >();
-
-          if (input.items) {
-            for (
-              const requestedItem of input.items
-            ) {
-              if (
-                !requestedItem.rawMaterial
-              ) {
-                throw new Error(
-                  "Each issue item must contain a rawMaterial."
-                );
-              }
-
-              const rawMaterialId =
-                toObjectId(
-                  requestedItem.rawMaterial
-                ).toString();
-
-              if (
-                issueMap.has(
-                  rawMaterialId
-                )
-              ) {
-                throw new Error(
-                  `Duplicate raw material in issue request: ${rawMaterialId}.`
-                );
-              }
-
-              issueMap.set(
-                rawMaterialId,
-                requestedItem
-              );
-            }
-          }
-
-          // =================================================
-          // VALIDATE UNKNOWN ITEMS
-          // =================================================
-
-          for (
-            const requestedItem of issueMap.values()
-          ) {
-            const exists =
-              existingItems.some(
-                (item) =>
-                  item.rawMaterial.toString() ===
-                  toObjectId(
-                    requestedItem.rawMaterial
-                  ).toString()
-              );
-
-            if (!exists) {
-              throw new Error(
-                `Raw material ${requestedItem.rawMaterial} does not belong to this Material Consumption.`
-              );
-            }
-          }
-
-          // =================================================
-          // PREPARE
-          // =================================================
-
-          const issueItems =
-            existingItems.map(
-              (item) => {
-                const requested =
-                  issueMap.get(
-                    item.rawMaterial.toString()
-                  );
-
-                const requestedQuantity =
-                  requested?.issuedQuantity !==
-                  undefined
-                    ? toNumber(
-                        requested.issuedQuantity
-                      )
-                    : toNumber(
-                        item.standardQuantity
-                      );
-
-                validatePositiveQuantity(
-                  `${item.rawMaterialName} issued quantity`,
-                  requestedQuantity
-                );
-
-                if (
-                  toNumber(
-                    item.issuedQuantity
-                  ) > QUANTITY_TOLERANCE
-                ) {
-                  throw new Error(
-                    `${item.rawMaterialName} has already been issued.`
-                  );
-                }
-
-                return {
-                  item,
-
-                  issuedQuantity:
-                    roundNumber(
-                      requestedQuantity
-                    ),
-
-                  lotNumber:
-                    requested?.lotNumber?.trim() ||
-                    item.lotNumber ||
-                    "",
-
-                  notes:
-                    requested?.notes?.trim() ||
-                    item.notes ||
-                    "",
-                };
-              }
-            );
-
-          // =================================================
-          // INVENTORY
-          // =================================================
-
-          for (
-            const prepared of issueItems
-          ) {
-            const item =
-              prepared.item;
-
-            const quantity =
-              prepared.issuedQuantity;
-
-            const inventory =
-              await Inventory.findOne({
-                rawMaterial:
-                  item.rawMaterial,
-              }).session(session);
-
-            if (!inventory) {
-              throw new Error(
-                `Inventory record not found for ${item.rawMaterialName} (${item.rawMaterialCode}).`
-              );
-            }
-
-            if (
-              inventory.unit
-                .trim()
-                .toLowerCase() !==
-              item.unit
-                .trim()
-                .toLowerCase()
-            ) {
-              throw new Error(
-                `Unit mismatch for ${item.rawMaterialName}: Inventory uses ${inventory.unit}, but Consumption uses ${item.unit}.`
-              );
-            }
-
-            const available =
-              roundNumber(
-                toNumber(
-                  inventory.availableQuantity
-                )
-              );
-
-            if (
-              available <
-              quantity -
-                QUANTITY_TOLERANCE
-            ) {
-              throw new Error(
-                `Insufficient stock for ${item.rawMaterialName}. Required: ${quantity} ${item.unit}, Available: ${available} ${inventory.unit}.`
-              );
-            }
-
-            await issueRawMaterialLot(
-              item.rawMaterial,
-              prepared.lotNumber,
-              quantity,
-              item.unit,
-              session
-            );
-
-            const quantityBefore =
-              available;
-
-            const quantityAfter =
-              roundNumber(
-                available -
-                  quantity
-              );
-
-            const newStatus =
-              quantityAfter <=
-              QUANTITY_TOLERANCE
-                ? "Out of Stock"
-                : quantityAfter <=
-                  toNumber(
-                    inventory.minimumStock
-                  )
-                ? "Low Stock"
-                : "Available";
-
-            const updatedInventory =
-              await Inventory.findOneAndUpdate(
-                {
-                  _id:
-                    inventory._id,
-
-                  availableQuantity: {
-                    $gte:
-                      quantity,
-                  },
-                },
-                {
-                  $inc: {
-                    quantity:
-                      -quantity,
-
-                    availableQuantity:
-                      -quantity,
-                  },
-
-                  $set: {
-                    status:
-                      newStatus,
-
-                    lastTransactionAt:
-                      new Date(),
-                  },
-                },
-                {
-                  new: true,
-                  session,
-                  runValidators:
-                    true,
-                }
-              );
-
-            if (!updatedInventory) {
-              throw new Error(
-                `Inventory changed while issuing ${item.rawMaterialName}. Please retry the operation.`
-              );
-            }
-
-            await syncRawMaterialInventorySnapshot(
-              item.rawMaterial,
-              updatedInventory,
-              session
-            );
-
-            await InventoryTransaction.create(
-              [
-                {
-                  inventory:
-                    inventory._id,
-
-                  rawMaterial:
-                    item.rawMaterial,
-
-                  rawMaterialName:
-                    item.rawMaterialName,
-
-                  rawMaterialCode:
-                    item.rawMaterialCode,
-
-                  type:
-                    "Production Issue",
-
-                  quantity,
-
-                  unit:
-                    item.unit,
-
-                  lotNumber:
-                    prepared.lotNumber ||
-                    undefined,
-
-                  unitCost:
-                    toNumber(
-                      inventory.averageCostPerUnit
-                    ),
-
-                  totalCost:
-                    roundNumber(
-                      quantity *
-                        toNumber(
-                          inventory.averageCostPerUnit
-                        )
-                    ),
-
-                  quantityBefore,
-
-                  quantityAfter,
-
-                  referenceType:
-                    "MaterialConsumption",
-
-                  referenceId:
-                    consumption._id,
-
-                  productionBatch:
-                    consumption.productionBatch,
-
-                  productionOrder:
-                    consumption.productionOrder,
-
-                  materialConsumption:
-                    consumption._id,
-
-                  performedBy:
-                    input.issuedBy
-                      ? toObjectId(
-                          input.issuedBy
-                        )
-                      : undefined,
-
-                  reason:
-                    "Raw material issued for production.",
-
-                  notes:
-                    prepared.notes ||
-                    input.notes?.trim() ||
-                    undefined,
-
-                  transactionDate:
-                    new Date(),
-                },
-              ],
-              {
-                session,
-              }
-            );
-          }
-
-          // =================================================
-          // UPDATE ITEMS
-          // =================================================
-
-          const updatedItems =
-            existingItems.map(
-              (item) => {
-                const prepared =
-                  issueItems.find(
-                    (entry) =>
-                      entry.item.rawMaterial.toString() ===
-                      item.rawMaterial.toString()
-                  );
-
-                if (!prepared) {
-                  throw new Error(
-                    `Could not prepare issue quantity for ${item.rawMaterialName}.`
-                  );
-                }
-
-                return calculateLine({
-                  rawMaterial:
-                    item.rawMaterial,
-
-                  rawMaterialName:
-                    item.rawMaterialName,
-
-                  rawMaterialCode:
-                    item.rawMaterialCode,
-
-                  unit:
-                    item.unit,
-
-                  standardQuantity:
-                    item.standardQuantity,
-
-                  issuedQuantity:
-                    prepared.issuedQuantity,
-
-                  actualQuantity:
-                    0,
-
-                  wasteQuantity:
-                    0,
-
-                  returnQuantity:
-                    0,
-
-                  varianceQuantity:
-                    0,
-
-                  variancePercentage:
-                    0,
-
-                  lotNumber:
-                    prepared.lotNumber,
-
-                  notes:
-                    prepared.notes,
-                });
-              }
-            );
-
-          consumption.items =
-            updatedItems;
-
-          const totals =
-            calculateTotals(
-              updatedItems
-            );
-
-          consumption.totalStandardQuantity =
-            totals.totalStandardQuantity;
-
-          consumption.totalIssuedQuantity =
-            totals.totalIssuedQuantity;
-
-          consumption.totalActualQuantity =
-            totals.totalActualQuantity;
-
-          consumption.totalWasteQuantity =
-            totals.totalWasteQuantity;
-
-          consumption.totalReturnQuantity =
-            totals.totalReturnQuantity;
-
-          consumption.totalVarianceQuantity =
-            totals.totalVarianceQuantity;
-
-          consumption.status =
-            "Issued";
-
-          consumption.issuedAt =
-            new Date();
-
-          if (
-            input.issuedBy
-          ) {
-            consumption.issuedBy =
-              toObjectId(
-                input.issuedBy
-              );
-          }
-
-          if (
-            input.notes !==
-            undefined
-          ) {
-            consumption.notes =
-              input.notes.trim();
-          }
-
-          await consumption.save({
-            session,
-          });
-
-          result =
-            await RawMaterialConsumption.findById(
-              consumption._id
-            )
-              .session(session)
-              .populate(
-                "productionOrder"
-              )
-              .populate(
-                "productionBatch"
-              )
-              .populate(
-                "product"
-              )
-              .populate(
-                "formula"
-              )
-              .populate(
-                "items.rawMaterial"
-              )
-              .lean();
+          issueMap.set(rawMaterialId, requestedItem);
         }
-      );
+      }
 
-      return result;
-    } finally {
-      await session.endSession();
-    }
-  };
+      // =================================================
+      // VALIDATE UNKNOWN ITEMS
+      // =================================================
+
+      for (const requestedItem of issueMap.values()) {
+        const exists = existingItems.some(
+          (item) =>
+            item.rawMaterial.toString() ===
+            toObjectId(requestedItem.rawMaterial).toString(),
+        );
+
+        if (!exists) {
+          throw new Error(
+            `Raw material ${requestedItem.rawMaterial} does not belong to this Material Consumption.`,
+          );
+        }
+      }
+
+      // =================================================
+      // PREPARE
+      // =================================================
+
+      const issueItems = existingItems.map((item) => {
+        const requested = issueMap.get(item.rawMaterial.toString());
+
+        const requestedQuantity =
+          requested?.issuedQuantity !== undefined
+            ? toNumber(requested.issuedQuantity)
+            : toNumber(item.standardQuantity);
+
+        validatePositiveQuantity(
+          `${item.rawMaterialName} issued quantity`,
+          requestedQuantity,
+        );
+
+        if (toNumber(item.issuedQuantity) > QUANTITY_TOLERANCE) {
+          throw new Error(`${item.rawMaterialName} has already been issued.`);
+        }
+
+        return {
+          item,
+
+          issuedQuantity: roundNumber(requestedQuantity),
+
+          lotNumber: requested?.lotNumber?.trim() || item.lotNumber || "",
+
+          notes: requested?.notes?.trim() || item.notes || "",
+        };
+      });
+
+      // =================================================
+      // INVENTORY
+      // =================================================
+
+      for (const prepared of issueItems) {
+        const item = prepared.item;
+
+        const quantity = prepared.issuedQuantity;
+
+        const inventory = await Inventory.findOne({
+          rawMaterial: item.rawMaterial,
+        }).session(session);
+
+        if (!inventory) {
+          throw new Error(
+            `Inventory record not found for ${item.rawMaterialName} (${item.rawMaterialCode}).`,
+          );
+        }
+
+        if (
+          inventory.unit.trim().toLowerCase() !== item.unit.trim().toLowerCase()
+        ) {
+          throw new Error(
+            `Unit mismatch for ${item.rawMaterialName}: Inventory uses ${inventory.unit}, but Consumption uses ${item.unit}.`,
+          );
+        }
+
+        const available = roundNumber(toNumber(inventory.availableQuantity));
+
+        if (available < quantity - QUANTITY_TOLERANCE) {
+          throw new Error(
+            `Insufficient stock for ${item.rawMaterialName}. Required: ${quantity} ${item.unit}, Available: ${available} ${inventory.unit}.`,
+          );
+        }
+
+        await issueRawMaterialLot(
+          item.rawMaterial,
+          prepared.lotNumber,
+          quantity,
+          item.unit,
+          session,
+        );
+
+        const quantityBefore = available;
+
+        const quantityAfter = roundNumber(available - quantity);
+
+        const newStatus =
+          quantityAfter <= QUANTITY_TOLERANCE
+            ? "Out of Stock"
+            : quantityAfter <= toNumber(inventory.minimumStock)
+              ? "Low Stock"
+              : "Available";
+
+        const updatedInventory = await Inventory.findOneAndUpdate(
+          {
+            _id: inventory._id,
+
+            availableQuantity: {
+              $gte: quantity,
+            },
+          },
+          {
+            $inc: {
+              quantity: -quantity,
+
+              availableQuantity: -quantity,
+            },
+
+            $set: {
+              status: newStatus,
+
+              lastTransactionAt: new Date(),
+            },
+          },
+          {
+            new: true,
+            session,
+            runValidators: true,
+          },
+        );
+
+        if (!updatedInventory) {
+          throw new Error(
+            `Inventory changed while issuing ${item.rawMaterialName}. Please retry the operation.`,
+          );
+        }
+
+        await syncRawMaterialInventorySnapshot(
+          item.rawMaterial,
+          updatedInventory,
+          session,
+        );
+
+        await InventoryTransaction.create(
+          [
+            {
+              inventory: inventory._id,
+
+              rawMaterial: item.rawMaterial,
+
+              rawMaterialName: item.rawMaterialName,
+
+              rawMaterialCode: item.rawMaterialCode,
+
+              type: "Production Issue",
+
+              quantity,
+
+              unit: item.unit,
+
+              lotNumber: prepared.lotNumber || undefined,
+
+              unitCost: toNumber(inventory.averageCostPerUnit),
+
+              totalCost: roundNumber(
+                quantity * toNumber(inventory.averageCostPerUnit),
+              ),
+
+              quantityBefore,
+
+              quantityAfter,
+
+              referenceType: "MaterialConsumption",
+
+              referenceId: consumption._id,
+
+              productionBatch: consumption.productionBatch,
+
+              productionOrder: consumption.productionOrder,
+
+              materialConsumption: consumption._id,
+
+              performedBy: input.issuedBy
+                ? toObjectId(input.issuedBy)
+                : undefined,
+
+              reason: "Raw material issued for production.",
+
+              notes: prepared.notes || input.notes?.trim() || undefined,
+
+              transactionDate: new Date(),
+            },
+          ],
+          {
+            session,
+          },
+        );
+      }
+
+      // =================================================
+      // UPDATE ITEMS
+      // =================================================
+
+      const updatedItems = existingItems.map((item) => {
+        const prepared = issueItems.find(
+          (entry) =>
+            entry.item.rawMaterial.toString() === item.rawMaterial.toString(),
+        );
+
+        if (!prepared) {
+          throw new Error(
+            `Could not prepare issue quantity for ${item.rawMaterialName}.`,
+          );
+        }
+
+        return calculateLine({
+          rawMaterial: item.rawMaterial,
+
+          rawMaterialName: item.rawMaterialName,
+
+          rawMaterialCode: item.rawMaterialCode,
+
+          unit: item.unit,
+
+          standardQuantity: item.standardQuantity,
+
+          issuedQuantity: prepared.issuedQuantity,
+
+          actualQuantity: 0,
+
+          wasteQuantity: 0,
+
+          returnQuantity: 0,
+
+          varianceQuantity: 0,
+
+          variancePercentage: 0,
+
+          lotNumber: prepared.lotNumber,
+
+          notes: prepared.notes,
+        });
+      });
+
+      consumption.items = updatedItems;
+
+      const totals = calculateTotals(updatedItems);
+
+      consumption.totalStandardQuantity = totals.totalStandardQuantity;
+
+      consumption.totalIssuedQuantity = totals.totalIssuedQuantity;
+
+      consumption.totalActualQuantity = totals.totalActualQuantity;
+
+      consumption.totalWasteQuantity = totals.totalWasteQuantity;
+
+      consumption.totalReturnQuantity = totals.totalReturnQuantity;
+
+      consumption.totalVarianceQuantity = totals.totalVarianceQuantity;
+
+      consumption.status = "Issued";
+
+      consumption.issuedAt = new Date();
+
+      if (input.issuedBy) {
+        consumption.issuedBy = toObjectId(input.issuedBy);
+      }
+
+      if (input.notes !== undefined) {
+        consumption.notes = input.notes.trim();
+      }
+
+      await consumption.save({
+        session,
+      });
+
+      result = await RawMaterialConsumption.findById(consumption._id)
+        .session(session)
+        .populate("productionOrder")
+        .populate("productionBatch")
+        .populate("product")
+        .populate("formula")
+        .populate("items.rawMaterial")
+        .lean();
+    });
+
+    return result;
+  } finally {
+    await session.endSession();
+  }
+};
 
 // =====================================================
 // GET ALL
 // =====================================================
 
-export const getMaterialConsumptions =
-  async (
-    filters?: {
-      status?: MaterialConsumptionStatus;
-      productionOrder?: string;
-      productionBatch?: string;
-      search?: string;
-      page?: number;
-      limit?: number;
-    }
-  ) => {
-    const page =
-      Math.max(
-        Number(
-          filters?.page ?? 1
-        ),
-        1
-      );
+export const getMaterialConsumptions = async (filters?: {
+  status?: MaterialConsumptionStatus;
+  productionOrder?: string;
+  productionBatch?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const page = Math.max(Number(filters?.page ?? 1), 1);
 
-    const limit =
-      Math.min(
-        Math.max(
-          Number(
-            filters?.limit ?? 20
-          ),
-          1
-        ),
-        100
-      );
+  const limit = Math.min(Math.max(Number(filters?.limit ?? 20), 1), 100);
 
-    const skip =
-      (page - 1) *
-      limit;
+  const skip = (page - 1) * limit;
 
-    const query: Record<
-      string,
-      unknown
-    > = {};
+  const query: Record<string, unknown> = {};
 
-    if (
-      filters?.status
-    ) {
-      query.status =
-        filters.status;
-    }
+  if (filters?.status) {
+    query.status = filters.status;
+  }
 
-    if (
-      filters?.productionOrder
-    ) {
-      query.productionOrder =
-        toObjectId(
-          filters.productionOrder
-        );
-    }
+  if (filters?.productionOrder) {
+    query.productionOrder = toObjectId(filters.productionOrder);
+  }
 
-    if (
-      filters?.productionBatch
-    ) {
-      query.productionBatch =
-        toObjectId(
-          filters.productionBatch
-        );
-    }
+  if (filters?.productionBatch) {
+    query.productionBatch = toObjectId(filters.productionBatch);
+  }
 
-    if (
-      filters?.search?.trim()
-    ) {
-      const search =
-        filters.search.trim();
+  if (filters?.search?.trim()) {
+    const search = filters.search.trim();
 
-      query.$or = [
-        {
-          consumptionNo: {
-            $regex:
-              search,
-            $options:
-              "i",
-          },
+    query.$or = [
+      {
+        consumptionNo: {
+          $regex: search,
+          $options: "i",
         },
-        {
-          productName: {
-            $regex:
-              search,
-            $options:
-              "i",
-          },
-        },
-        {
-          productCode: {
-            $regex:
-              search,
-            $options:
-              "i",
-          },
-        },
-        {
-          formulaName: {
-            $regex:
-              search,
-            $options:
-              "i",
-          },
-        },
-        {
-          batchNumber: {
-            $regex:
-              search,
-            $options:
-              "i",
-          },
-        },
-      ];
-    }
-
-    const [
-      data,
-      total,
-    ] = await Promise.all([
-      RawMaterialConsumption.find(
-        query
-      )
-        .populate(
-          "productionOrder",
-          "productionOrderNo quantity unit status product productName productCode formula formulaName formulaCode formulaVersion"
-        )
-        .populate(
-          "productionBatch",
-          "batchNo batchNumber plannedQuantity actualQuantity unit status"
-        )
-        .populate(
-          "product",
-          "name code"
-        )
-        .populate(
-          "formula",
-          "name code version"
-        )
-        .populate(
-          "items.rawMaterial",
-          "name code unit"
-        )
-        .sort({
-          createdAt:
-            -1,
-        })
-        .skip(
-          skip
-        )
-        .limit(
-          limit
-        )
-        .lean(),
-
-      RawMaterialConsumption.countDocuments(
-        query
-      ),
-    ]);
-
-    return {
-      data,
-
-      pagination: {
-        page,
-        limit,
-        total,
-
-        pages:
-          Math.ceil(
-            total /
-              limit
-          ),
       },
-    };
+      {
+        productName: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+      {
+        productCode: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+      {
+        formulaName: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+      {
+        batchNumber: {
+          $regex: search,
+          $options: "i",
+        },
+      },
+    ];
+  }
+
+  const [data, total] = await Promise.all([
+    RawMaterialConsumption.find(query)
+      .populate(
+        "productionOrder",
+        "productionOrderNo quantity unit status product productName productCode formula formulaName formulaCode formulaVersion",
+      )
+      .populate(
+        "productionBatch",
+        "batchNo batchNumber plannedQuantity actualQuantity unit status",
+      )
+      .populate("product", "name code")
+      .populate("formula", "name code version")
+      .populate("items.rawMaterial", "name code unit")
+      .sort({
+        createdAt: -1,
+      })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    RawMaterialConsumption.countDocuments(query),
+  ]);
+
+  return {
+    data,
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      pages: Math.ceil(total / limit),
+    },
   };
+};
 
 // =====================================================
 // GET BY ID
 // =====================================================
 
-export const getMaterialConsumptionById =
-  async (
-    id: string
-  ) => {
-    const consumption =
-      await populateConsumption(
-        toObjectId(id)
-      );
+export const getMaterialConsumptionById = async (id: string) => {
+  const consumption = await populateConsumption(toObjectId(id));
 
-    if (!consumption) {
-      throw new Error(
-        "Material Consumption not found."
-      );
-    }
+  if (!consumption) {
+    throw new Error("Material Consumption not found.");
+  }
 
-    return consumption;
-  };
+  return consumption;
+};
 
 // =====================================================
 // GET BY BATCH
@@ -1779,46 +1310,27 @@ export const getMaterialConsumptionById =
  *
  * But CREATE is still restricted to In Progress.
  */
-export const getMaterialConsumptionByBatch =
-  async (
-    productionBatchId: string
-  ) => {
-    if (
-      !productionBatchId
-    ) {
-      throw new Error(
-        "Production Batch ID is required."
-      );
-    }
+export const getMaterialConsumptionByBatch = async (
+  productionBatchId: string,
+) => {
+  if (!productionBatchId) {
+    throw new Error("Production Batch ID is required.");
+  }
 
-    return RawMaterialConsumption.findOne({
-      productionBatch:
-        toObjectId(
-          productionBatchId
-        ),
+  return RawMaterialConsumption.findOne({
+    productionBatch: toObjectId(productionBatchId),
 
-      status: {
-        $ne:
-          "Cancelled",
-      },
-    })
-      .populate(
-        "productionOrder"
-      )
-      .populate(
-        "productionBatch"
-      )
-      .populate(
-        "product"
-      )
-      .populate(
-        "formula"
-      )
-      .populate(
-        "items.rawMaterial"
-      )
-      .lean();
-  };
+    status: {
+      $ne: "Cancelled",
+    },
+  })
+    .populate("productionOrder")
+    .populate("productionBatch")
+    .populate("product")
+    .populate("formula")
+    .populate("items.rawMaterial")
+    .lean();
+};
 
 // =====================================================
 // UPDATE MATERIAL CONSUMPTION
@@ -1828,13 +1340,13 @@ export const getMaterialConsumptionByBatch =
  * GENERIC PATCH
  *
  * Allowed:
+ *   - standardQuantity (Draft only, before any issue)
  *   - actualQuantity
  *   - wasteQuantity
  *   - lotNumber
  *   - notes
  *
  * Protected:
- *   - standardQuantity
  *   - issuedQuantity
  *   - returnQuantity
  *   - varianceQuantity
@@ -1843,847 +1355,584 @@ export const getMaterialConsumptionByBatch =
  *
  * Inventory must NEVER be changed here.
  */
-export const updateMaterialConsumption =
-  async (
-    id: string,
-    input: UpdateMaterialConsumptionInput
-  ) => {
-    const consumption =
-      await RawMaterialConsumption.findById(
-        toObjectId(id)
-      );
+export const updateMaterialConsumption = async (
+  id: string,
+  input: UpdateMaterialConsumptionInput,
+) => {
+  const consumption = await RawMaterialConsumption.findById(toObjectId(id));
 
-    if (!consumption) {
+  if (!consumption) {
+    throw new Error("Material Consumption not found.");
+  }
+
+  if (consumption.status === "Cancelled") {
+    throw new Error("Cancelled Material Consumption cannot be updated.");
+  }
+
+  if (consumption.status === "Consumed") {
+    throw new Error(
+      "Consumed Material Consumption is locked and cannot be edited.",
+    );
+  }
+
+  if (input.items) {
+    const existingItems = getConsumptionItems(consumption.items);
+
+    if (input.items.length !== existingItems.length) {
       throw new Error(
-        "Material Consumption not found."
+        "Material item structure cannot be changed after creation.",
       );
     }
 
-    if (
-      consumption.status ===
-      "Cancelled"
-    ) {
-      throw new Error(
-        "Cancelled Material Consumption cannot be updated."
-      );
-    }
+    const updatedItems = existingItems.map((existingItem, index) => {
+      const incoming = input.items?.[index];
 
-    if (
-      consumption.status ===
-      "Consumed"
-    ) {
-      throw new Error(
-        "Consumed Material Consumption is locked and cannot be edited."
-      );
-    }
+      const issued = roundNumber(toNumber(existingItem.issuedQuantity));
 
-    if (
-      input.items
-    ) {
-      const existingItems =
-        getConsumptionItems(
-          consumption.items
-        );
+      const standard =
+        incoming?.standardQuantity !== undefined
+          ? roundNumber(toNumber(incoming.standardQuantity))
+          : roundNumber(toNumber(existingItem.standardQuantity));
 
       if (
-        input.items.length !==
-        existingItems.length
+        incoming?.standardQuantity !== undefined &&
+        consumption.status !== "Draft"
       ) {
         throw new Error(
-          "Material item structure cannot be changed after creation."
+          `${existingItem.rawMaterialName}: Batch recipe quantities can only be changed before materials are issued.`,
         );
       }
 
-      const updatedItems =
-        existingItems.map(
-          (
-            existingItem,
-            index
-          ) => {
-            const incoming =
-              input.items?.[index];
+      validateNonNegativeQuantity(
+        `${existingItem.rawMaterialName} recipe quantity`,
+        standard,
+      );
 
-            const issued =
-              roundNumber(
-                toNumber(
-                  existingItem.issuedQuantity
-                )
-              );
+      const actual =
+        incoming?.actualQuantity !== undefined
+          ? roundNumber(toNumber(incoming.actualQuantity))
+          : roundNumber(toNumber(existingItem.actualQuantity));
 
-            const actual =
-              incoming?.actualQuantity !==
-              undefined
-                ? roundNumber(
-                    toNumber(
-                      incoming.actualQuantity
-                    )
-                  )
-                : roundNumber(
-                    toNumber(
-                      existingItem.actualQuantity
-                    )
-                  );
+      const waste =
+        incoming?.wasteQuantity !== undefined
+          ? roundNumber(toNumber(incoming.wasteQuantity))
+          : roundNumber(toNumber(existingItem.wasteQuantity));
 
-            const waste =
-              incoming?.wasteQuantity !==
-              undefined
-                ? roundNumber(
-                    toNumber(
-                      incoming.wasteQuantity
-                    )
-                  )
-                : roundNumber(
-                    toNumber(
-                      existingItem.wasteQuantity
-                    )
-                  );
+      const returned = roundNumber(toNumber(existingItem.returnQuantity));
 
-            const returned =
-              roundNumber(
-                toNumber(
-                  existingItem.returnQuantity
-                )
-              );
+      validateNonNegativeQuantity(
+        `${existingItem.rawMaterialName} actual quantity`,
+        actual,
+      );
 
-            validateNonNegativeQuantity(
-              `${existingItem.rawMaterialName} actual quantity`,
-              actual
-            );
+      validateNonNegativeQuantity(
+        `${existingItem.rawMaterialName} waste quantity`,
+        waste,
+      );
 
-            validateNonNegativeQuantity(
-              `${existingItem.rawMaterialName} waste quantity`,
-              waste
-            );
+      validateNonNegativeQuantity(
+        `${existingItem.rawMaterialName} return quantity`,
+        returned,
+      );
 
-            validateNonNegativeQuantity(
-              `${existingItem.rawMaterialName} return quantity`,
-              returned
-            );
+      const accounted = roundNumber(actual + waste + returned);
 
-            const accounted =
-              roundNumber(
-                actual +
-                  waste +
-                  returned
-              );
-
-            if (
-              accounted >
-              issued +
-                QUANTITY_TOLERANCE
-            ) {
-              throw new Error(
-                `${existingItem.rawMaterialName}: Actual (${actual}) + Waste (${waste}) + Return (${returned}) cannot exceed Issued (${issued}).`
-              );
-            }
-
-            // No actual/waste can be recorded
-            // before material has been issued.
-            if (
-              issued <=
-                QUANTITY_TOLERANCE &&
-              accounted >
-                QUANTITY_TOLERANCE
-            ) {
-              throw new Error(
-                `${existingItem.rawMaterialName}: Materials must be issued before actual usage or waste can be recorded.`
-              );
-            }
-
-            const lotNumber =
-              incoming?.lotNumber !==
-              undefined
-                ? incoming.lotNumber.trim()
-                : existingItem.lotNumber ??
-                  "";
-
-            const notes =
-              incoming?.notes !==
-              undefined
-                ? incoming.notes.trim()
-                : existingItem.notes ??
-                  "";
-
-            return calculateLine({
-              rawMaterial:
-                existingItem.rawMaterial,
-
-              rawMaterialName:
-                existingItem.rawMaterialName,
-
-              rawMaterialCode:
-                existingItem.rawMaterialCode,
-
-              unit:
-                existingItem.unit,
-
-              standardQuantity:
-                existingItem.standardQuantity,
-
-              issuedQuantity:
-                issued,
-
-              actualQuantity:
-                actual,
-
-              wasteQuantity:
-                waste,
-
-              returnQuantity:
-                returned,
-
-              varianceQuantity:
-                0,
-
-              variancePercentage:
-                0,
-
-              lotNumber,
-
-              notes,
-            });
-          }
+      if (accounted > issued + QUANTITY_TOLERANCE) {
+        throw new Error(
+          `${existingItem.rawMaterialName}: Actual (${actual}) + Waste (${waste}) + Return (${returned}) cannot exceed Issued (${issued}).`,
         );
+      }
 
-      consumption.items =
-        updatedItems;
-
-      const totals =
-        calculateTotals(
-          updatedItems
+      // No actual/waste can be recorded
+      // before material has been issued.
+      if (issued <= QUANTITY_TOLERANCE && accounted > QUANTITY_TOLERANCE) {
+        throw new Error(
+          `${existingItem.rawMaterialName}: Materials must be issued before actual usage or waste can be recorded.`,
         );
+      }
 
-      consumption.totalStandardQuantity =
-        totals.totalStandardQuantity;
+      const lotNumber =
+        incoming?.lotNumber !== undefined
+          ? incoming.lotNumber.trim()
+          : (existingItem.lotNumber ?? "");
 
-      consumption.totalIssuedQuantity =
-        totals.totalIssuedQuantity;
+      const notes =
+        incoming?.notes !== undefined
+          ? incoming.notes.trim()
+          : (existingItem.notes ?? "");
 
-      consumption.totalActualQuantity =
-        totals.totalActualQuantity;
+      return calculateLine({
+        rawMaterial: existingItem.rawMaterial,
 
-      consumption.totalWasteQuantity =
-        totals.totalWasteQuantity;
+        rawMaterialName: existingItem.rawMaterialName,
 
-      consumption.totalReturnQuantity =
-        totals.totalReturnQuantity;
+        rawMaterialCode: existingItem.rawMaterialCode,
 
-      consumption.totalVarianceQuantity =
-        totals.totalVarianceQuantity;
+        unit: existingItem.unit,
 
-      consumption.status =
-        determineConsumptionStatus(
-          updatedItems
-        );
-    }
+        standardQuantity: standard,
 
-    if (
-      input.notes !==
-      undefined
-    ) {
-      consumption.notes =
-        input.notes.trim();
-    }
+        issuedQuantity: issued,
 
-    await consumption.save();
+        actualQuantity: actual,
 
-    return populateConsumption(
-      consumption._id
+        wasteQuantity: waste,
+
+        returnQuantity: returned,
+
+        varianceQuantity: 0,
+
+        variancePercentage: 0,
+
+        lotNumber,
+
+        notes,
+      });
+    });
+
+    consumption.items = updatedItems;
+
+    const totals = calculateTotals(updatedItems);
+
+    consumption.totalStandardQuantity = totals.totalStandardQuantity;
+
+    consumption.totalIssuedQuantity = totals.totalIssuedQuantity;
+
+    consumption.totalActualQuantity = totals.totalActualQuantity;
+
+    consumption.totalWasteQuantity = totals.totalWasteQuantity;
+
+    consumption.totalReturnQuantity = totals.totalReturnQuantity;
+
+    consumption.totalVarianceQuantity = totals.totalVarianceQuantity;
+
+    consumption.status = determineConsumptionStatus(updatedItems);
+  }
+
+  if (input.notes !== undefined) {
+    consumption.notes = input.notes.trim();
+  }
+
+  await consumption.save();
+
+  return populateConsumption(consumption._id);
+};
+
+/** Promote a draft batch recipe to the next formula version for future batches. */
+export const saveBatchRecipeAsFormulaVersion = async (
+  id: string,
+  input: UpdateMaterialConsumptionInput = {},
+) => {
+  await updateMaterialConsumption(id, input);
+  const consumption = await RawMaterialConsumption.findById(toObjectId(id));
+  if (!consumption) throw new Error("Material Consumption not found.");
+  if (consumption.status !== "Draft") {
+    throw new Error(
+      "A formula version can only be created before materials are issued.",
     );
-  };
+  }
+  if (!consumption.formula)
+    throw new Error("This batch is not linked to a formula.");
+
+  const baseFormula = await Formula.findById(consumption.formula).lean();
+  if (!baseFormula) throw new Error("The source formula was not found.");
+
+  const formula = await createNewFormulaVersion(String(consumption.formula), {
+    items: consumption.items.map((item: any) => {
+      const source = baseFormula.items.find(
+        (formulaItem: any) =>
+          String(formulaItem.rawMaterial) === String(item.rawMaterial),
+      );
+      return {
+        rawMaterial: String(item.rawMaterial),
+        quantity: Number(item.standardQuantity || 0),
+        unit: item.unit,
+        wastePercentage: Number(source?.wastePercentage || 0),
+        notes: source?.notes || item.notes || "",
+      };
+    }),
+    notes: `Created from batch recipe ${consumption.consumptionNo}.`,
+  });
+
+  if (!formula) {
+    throw new Error("Could not create the next formula version.");
+  }
+
+  const batch = await ProductionBatch.findById(consumption.productionBatch);
+  if (batch) {
+    batch.formula = formula._id;
+    batch.formulaName = formula.name;
+    batch.formulaCode = formula.code;
+    batch.formulaVersion = Number(formula.version);
+    await batch.save();
+  }
+
+  consumption.formula = formula._id;
+  consumption.formulaName = formula.name;
+  consumption.formulaVersion = String(formula.version);
+  await consumption.save();
+
+  return { consumption: await populateConsumption(consumption._id), formula };
+};
 
 // =====================================================
 // RETURN MATERIALS
 // =====================================================
 
-export const returnMaterialConsumption =
-  async (
-    id: string,
-    input: ReturnMaterialConsumptionInput
-  ) => {
-    if (
-      !input.items ||
-      input.items.length ===
-      0
-    ) {
-      throw new Error(
-        "At least one material return item is required."
-      );
-    }
-
-    const session =
-      await mongoose.startSession();
-
-    try {
-      let result:
-        | unknown
-        | null = null;
-
-      await session.withTransaction(
-        async () => {
-          const consumption =
-            await RawMaterialConsumption.findById(
-              toObjectId(id)
-            ).session(session);
-
-          if (!consumption) {
-            throw new Error(
-              "Material Consumption not found."
-            );
-          }
-
-          if (
-            consumption.status ===
-            "Cancelled"
-          ) {
-            throw new Error(
-              "Cancelled Material Consumption cannot receive returns."
-            );
-          }
-
-          if (
-            consumption.status ===
-            "Consumed"
-          ) {
-            throw new Error(
-              "Consumed Material Consumption is locked."
-            );
-          }
-
-          const existingItems =
-            getConsumptionItems(
-              consumption.items
-            );
-
-          if (
-            existingItems.length ===
-            0
-          ) {
-            throw new Error(
-              "Material Consumption has no raw material items."
-            );
-          }
-
-          // =================================================
-          // REQUEST MAP
-          // =================================================
-
-          const returnMap =
-            new Map<
-              string,
-              ReturnMaterialConsumptionItemInput
-            >();
-
-          for (
-            const requestedItem of input.items
-          ) {
-            if (
-              !requestedItem.rawMaterial
-            ) {
-              throw new Error(
-                "Each return item must contain a rawMaterial."
-              );
-            }
-
-            const rawMaterialId =
-              toObjectId(
-                requestedItem.rawMaterial
-              ).toString();
-
-            if (
-              returnMap.has(
-                rawMaterialId
-              )
-            ) {
-              throw new Error(
-                `Duplicate raw material in return request: ${rawMaterialId}.`
-              );
-            }
-
-            const quantity =
-              toNumber(
-                requestedItem.returnQuantity
-              );
-
-            validatePositiveQuantity(
-              `${rawMaterialId} return quantity`,
-              quantity
-            );
-
-            returnMap.set(
-              rawMaterialId,
-              {
-                ...requestedItem,
-
-                returnQuantity:
-                  roundNumber(
-                    quantity
-                  ),
-              }
-            );
-          }
-
-          // =================================================
-          // VALIDATE MATERIALS
-          // =================================================
-
-          for (
-            const requestedItem of returnMap.values()
-          ) {
-            const exists =
-              existingItems.some(
-                (item) =>
-                  item.rawMaterial.toString() ===
-                  toObjectId(
-                    requestedItem.rawMaterial
-                  ).toString()
-              );
-
-            if (!exists) {
-              throw new Error(
-                `Raw material ${requestedItem.rawMaterial} does not belong to this Material Consumption.`
-              );
-            }
-          }
-
-          // =================================================
-          // UPDATE ITEMS
-          // =================================================
-
-          const updatedItems =
-            existingItems.map(
-              (item) => {
-                const requested =
-                  returnMap.get(
-                    item.rawMaterial.toString()
-                  );
-
-                if (!requested) {
-                  return calculateLine(
-                    item
-                  );
-                }
-
-                const issued =
-                  roundNumber(
-                    toNumber(
-                      item.issuedQuantity
-                    )
-                  );
-
-                const actual =
-                  roundNumber(
-                    toNumber(
-                      item.actualQuantity
-                    )
-                  );
-
-                const waste =
-                  roundNumber(
-                    toNumber(
-                      item.wasteQuantity
-                    )
-                  );
-
-                const existingReturn =
-                  roundNumber(
-                    toNumber(
-                      item.returnQuantity
-                    )
-                  );
-
-                const newReturn =
-                  roundNumber(
-                    toNumber(
-                      requested.returnQuantity
-                    )
-                  );
-
-                if (
-                  issued <=
-                  QUANTITY_TOLERANCE
-                ) {
-                  throw new Error(
-                    `${item.rawMaterialName}: Material must be issued before it can be returned.`
-                  );
-                }
-
-                const remaining =
-                  roundNumber(
-                    issued -
-                      actual -
-                      waste -
-                      existingReturn
-                  );
-
-                if (
-                  newReturn >
-                  remaining +
-                    QUANTITY_TOLERANCE
-                ) {
-                  throw new Error(
-                    `${item.rawMaterialName}: Return quantity (${newReturn}) cannot exceed remaining unaccounted quantity (${remaining} ${item.unit}).`
-                  );
-                }
-
-                return calculateLine({
-                  rawMaterial:
-                    item.rawMaterial,
-
-                  rawMaterialName:
-                    item.rawMaterialName,
-
-                  rawMaterialCode:
-                    item.rawMaterialCode,
-
-                  unit:
-                    item.unit,
-
-                  standardQuantity:
-                    item.standardQuantity,
-
-                  issuedQuantity:
-                    issued,
-
-                  actualQuantity:
-                    actual,
-
-                  wasteQuantity:
-                    waste,
-
-                  returnQuantity:
-                    roundNumber(
-                      existingReturn +
-                        newReturn
-                    ),
-
-                  varianceQuantity:
-                    0,
-
-                  variancePercentage:
-                    0,
-
-                  lotNumber:
-                    item.lotNumber,
-
-                  notes:
-                    requested.notes?.trim() ||
-                    item.notes ||
-                    "",
-                });
-              }
-            );
-
-          // =================================================
-          // INVENTORY RETURN
-          // =================================================
-
-          for (
-            const requested of returnMap.values()
-          ) {
-            const item =
-              existingItems.find(
-                (existingItem) =>
-                  existingItem.rawMaterial.toString() ===
-                  toObjectId(
-                    requested.rawMaterial
-                  ).toString()
-              );
-
-            if (!item) {
-              throw new Error(
-                "Return material item not found."
-              );
-            }
-
-            const quantity =
-              roundNumber(
-                toNumber(
-                  requested.returnQuantity
-                )
-              );
-
-            const inventory =
-              await Inventory.findOne({
-                rawMaterial:
-                  item.rawMaterial,
-              }).session(session);
-
-            if (!inventory) {
-              throw new Error(
-                `Inventory record not found for ${item.rawMaterialName} (${item.rawMaterialCode}).`
-              );
-            }
-
-            if (
-              inventory.unit
-                .trim()
-                .toLowerCase() !==
-              item.unit
-                .trim()
-                .toLowerCase()
-            ) {
-              throw new Error(
-                `Unit mismatch for ${item.rawMaterialName}: Inventory uses ${inventory.unit}, but Consumption uses ${item.unit}.`
-              );
-            }
-
-            const quantityBefore =
-              roundNumber(
-                toNumber(
-                  inventory.quantity
-                )
-              );
-
-            const availableBefore =
-              roundNumber(
-                toNumber(
-                  inventory.availableQuantity
-                )
-              );
-
-            const quantityAfter =
-              roundNumber(
-                quantityBefore +
-                  quantity
-              );
-
-            const availableAfter =
-              roundNumber(
-                availableBefore +
-                  quantity
-              );
-
-            const newStatus =
-              availableAfter <=
-              QUANTITY_TOLERANCE
-                ? "Out of Stock"
-                : availableAfter <=
-                  toNumber(
-                    inventory.minimumStock
-                  )
-                ? "Low Stock"
-                : "Available";
-
-            const updatedInventory =
-              await Inventory.findOneAndUpdate(
-                {
-                  _id:
-                    inventory._id,
-                },
-                {
-                  $inc: {
-                    quantity:
-                      quantity,
-
-                    availableQuantity:
-                      quantity,
-                  },
-
-                  $set: {
-                    status:
-                      newStatus,
-
-                    lastTransactionAt:
-                      new Date(),
-                  },
-                },
-                {
-                  new: true,
-                  session,
-                  runValidators:
-                    true,
-                }
-              );
-
-            if (!updatedInventory) {
-              throw new Error(
-                `Could not update inventory for ${item.rawMaterialName}.`
-              );
-            }
-
-            await returnRawMaterialLot(
-              item.rawMaterial,
-              item.lotNumber || "",
-              quantity,
-              session
-            );
-
-            await syncRawMaterialInventorySnapshot(
-              item.rawMaterial,
-              updatedInventory,
-              session
-            );
-
-            await InventoryTransaction.create(
-              [
-                {
-                  inventory:
-                    inventory._id,
-
-                  rawMaterial:
-                    item.rawMaterial,
-
-                  rawMaterialName:
-                    item.rawMaterialName,
-
-                  rawMaterialCode:
-                    item.rawMaterialCode,
-
-                  type:
-                    "Production Return",
-
-                  quantity,
-
-                  unit:
-                    item.unit,
-
-                  lotNumber:
-                    item.lotNumber ||
-                    undefined,
-
-                  unitCost:
-                    toNumber(
-                      inventory.averageCostPerUnit
-                    ),
-
-                  totalCost:
-                    roundNumber(
-                      quantity *
-                        toNumber(
-                          inventory.averageCostPerUnit
-                        )
-                    ),
-
-                  quantityBefore,
-
-                  quantityAfter,
-
-                  referenceType:
-                    "MaterialConsumption",
-
-                  referenceId:
-                    consumption._id,
-
-                  productionBatch:
-                    consumption.productionBatch,
-
-                  productionOrder:
-                    consumption.productionOrder,
-
-                  materialConsumption:
-                    consumption._id,
-
-                  performedBy:
-                    input.returnedBy
-                      ? toObjectId(
-                          input.returnedBy
-                        )
-                      : undefined,
-
-                  reason:
-                    "Unused raw material returned from production.",
-
-                  notes:
-                    requested.notes?.trim() ||
-                    input.notes?.trim() ||
-                    undefined,
-
-                  transactionDate:
-                    new Date(),
-                },
-              ],
-              {
-                session,
-              }
-            );
-          }
-
-          // =================================================
-          // SAVE CONSUMPTION
-          // =================================================
-
-          consumption.items =
-            updatedItems;
-
-          const totals =
-            calculateTotals(
-              updatedItems
-            );
-
-          consumption.totalStandardQuantity =
-            totals.totalStandardQuantity;
-
-          consumption.totalIssuedQuantity =
-            totals.totalIssuedQuantity;
-
-          consumption.totalActualQuantity =
-            totals.totalActualQuantity;
-
-          consumption.totalWasteQuantity =
-            totals.totalWasteQuantity;
-
-          consumption.totalReturnQuantity =
-            totals.totalReturnQuantity;
-
-          consumption.totalVarianceQuantity =
-            totals.totalVarianceQuantity;
-
-          consumption.status =
-            determineConsumptionStatus(
-              updatedItems
-            );
-
-          if (
-            !consumption.issuedAt &&
-            totals.totalIssuedQuantity >
-              QUANTITY_TOLERANCE
-          ) {
-            consumption.issuedAt =
-              new Date();
-          }
-
-          if (
-            input.notes !==
-            undefined
-          ) {
-            consumption.notes =
-              input.notes.trim();
-          }
-
-          await consumption.save({
-            session,
-          });
-
-          result =
-            await RawMaterialConsumption.findById(
-              consumption._id
-            )
-              .session(session)
-              .populate(
-                "productionOrder"
-              )
-              .populate(
-                "productionBatch"
-              )
-              .populate(
-                "product"
-              )
-              .populate(
-                "formula"
-              )
-              .populate(
-                "items.rawMaterial"
-              )
-              .lean();
+export const returnMaterialConsumption = async (
+  id: string,
+  input: ReturnMaterialConsumptionInput,
+) => {
+  if (!input.items || input.items.length === 0) {
+    throw new Error("At least one material return item is required.");
+  }
+
+  const session = await mongoose.startSession();
+
+  try {
+    let result: unknown | null = null;
+
+    await session.withTransaction(async () => {
+      const consumption = await RawMaterialConsumption.findById(
+        toObjectId(id),
+      ).session(session);
+
+      if (!consumption) {
+        throw new Error("Material Consumption not found.");
+      }
+
+      if (consumption.status === "Cancelled") {
+        throw new Error(
+          "Cancelled Material Consumption cannot receive returns.",
+        );
+      }
+
+      if (consumption.status === "Consumed") {
+        throw new Error("Consumed Material Consumption is locked.");
+      }
+
+      const existingItems = getConsumptionItems(consumption.items);
+
+      if (existingItems.length === 0) {
+        throw new Error("Material Consumption has no raw material items.");
+      }
+
+      // =================================================
+      // REQUEST MAP
+      // =================================================
+
+      const returnMap = new Map<string, ReturnMaterialConsumptionItemInput>();
+
+      for (const requestedItem of input.items) {
+        if (!requestedItem.rawMaterial) {
+          throw new Error("Each return item must contain a rawMaterial.");
         }
-      );
 
-      return result;
-    } finally {
-      await session.endSession();
-    }
-  };
+        const rawMaterialId = toObjectId(requestedItem.rawMaterial).toString();
+
+        if (returnMap.has(rawMaterialId)) {
+          throw new Error(
+            `Duplicate raw material in return request: ${rawMaterialId}.`,
+          );
+        }
+
+        const quantity = toNumber(requestedItem.returnQuantity);
+
+        validatePositiveQuantity(`${rawMaterialId} return quantity`, quantity);
+
+        returnMap.set(rawMaterialId, {
+          ...requestedItem,
+
+          returnQuantity: roundNumber(quantity),
+        });
+      }
+
+      // =================================================
+      // VALIDATE MATERIALS
+      // =================================================
+
+      for (const requestedItem of returnMap.values()) {
+        const exists = existingItems.some(
+          (item) =>
+            item.rawMaterial.toString() ===
+            toObjectId(requestedItem.rawMaterial).toString(),
+        );
+
+        if (!exists) {
+          throw new Error(
+            `Raw material ${requestedItem.rawMaterial} does not belong to this Material Consumption.`,
+          );
+        }
+      }
+
+      // =================================================
+      // UPDATE ITEMS
+      // =================================================
+
+      const updatedItems = existingItems.map((item) => {
+        const requested = returnMap.get(item.rawMaterial.toString());
+
+        if (!requested) {
+          return calculateLine(item);
+        }
+
+        const issued = roundNumber(toNumber(item.issuedQuantity));
+
+        const actual = roundNumber(toNumber(item.actualQuantity));
+
+        const waste = roundNumber(toNumber(item.wasteQuantity));
+
+        const existingReturn = roundNumber(toNumber(item.returnQuantity));
+
+        const newReturn = roundNumber(toNumber(requested.returnQuantity));
+
+        if (issued <= QUANTITY_TOLERANCE) {
+          throw new Error(
+            `${item.rawMaterialName}: Material must be issued before it can be returned.`,
+          );
+        }
+
+        const remaining = roundNumber(issued - actual - waste - existingReturn);
+
+        if (newReturn > remaining + QUANTITY_TOLERANCE) {
+          throw new Error(
+            `${item.rawMaterialName}: Return quantity (${newReturn}) cannot exceed remaining unaccounted quantity (${remaining} ${item.unit}).`,
+          );
+        }
+
+        return calculateLine({
+          rawMaterial: item.rawMaterial,
+
+          rawMaterialName: item.rawMaterialName,
+
+          rawMaterialCode: item.rawMaterialCode,
+
+          unit: item.unit,
+
+          standardQuantity: item.standardQuantity,
+
+          issuedQuantity: issued,
+
+          actualQuantity: actual,
+
+          wasteQuantity: waste,
+
+          returnQuantity: roundNumber(existingReturn + newReturn),
+
+          varianceQuantity: 0,
+
+          variancePercentage: 0,
+
+          lotNumber: item.lotNumber,
+
+          notes: requested.notes?.trim() || item.notes || "",
+        });
+      });
+
+      // =================================================
+      // INVENTORY RETURN
+      // =================================================
+
+      for (const requested of returnMap.values()) {
+        const item = existingItems.find(
+          (existingItem) =>
+            existingItem.rawMaterial.toString() ===
+            toObjectId(requested.rawMaterial).toString(),
+        );
+
+        if (!item) {
+          throw new Error("Return material item not found.");
+        }
+
+        const quantity = roundNumber(toNumber(requested.returnQuantity));
+
+        const inventory = await Inventory.findOne({
+          rawMaterial: item.rawMaterial,
+        }).session(session);
+
+        if (!inventory) {
+          throw new Error(
+            `Inventory record not found for ${item.rawMaterialName} (${item.rawMaterialCode}).`,
+          );
+        }
+
+        if (
+          inventory.unit.trim().toLowerCase() !== item.unit.trim().toLowerCase()
+        ) {
+          throw new Error(
+            `Unit mismatch for ${item.rawMaterialName}: Inventory uses ${inventory.unit}, but Consumption uses ${item.unit}.`,
+          );
+        }
+
+        const quantityBefore = roundNumber(toNumber(inventory.quantity));
+
+        const availableBefore = roundNumber(
+          toNumber(inventory.availableQuantity),
+        );
+
+        const quantityAfter = roundNumber(quantityBefore + quantity);
+
+        const availableAfter = roundNumber(availableBefore + quantity);
+
+        const newStatus =
+          availableAfter <= QUANTITY_TOLERANCE
+            ? "Out of Stock"
+            : availableAfter <= toNumber(inventory.minimumStock)
+              ? "Low Stock"
+              : "Available";
+
+        const updatedInventory = await Inventory.findOneAndUpdate(
+          {
+            _id: inventory._id,
+          },
+          {
+            $inc: {
+              quantity: quantity,
+
+              availableQuantity: quantity,
+            },
+
+            $set: {
+              status: newStatus,
+
+              lastTransactionAt: new Date(),
+            },
+          },
+          {
+            new: true,
+            session,
+            runValidators: true,
+          },
+        );
+
+        if (!updatedInventory) {
+          throw new Error(
+            `Could not update inventory for ${item.rawMaterialName}.`,
+          );
+        }
+
+        await returnRawMaterialLot(
+          item.rawMaterial,
+          item.lotNumber || "",
+          quantity,
+          session,
+        );
+
+        await syncRawMaterialInventorySnapshot(
+          item.rawMaterial,
+          updatedInventory,
+          session,
+        );
+
+        await InventoryTransaction.create(
+          [
+            {
+              inventory: inventory._id,
+
+              rawMaterial: item.rawMaterial,
+
+              rawMaterialName: item.rawMaterialName,
+
+              rawMaterialCode: item.rawMaterialCode,
+
+              type: "Production Return",
+
+              quantity,
+
+              unit: item.unit,
+
+              lotNumber: item.lotNumber || undefined,
+
+              unitCost: toNumber(inventory.averageCostPerUnit),
+
+              totalCost: roundNumber(
+                quantity * toNumber(inventory.averageCostPerUnit),
+              ),
+
+              quantityBefore,
+
+              quantityAfter,
+
+              referenceType: "MaterialConsumption",
+
+              referenceId: consumption._id,
+
+              productionBatch: consumption.productionBatch,
+
+              productionOrder: consumption.productionOrder,
+
+              materialConsumption: consumption._id,
+
+              performedBy: input.returnedBy
+                ? toObjectId(input.returnedBy)
+                : undefined,
+
+              reason: "Unused raw material returned from production.",
+
+              notes:
+                requested.notes?.trim() || input.notes?.trim() || undefined,
+
+              transactionDate: new Date(),
+            },
+          ],
+          {
+            session,
+          },
+        );
+      }
+
+      // =================================================
+      // SAVE CONSUMPTION
+      // =================================================
+
+      consumption.items = updatedItems;
+
+      const totals = calculateTotals(updatedItems);
+
+      consumption.totalStandardQuantity = totals.totalStandardQuantity;
+
+      consumption.totalIssuedQuantity = totals.totalIssuedQuantity;
+
+      consumption.totalActualQuantity = totals.totalActualQuantity;
+
+      consumption.totalWasteQuantity = totals.totalWasteQuantity;
+
+      consumption.totalReturnQuantity = totals.totalReturnQuantity;
+
+      consumption.totalVarianceQuantity = totals.totalVarianceQuantity;
+
+      consumption.status = determineConsumptionStatus(updatedItems);
+
+      if (
+        !consumption.issuedAt &&
+        totals.totalIssuedQuantity > QUANTITY_TOLERANCE
+      ) {
+        consumption.issuedAt = new Date();
+      }
+
+      if (input.notes !== undefined) {
+        consumption.notes = input.notes.trim();
+      }
+
+      await consumption.save({
+        session,
+      });
+
+      result = await RawMaterialConsumption.findById(consumption._id)
+        .session(session)
+        .populate("productionOrder")
+        .populate("productionBatch")
+        .populate("product")
+        .populate("formula")
+        .populate("items.rawMaterial")
+        .lean();
+    });
+
+    return result;
+  } finally {
+    await session.endSession();
+  }
+};
 
 // =====================================================
 // COMPLETE MATERIAL CONSUMPTION
@@ -2704,298 +1953,193 @@ export const returnMaterialConsumption =
  *
  *    Actual + Waste + Return = Issued
  */
-export const completeMaterialConsumption =
-  async (
-    id: string,
-    input: CompleteMaterialConsumptionInput = {}
-  ) => {
-    const consumption =
-      await RawMaterialConsumption.findById(
-        toObjectId(id)
-      );
+export const completeMaterialConsumption = async (
+  id: string,
+  input: CompleteMaterialConsumptionInput = {},
+) => {
+  const consumption = await RawMaterialConsumption.findById(toObjectId(id));
 
-    if (!consumption) {
-      throw new Error(
-        "Material Consumption not found."
-      );
-    }
+  if (!consumption) {
+    throw new Error("Material Consumption not found.");
+  }
 
-    if (
-      consumption.status ===
-      "Cancelled"
-    ) {
-      throw new Error(
-        "Cancelled Material Consumption cannot be completed."
-      );
-    }
+  if (consumption.status === "Cancelled") {
+    throw new Error("Cancelled Material Consumption cannot be completed.");
+  }
 
-    if (
-      consumption.status ===
-      "Consumed"
-    ) {
-      throw new Error(
-        "Material Consumption is already completed."
-      );
-    }
+  if (consumption.status === "Consumed") {
+    throw new Error("Material Consumption is already completed.");
+  }
 
-    const batch =
-      await ProductionBatch.findById(
-        consumption.productionBatch
-      );
+  const batch = await ProductionBatch.findById(consumption.productionBatch);
 
-    if (!batch) {
-      throw new Error(
-        "Production Batch not found."
-      );
-    }
+  if (!batch) {
+    throw new Error("Production Batch not found.");
+  }
 
-    // =================================================
-    // BATCH MUST BE COMPLETED
-    // =================================================
+  // =================================================
+  // BATCH MUST BE COMPLETED
+  // =================================================
 
-    if (
-      batch.status !==
-      "Completed"
-    ) {
-      throw new Error(
-        `Material Consumption can only be completed after the Production Batch is Completed. Current batch status: ${batch.status}.`
-      );
-    }
-
-    const items =
-      getConsumptionItems(
-        consumption.items
-      );
-
-    if (
-      items.length === 0
-    ) {
-      throw new Error(
-        "Material Consumption has no raw material items."
-      );
-    }
-
-    // =================================================
-    // RECONCILIATION
-    // =================================================
-
-    let hasIssued = false;
-
-    let hasActivity = false;
-
-    for (
-      const item of items
-    ) {
-      const reconciliation =
-        validateReconciliation(
-          item,
-          true
-        );
-
-      if (
-        reconciliation.issued >
-        QUANTITY_TOLERANCE
-      ) {
-        hasIssued = true;
-      }
-
-      if (
-        reconciliation.accounted >
-        QUANTITY_TOLERANCE
-      ) {
-        hasActivity = true;
-      }
-    }
-
-    if (!hasIssued) {
-      throw new Error(
-        "Materials must be issued before Material Consumption can be completed."
-      );
-    }
-
-    if (!hasActivity) {
-      throw new Error(
-        "Actual usage, waste, or return must be recorded before Material Consumption can be completed."
-      );
-    }
-
-    // =================================================
-    // TOTALS
-    // =================================================
-
-    const totals =
-      calculateTotals(
-        items
-      );
-
-    consumption.totalStandardQuantity =
-      totals.totalStandardQuantity;
-
-    consumption.totalIssuedQuantity =
-      totals.totalIssuedQuantity;
-
-    consumption.totalActualQuantity =
-      totals.totalActualQuantity;
-
-    consumption.totalWasteQuantity =
-      totals.totalWasteQuantity;
-
-    consumption.totalReturnQuantity =
-      totals.totalReturnQuantity;
-
-    consumption.totalVarianceQuantity =
-      totals.totalVarianceQuantity;
-
-    // =================================================
-    // FINAL STATUS
-    // =================================================
-
-    consumption.status =
-      "Consumed";
-
-    consumption.consumedAt =
-      new Date();
-
-    if (
-      input.completedBy
-    ) {
-      consumption.completedBy =
-        toObjectId(
-          input.completedBy
-        );
-    }
-
-    if (
-      !consumption.issuedAt
-    ) {
-      consumption.issuedAt =
-        new Date();
-    }
-
-    if (
-      input.notes !==
-      undefined
-    ) {
-      consumption.notes =
-        input.notes.trim();
-    }
-
-    await consumption.save();
-
-    return populateConsumption(
-      consumption._id
+  if (batch.status !== "Completed") {
+    throw new Error(
+      `Material Consumption can only be completed after the Production Batch is Completed. Current batch status: ${batch.status}.`,
     );
-  };
+  }
+
+  const items = getConsumptionItems(consumption.items);
+
+  if (items.length === 0) {
+    throw new Error("Material Consumption has no raw material items.");
+  }
+
+  // =================================================
+  // RECONCILIATION
+  // =================================================
+
+  let hasIssued = false;
+
+  let hasActivity = false;
+
+  for (const item of items) {
+    const reconciliation = validateReconciliation(item, true);
+
+    if (reconciliation.issued > QUANTITY_TOLERANCE) {
+      hasIssued = true;
+    }
+
+    if (reconciliation.accounted > QUANTITY_TOLERANCE) {
+      hasActivity = true;
+    }
+  }
+
+  if (!hasIssued) {
+    throw new Error(
+      "Materials must be issued before Material Consumption can be completed.",
+    );
+  }
+
+  if (!hasActivity) {
+    throw new Error(
+      "Actual usage, waste, or return must be recorded before Material Consumption can be completed.",
+    );
+  }
+
+  // =================================================
+  // TOTALS
+  // =================================================
+
+  const totals = calculateTotals(items);
+
+  consumption.totalStandardQuantity = totals.totalStandardQuantity;
+
+  consumption.totalIssuedQuantity = totals.totalIssuedQuantity;
+
+  consumption.totalActualQuantity = totals.totalActualQuantity;
+
+  consumption.totalWasteQuantity = totals.totalWasteQuantity;
+
+  consumption.totalReturnQuantity = totals.totalReturnQuantity;
+
+  consumption.totalVarianceQuantity = totals.totalVarianceQuantity;
+
+  // =================================================
+  // FINAL STATUS
+  // =================================================
+
+  consumption.status = "Consumed";
+
+  consumption.consumedAt = new Date();
+
+  if (input.completedBy) {
+    consumption.completedBy = toObjectId(input.completedBy);
+  }
+
+  if (!consumption.issuedAt) {
+    consumption.issuedAt = new Date();
+  }
+
+  if (input.notes !== undefined) {
+    consumption.notes = input.notes.trim();
+  }
+
+  await consumption.save();
+
+  return populateConsumption(consumption._id);
+};
 
 // =====================================================
 // CANCEL
 // =====================================================
 
-export const cancelMaterialConsumption =
-  async (
-    id: string
-  ) => {
-    const consumption =
-      await RawMaterialConsumption.findById(
-        toObjectId(id)
-      );
+export const cancelMaterialConsumption = async (id: string) => {
+  const consumption = await RawMaterialConsumption.findById(toObjectId(id));
 
-    if (!consumption) {
-      throw new Error(
-        "Material Consumption not found."
-      );
-    }
+  if (!consumption) {
+    throw new Error("Material Consumption not found.");
+  }
 
-    if (
-      consumption.status ===
-      "Consumed"
-    ) {
-      throw new Error(
-        "Consumed Material Consumption cannot be cancelled directly. Use a reversal/correction transaction."
-      );
-    }
-
-    if (
-      consumption.status ===
-      "Cancelled"
-    ) {
-      throw new Error(
-        "Material Consumption is already cancelled."
-      );
-    }
-
-    if (
-      toNumber(
-        consumption.totalIssuedQuantity
-      ) >
-      QUANTITY_TOLERANCE
-    ) {
-      throw new Error(
-        "Material Consumption with issued materials cannot be cancelled directly. Reverse the inventory issue first."
-      );
-    }
-
-    consumption.status =
-      "Cancelled";
-
-    consumption.cancelledAt =
-      new Date();
-
-    await consumption.save();
-
-    return populateConsumption(
-      consumption._id
+  if (consumption.status === "Consumed") {
+    throw new Error(
+      "Consumed Material Consumption cannot be cancelled directly. Use a reversal/correction transaction.",
     );
-  };
+  }
+
+  if (consumption.status === "Cancelled") {
+    throw new Error("Material Consumption is already cancelled.");
+  }
+
+  if (toNumber(consumption.totalIssuedQuantity) > QUANTITY_TOLERANCE) {
+    throw new Error(
+      "Material Consumption with issued materials cannot be cancelled directly. Reverse the inventory issue first.",
+    );
+  }
+
+  consumption.status = "Cancelled";
+
+  consumption.cancelledAt = new Date();
+
+  await consumption.save();
+
+  return populateConsumption(consumption._id);
+};
 
 // =====================================================
 // STATS
 // =====================================================
 
-export const getMaterialConsumptionStats =
-  async () => {
-    const [
-      total,
-      draft,
-      issued,
-      partiallyConsumed,
-      consumed,
-      cancelled,
-    ] = await Promise.all([
+export const getMaterialConsumptionStats = async () => {
+  const [total, draft, issued, partiallyConsumed, consumed, cancelled] =
+    await Promise.all([
       RawMaterialConsumption.countDocuments(),
 
       RawMaterialConsumption.countDocuments({
-        status:
-          "Draft",
+        status: "Draft",
       }),
 
       RawMaterialConsumption.countDocuments({
-        status:
-          "Issued",
+        status: "Issued",
       }),
 
       RawMaterialConsumption.countDocuments({
-        status:
-          "Partially Consumed",
+        status: "Partially Consumed",
       }),
 
       RawMaterialConsumption.countDocuments({
-        status:
-          "Consumed",
+        status: "Consumed",
       }),
 
       RawMaterialConsumption.countDocuments({
-        status:
-          "Cancelled",
+        status: "Cancelled",
       }),
     ]);
 
-    return {
-      total,
-      draft,
-      issued,
-      partiallyConsumed,
-      consumed,
-      cancelled,
-    };
+  return {
+    total,
+    draft,
+    issued,
+    partiallyConsumed,
+    consumed,
+    cancelled,
   };
+};

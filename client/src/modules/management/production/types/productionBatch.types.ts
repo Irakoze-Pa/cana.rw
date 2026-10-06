@@ -1,10 +1,5 @@
 export type ProductionBatchStatus =
-  | "Planned"
-  | "Ready"
-  | "In Progress"
-  | "Paused"
-  | "Completed"
-  | "Cancelled";
+  "Planned" | "Ready" | "In Progress" | "Paused" | "Completed" | "Cancelled";
 
 export interface ProductionOrderSummary {
   _id: string;
@@ -57,20 +52,14 @@ export interface ProductionBatch {
 
   batchNo: string;
 
-  productionOrder:
-    | string
-    | ProductionOrderSummary;
+  productionOrder: string | ProductionOrderSummary;
 
-  product:
-    | string
-    | ProductSummary;
+  product: string | ProductSummary;
 
   productName: string;
   productCode: string;
 
-  formula:
-    | string
-    | FormulaSummary;
+  formula: string | FormulaSummary;
 
   formulaName: string;
   formulaCode: string;
@@ -99,9 +88,7 @@ export interface ProductionBatch {
   startDate?: string;
   endDate?: string;
 
-  supervisor?:
-    | string
-    | SupervisorSummary;
+  supervisor?: string | SupervisorSummary;
 
   supervisorName: string;
 
@@ -124,7 +111,12 @@ export interface ProductionBatch {
 }
 
 export interface CreateProductionBatchData {
-  productionOrder: string;
+  /** Optional legacy/planned workflow reference. */
+  productionOrder?: string;
+
+  /** Direct workflow fields. Select product and formula to start a batch. */
+  product?: string;
+  formula?: string;
 
   /**
    * Optional.

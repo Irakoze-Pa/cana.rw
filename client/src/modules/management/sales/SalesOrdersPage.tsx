@@ -9,7 +9,15 @@ import { printCanaDocument } from "../utils/printCanaDocument";
 type Order = {
   _id: string;
   orderNumber: string;
-  customer?: { fullName?: string; phone?: string; email?: string; isCompanyCustomer?: boolean; businessName?: string; address?: string; tin?: string };
+  customer?: {
+    fullName?: string;
+    phone?: string;
+    email?: string;
+    isCompanyCustomer?: boolean;
+    businessName?: string;
+    address?: string;
+    tin?: string;
+  };
   subtotal?: number;
   tax?: number;
   total: number;
@@ -19,7 +27,9 @@ type Order = {
   notes?: string;
   statusHistory?: { status: string; at: string }[];
   items: {
-    product: string;
+    itemType?: "product" | "raw_material";
+    product?: string;
+    rawMaterial?: string;
     productName: string;
     productCode?: string;
     quantity: number;
@@ -33,7 +43,15 @@ type Order = {
   }[];
   createdAt: string;
 };
-type Customer = { _id: string; fullName: string; phone: string; isCompanyCustomer?: boolean; businessName?: string; address?: string; tin?: string };
+type Customer = {
+  _id: string;
+  fullName: string;
+  phone: string;
+  isCompanyCustomer?: boolean;
+  businessName?: string;
+  address?: string;
+  tin?: string;
+};
 type Product = {
   _id: string;
   name: string;
@@ -43,6 +61,21 @@ type Product = {
   baseUnit?: "kg" | "pcs";
   packSizeKg?: number;
   status: string;
+};
+type RawMaterial = {
+  _id: string;
+  name: string;
+  code: string;
+  unit: string;
+  costPerUnit?: number;
+  availableQuantity?: number;
+  status: string;
+};
+type SalesLine = {
+  itemType: "product" | "raw_material";
+  itemId: string;
+  quantity: string;
+  unitPrice: string;
 };
 const next: Record<string, string[]> = {
   draft: ["confirmed", "cancelled"],
@@ -58,11 +91,23 @@ const orderQuantity = (item: Order["items"][number]) =>
     ? `${item.quantity} ${item.quantity === 1 ? "pack" : "packs"}${item.packLabel ? ` · ${item.packLabel} each` : ""}`
     : `${item.quantity} ${item.unit}`;
 const stockIssue = (item: Order["items"][number]) => {
-  if (Number.isFinite(Number(item.stockQuantity)) && Number(item.stockQuantity) > 0) return `${item.stockQuantity} ${item.stockUnit || "kg"}`;
-  if (item.unit === "packs" && Number(item.packSizeKg) > 0) return `${Number(item.quantity) * Number(item.packSizeKg)} kg`;
+  if (
+    Number.isFinite(Number(item.stockQuantity)) &&
+    Number(item.stockQuantity) > 0
+  )
+    return `${item.stockQuantity} ${item.stockUnit || "kg"}`;
+  if (item.unit === "packs" && Number(item.packSizeKg) > 0)
+    return `${Number(item.quantity) * Number(item.packSizeKg)} kg`;
   return orderQuantity(item);
 };
-const statusStyle = (status: string) => status === "cancelled" ? "bg-red-50 text-red-700" : status === "delivered" ? "bg-emerald-50 text-emerald-700" : status === "ready_for_delivery" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-700";
+const statusStyle = (status: string) =>
+  status === "cancelled"
+    ? "bg-red-50 text-red-700"
+    : status === "delivered"
+      ? "bg-emerald-50 text-emerald-700"
+      : status === "ready_for_delivery"
+        ? "bg-blue-50 text-blue-700"
+        : "bg-slate-100 text-slate-700";
 function printSalesOrder(order: Order) {
   printCanaDocument({
     title: "Sales order",
@@ -81,7 +126,12 @@ function printSalesOrder(order: Order) {
     },
     details: [
       { label: "Customer", value: order.customer?.fullName || "Customer" },
-      ...(order.customer?.businessName ? [{ label: "Company", value: order.customer.businessName }, { label: "TIN", value: order.customer.tin || "—" }] : []),
+      ...(order.customer?.businessName
+        ? [
+            { label: "Company", value: order.customer.businessName },
+            { label: "TIN", value: order.customer.tin || "—" },
+          ]
+        : []),
       { label: "Phone", value: order.customer?.phone },
       { label: "Email", value: order.customer?.email },
       {
@@ -113,11 +163,68 @@ function printSalesOrder(order: Order) {
     notes: order.notes,
   });
 }
-function OrderActions({ order, saving, onView, onPrint, onSetPrices, onTransition }: { order: Order; saving: boolean; onView: (order: Order) => void; onPrint: (order: Order) => void; onSetPrices: (order: Order) => void; onTransition: (id: string, status: string) => void }) {
-  return <div className="flex flex-wrap gap-1.5"><button type="button" onClick={() => onView(order)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800"><Eye size={13} />Details</button><button type="button" onClick={() => onPrint(order)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700"><Printer size={13} />Print</button>{["draft", "submitted"].includes(order.status) && <button type="button" disabled={saving} onClick={() => onSetPrices(order)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700">Set prices</button>}{next[order.status]?.map((status) => <button key={status} disabled={saving} onClick={() => onTransition(order._id, status)} className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{status.replaceAll("_", " ")}</button>)}</div>;
+function OrderActions({
+  order,
+  saving,
+  onView,
+  onPrint,
+  onSetPrices,
+  onTransition,
+}: {
+  order: Order;
+  saving: boolean;
+  onView: (order: Order) => void;
+  onPrint: (order: Order) => void;
+  onSetPrices: (order: Order) => void;
+  onTransition: (id: string, status: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <button
+        type="button"
+        onClick={() => onView(order)}
+        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800"
+      >
+        <Eye size={13} />
+        Details
+      </button>
+      <button
+        type="button"
+        onClick={() => onPrint(order)}
+        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700"
+      >
+        <Printer size={13} />
+        Print
+      </button>
+      {["draft", "submitted"].includes(order.status) && (
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => onSetPrices(order)}
+          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+        >
+          Set prices
+        </button>
+      )}
+      {next[order.status]?.map((status) => (
+        <button
+          key={status}
+          disabled={saving}
+          onClick={() => onTransition(order._id, status)}
+          className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+        >
+          {status.replaceAll("_", " ")}
+        </button>
+      ))}
+    </div>
+  );
 }
 
-export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" | "fulfilment" }) {
+export default function SalesOrdersPage({
+  view = "orders",
+}: {
+  view?: "orders" | "fulfilment";
+}) {
   const { toast } = useToast();
   const [addingCustomer, setAddingCustomer] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -128,6 +235,7 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
@@ -140,29 +248,56 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
     requestedDeliveryDate: "",
     notes: "",
   });
-  const [orderLines, setOrderLines] = useState([
-    { product: "", quantity: "1", unitPrice: "" },
+  const [orderLines, setOrderLines] = useState<SalesLine[]>([
+    { itemType: "product" as const, itemId: "", quantity: "1", unitPrice: "" },
   ]);
   const fulfilmentView = view === "fulfilment";
   const pageTitle = fulfilmentView ? "Order fulfilment" : "Sales orders";
-  const visibleOrders = useMemo(() => orders.filter((order) => {
-    const orderDate = order.createdAt ? new Date(order.createdAt).toISOString().slice(0, 10) : "";
-    return (!statusFilter || order.status === statusFilter) && (!fulfilmentView || ["confirmed", "in_production", "ready_for_delivery", "delivered"].includes(order.status)) && (!dateFrom || orderDate >= dateFrom) && (!dateTo || orderDate <= dateTo) && `${order.orderNumber} ${order.customer?.fullName || ""}`.toLowerCase().includes(search.toLowerCase());
-  }), [orders, statusFilter, fulfilmentView, dateFrom, dateTo, search]);
+  const visibleOrders = useMemo(
+    () =>
+      orders.filter((order) => {
+        const orderDate = order.createdAt
+          ? new Date(order.createdAt).toISOString().slice(0, 10)
+          : "";
+        return (
+          (!statusFilter || order.status === statusFilter) &&
+          (!fulfilmentView ||
+            [
+              "confirmed",
+              "in_production",
+              "ready_for_delivery",
+              "delivered",
+            ].includes(order.status)) &&
+          (!dateFrom || orderDate >= dateFrom) &&
+          (!dateTo || orderDate <= dateTo) &&
+          `${order.orderNumber} ${order.customer?.fullName || ""}`
+            .toLowerCase()
+            .includes(search.toLowerCase())
+        );
+      }),
+    [orders, statusFilter, fulfilmentView, dateFrom, dateTo, search],
+  );
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const [sales, customerData, productData] = await Promise.all([
-        api.get<{ data: Order[] }>("/sales-orders"),
-        api.get<{ data: Customer[] }>("/users/customers"),
-        api.get<{ data: Product[] }>("/products"),
-      ]);
+      const [sales, customerData, productData, rawMaterialData] =
+        await Promise.all([
+          api.get<{ data: Order[] }>("/sales-orders"),
+          api.get<{ data: Customer[] }>("/users/customers"),
+          api.get<{ data: Product[] }>("/products"),
+          api.get<{ data: RawMaterial[] }>("/raw-materials"),
+        ]);
       setOrders(sales.data.data || []);
       setCustomers(customerData.data.data || []);
       setProducts(
         (productData.data.data || []).filter(
           (product) => product.status === "Active",
+        ),
+      );
+      setRawMaterials(
+        (rawMaterialData.data.data || []).filter(
+          (material) => material.status === "Active",
         ),
       );
     } catch (e) {
@@ -197,36 +332,79 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
   };
   const openPricing = (order: Order) => {
     setPricingOrder(order);
-    setAgreedPrices(Object.fromEntries(order.items.map((item) => [item.product, String(item.unitPrice ?? 0)])));
+    setAgreedPrices(
+      Object.fromEntries(
+        order.items.map((item) => [
+          item.itemType === "raw_material"
+            ? `raw:${item.rawMaterial}`
+            : `product:${item.product}`,
+          String(item.unitPrice ?? 0),
+        ]),
+      ),
+    );
   };
   const saveAgreedPrices = async (order: Order) => {
-    const prices = [] as Array<{ product: string; unitPrice: number }>;
+    const prices = [] as Array<{
+      product?: string;
+      rawMaterial?: string;
+      unitPrice: number;
+    }>;
     for (const item of order.items) {
-      const unitPrice = Number(agreedPrices[item.product]);
-      if (!Number.isFinite(unitPrice) || unitPrice < 0) return setError(`Enter a valid price for ${item.productName}.`);
-      prices.push({ product: item.product, unitPrice });
+      const itemKey =
+        item.itemType === "raw_material"
+          ? `raw:${item.rawMaterial}`
+          : `product:${item.product}`;
+      const unitPrice = Number(agreedPrices[itemKey]);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0)
+        return setError(`Enter a valid price for ${item.productName}.`);
+      prices.push(
+        item.itemType === "raw_material"
+          ? { rawMaterial: item.rawMaterial, unitPrice }
+          : { product: item.product, unitPrice },
+      );
     }
     try {
       setSaving(true);
-      const response = await api.patch<{ data: Order }>(`/sales-orders/${order._id}/prices`, { prices });
-      setOrders((current) => current.map((item) => item._id === order._id ? response.data.data : item));
+      const response = await api.patch<{ data: Order }>(
+        `/sales-orders/${order._id}/prices`,
+        { prices },
+      );
+      setOrders((current) =>
+        current.map((item) =>
+          item._id === order._id ? response.data.data : item,
+        ),
+      );
       setPricingOrder(null);
       toast("Agreed prices saved. You can now confirm the order.", "success");
-    } catch (e) { setError(e instanceof Error ? e.message : "Unable to save agreed prices."); } finally { setSaving(false); }
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Unable to save agreed prices.",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
     const items = orderLines.map((line) => {
-      const product = products.find((item) => item._id === line.product);
-      return product
+      const product = products.find((item) => item._id === line.itemId);
+      const rawMaterial = rawMaterials.find((item) => item._id === line.itemId);
+      return line.itemType === "product" && product
         ? {
             product: product._id,
             quantity: Number(line.quantity),
             unit: product.baseUnit === "pcs" ? "pcs" : "packs",
             unitPrice: Number(line.unitPrice),
           }
-        : null;
+        : line.itemType === "raw_material" && rawMaterial
+          ? {
+              rawMaterial: rawMaterial._id,
+              quantity: Number(line.quantity),
+              unit: rawMaterial.unit,
+              unitPrice: Number(line.unitPrice),
+            }
+          : null;
     });
     if (
       items.some(
@@ -239,12 +417,13 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
       )
     )
       return setError(
-        "Select a product, quantity, and valid unit price for every order line.",
+        "Select an item, quantity, and valid unit price for every order line.",
       );
     if (
-      new Set(orderLines.map((line) => line.product)).size !== orderLines.length
+      new Set(orderLines.map((line) => `${line.itemType}:${line.itemId}`))
+        .size !== orderLines.length
     )
-      return setError("Combine repeated products into one line.");
+      return setError("Combine repeated items into one line.");
     setSaving(true);
     setError("");
     try {
@@ -263,7 +442,9 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
         requestedDeliveryDate: "",
         notes: "",
       });
-      setOrderLines([{ product: "", quantity: "1", unitPrice: "" }]);
+      setOrderLines([
+        { itemType: "product", itemId: "", quantity: "1", unitPrice: "" },
+      ]);
       toast("Draft sales order created.", "success");
     } catch (e) {
       setError(
@@ -282,18 +463,30 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
           </div>
           <div>
             <p className="cana-section-kicker">Sales workspace</p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{pageTitle}</h1>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
+              {pageTitle}
+            </h1>
           </div>
         </div>
         <div className="flex gap-2">
-          {!fulfilmentView && <button
-            onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
-          >
-            <Plus size={16} />
-            New sales order
-          </button>}
-          {fulfilmentView && <Link to="/management/sales/orders" className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white hover:bg-slate-800"><Plus size={16}/>New sales order</Link>}
+          {!fulfilmentView && (
+            <button
+              onClick={() => setCreating(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
+            >
+              <Plus size={16} />
+              New sales order
+            </button>
+          )}
+          {fulfilmentView && (
+            <Link
+              to="/management/sales/orders"
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white hover:bg-slate-800"
+            >
+              <Plus size={16} />
+              New sales order
+            </Link>
+          )}
           <button
             onClick={() => void load()}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold"
@@ -346,7 +539,9 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
             <option value="">Select customer</option>
             {customers.map((customer) => (
               <option key={customer._id} value={customer._id}>
-                {customer.businessName ? `${customer.businessName} · ${customer.fullName} · ${customer.phone}` : `${customer.fullName} · ${customer.phone}`}
+                {customer.businessName
+                  ? `${customer.businessName} · ${customer.fullName} · ${customer.phone}`
+                  : `${customer.fullName} · ${customer.phone}`}
               </option>
             ))}
           </select>
@@ -358,7 +553,12 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                 onClick={() =>
                   setOrderLines((current) => [
                     ...current,
-                    { product: "", quantity: "1", unitPrice: "" },
+                    {
+                      itemType: "product",
+                      itemId: "",
+                      quantity: "1",
+                      unitPrice: "",
+                    },
                   ])
                 }
                 className="text-xs font-bold text-slate-700"
@@ -373,38 +573,78 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
               >
                 <select
                   required
-                  value={line.product}
+                  value={line.itemId ? `${line.itemType}:${line.itemId}` : ""}
                   onChange={(event) =>
                     setOrderLines((current) =>
                       current.map((item, itemIndex) =>
-                        itemIndex === index
-                          ? {
-                              ...item,
-                              product: event.target.value,
-                              unitPrice: String(
-                                products.find(
-                                  (product) =>
-                                    product._id === event.target.value,
-                                )?.wholesalePrice ?? products.find((product) => product._id === event.target.value)?.price ?? "",
-                              ),
-                            }
-                          : item,
+                        itemIndex !== index
+                          ? item
+                          : (() => {
+                              const [itemType, itemId] =
+                                event.target.value.split(":");
+                              const product = products.find(
+                                (candidate) => candidate._id === itemId,
+                              );
+                              const rawMaterial = rawMaterials.find(
+                                (candidate) => candidate._id === itemId,
+                              );
+                              return {
+                                ...item,
+                                itemType:
+                                  itemType === "raw_material"
+                                    ? "raw_material"
+                                    : "product",
+                                itemId,
+                                quantity: "1",
+                                unitPrice: String(
+                                  product?.wholesalePrice ??
+                                    product?.price ??
+                                    rawMaterial?.costPerUnit ??
+                                    "",
+                                ),
+                              };
+                            })(),
                       ),
                     )
                   }
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
                 >
-                  <option value="">Select product</option>
-                  {products.map((product) => (
-                    <option key={product._id} value={product._id}>
-                      {product.name} · wholesale {money(product.wholesalePrice ?? product.price)} RWF/{product.baseUnit === "pcs" ? "pc" : "pack"}
-                    </option>
-                  ))}
+                  <option value="">
+                    Select finished product or raw material
+                  </option>
+                  {products.length > 0 && (
+                    <optgroup label="Finished products">
+                      {products.map((product) => (
+                        <option
+                          key={product._id}
+                          value={`product:${product._id}`}
+                        >
+                          {product.name} · wholesale{" "}
+                          {money(product.wholesalePrice ?? product.price)} RWF/
+                          {product.baseUnit === "pcs" ? "pc" : "pack"}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {rawMaterials.length > 0 && (
+                    <optgroup label="Raw materials — office sales only">
+                      {rawMaterials.map((material) => (
+                        <option
+                          key={material._id}
+                          value={`raw_material:${material._id}`}
+                        >
+                          {material.name} · available{" "}
+                          {money(material.availableQuantity || 0)}{" "}
+                          {material.unit}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
                 <input
                   required
-                  min="1"
-                  step="1"
+                  min={line.itemType === "raw_material" ? "0.0001" : "1"}
+                  step={line.itemType === "raw_material" ? "any" : "1"}
                   type="number"
                   value={line.quantity}
                   onChange={(event) =>
@@ -417,7 +657,9 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                     )
                   }
                   aria-label="Quantity"
-                  placeholder="Packs"
+                  placeholder={
+                    line.itemType === "raw_material" ? "Quantity" : "Packs"
+                  }
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
                 />
                 <input
@@ -436,7 +678,11 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
                     )
                   }
                   aria-label="Unit price in RWF"
-                  placeholder="Price / pack (RWF)"
+                  placeholder={
+                    line.itemType === "raw_material"
+                      ? "Price / unit (RWF)"
+                      : "Price / pack (RWF)"
+                  }
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
                 />
                 <button
@@ -502,21 +748,145 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
           </button>
         </form>
       )}
-      {fulfilmentView && <div className="flex justify-end"><Link to="/management/sales/orders" className="text-sm font-bold text-slate-700 hover:text-slate-950">View all orders</Link></div>}
-      <section className="cana-panel flex flex-wrap items-end gap-3 p-3"><label className="min-w-52 flex-1 text-xs font-bold text-slate-500">Search<input aria-label="Search orders" placeholder="Order number or customer" value={search} onChange={(event) => setSearch(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-slate-900"/></label><label className="text-xs font-bold text-slate-500">From<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1 block rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-slate-900"/></label><label className="text-xs font-bold text-slate-500">To<input type="date" min={dateFrom || undefined} value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1 block rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-slate-900"/></label>
-        <label className="text-xs font-bold text-slate-500">Status<select aria-label="Filter order status"
-          value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
-          className="mt-1 block rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-        >
-          <option value="">All statuses</option>
-          {[...Object.keys(next), "delivered", "cancelled"].map((status) => (
-            <option key={status} value={status}>
-              {status.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select></label><div className="ml-auto pb-1 text-sm text-slate-500"><strong className="text-slate-900">{visibleOrders.length}</strong> transaction{visibleOrders.length === 1 ? "" : "s"} shown</div>{(dateFrom || dateTo || search || statusFilter) && <button type="button" onClick={() => { setSearch(""); setStatusFilter(""); setDateFrom(""); setDateTo(""); }} className="pb-1 text-sm font-bold text-red-700">Clear filters</button>}</section>
-      <section className="space-y-2 md:hidden">{loading ? <p className="cana-panel p-8 text-center text-sm text-slate-500">Loading sales orders…</p> : visibleOrders.map((order) => <article key={order._id} onClick={() => setDetailsOrder(order)} className="cana-panel cursor-pointer p-4 transition hover:border-slate-300"><div className="flex items-start justify-between gap-3"><div><p className="font-extrabold text-slate-950">{order.orderNumber}</p><p className="mt-1 text-sm font-semibold text-slate-700">{order.customer?.businessName || order.customer?.fullName || "Customer"}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}>{order.status.replaceAll("_", " ")}</span></div><p className="mt-3 text-sm text-slate-600">{order.items.map((item) => `${item.productName} · ${orderQuantity(item)}`).join(", ")}</p><div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3"><strong className="text-slate-950">{money(order.total)} RWF</strong><span className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleDateString("en-RW")}</span></div><div className="mt-3" onClick={(event) => event.stopPropagation()}><OrderActions order={order} saving={saving} onView={setDetailsOrder} onPrint={printSalesOrder} onSetPrices={openPricing} onTransition={(id, status) => void transition(id, status)} /></div></article>)}{!loading && !visibleOrders.length && <p className="cana-panel p-8 text-center text-sm text-slate-500">No sales orders match this view.</p>}</section>
+      {fulfilmentView && (
+        <div className="flex justify-end">
+          <Link
+            to="/management/sales/orders"
+            className="text-sm font-bold text-slate-700 hover:text-slate-950"
+          >
+            View all orders
+          </Link>
+        </div>
+      )}
+      <section className="cana-panel flex flex-wrap items-end gap-3 p-3">
+        <label className="min-w-52 flex-1 text-xs font-bold text-slate-500">
+          Search
+          <input
+            aria-label="Search orders"
+            placeholder="Order number or customer"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-slate-900"
+          />
+        </label>
+        <label className="text-xs font-bold text-slate-500">
+          From
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(event) => setDateFrom(event.target.value)}
+            className="mt-1 block rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-slate-900"
+          />
+        </label>
+        <label className="text-xs font-bold text-slate-500">
+          To
+          <input
+            type="date"
+            min={dateFrom || undefined}
+            value={dateTo}
+            onChange={(event) => setDateTo(event.target.value)}
+            className="mt-1 block rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-slate-900"
+          />
+        </label>
+        <label className="text-xs font-bold text-slate-500">
+          Status
+          <select
+            aria-label="Filter order status"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="mt-1 block rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-slate-900"
+          >
+            <option value="">All statuses</option>
+            {[...Object.keys(next), "delivered", "cancelled"].map((status) => (
+              <option key={status} value={status}>
+                {status.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="ml-auto pb-1 text-sm text-slate-500">
+          <strong className="text-slate-900">{visibleOrders.length}</strong>{" "}
+          transaction{visibleOrders.length === 1 ? "" : "s"} shown
+        </div>
+        {(dateFrom || dateTo || search || statusFilter) && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setStatusFilter("");
+              setDateFrom("");
+              setDateTo("");
+            }}
+            className="pb-1 text-sm font-bold text-red-700"
+          >
+            Clear filters
+          </button>
+        )}
+      </section>
+      <section className="space-y-2 md:hidden">
+        {loading ? (
+          <p className="cana-panel p-8 text-center text-sm text-slate-500">
+            Loading sales orders…
+          </p>
+        ) : (
+          visibleOrders.map((order) => (
+            <article
+              key={order._id}
+              onClick={() => setDetailsOrder(order)}
+              className="cana-panel cursor-pointer p-4 transition hover:border-slate-300"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-extrabold text-slate-950">
+                    {order.orderNumber}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-700">
+                    {order.customer?.businessName ||
+                      order.customer?.fullName ||
+                      "Customer"}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}
+                >
+                  {order.status.replaceAll("_", " ")}
+                </span>
+              </div>
+              <p className="mt-3 text-sm text-slate-600">
+                {order.items
+                  .map((item) => `${item.productName} · ${orderQuantity(item)}`)
+                  .join(", ")}
+              </p>
+              <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
+                <strong className="text-slate-950">
+                  {money(order.total)} RWF
+                </strong>
+                <span className="text-xs text-slate-500">
+                  {new Date(order.createdAt).toLocaleDateString("en-RW")}
+                </span>
+              </div>
+              <div
+                className="mt-3"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <OrderActions
+                  order={order}
+                  saving={saving}
+                  onView={setDetailsOrder}
+                  onPrint={printSalesOrder}
+                  onSetPrices={openPricing}
+                  onTransition={(id, status) => void transition(id, status)}
+                />
+              </div>
+            </article>
+          ))
+        )}
+        {!loading && !visibleOrders.length && (
+          <p className="cana-panel p-8 text-center text-sm text-slate-500">
+            No sales orders match this view.
+          </p>
+        )}
+      </section>
       <div className="hidden overflow-x-auto md:block cana-panel">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -538,31 +908,57 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
               </tr>
             ) : (
               visibleOrders.map((order) => (
-                  <tr key={order._id} onClick={() => setDetailsOrder(order)} className="cursor-pointer transition hover:bg-slate-50">
-                    <td className="px-5 py-4 font-semibold">
-                      {order.orderNumber}
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-900">{order.customer?.businessName || order.customer?.fullName || "Customer"}</p>
-                      {order.customer?.businessName && <p className="mt-1 text-xs text-slate-500">Contact: {order.customer.fullName}</p>}
-                    </td>
-                    <td className="px-5 py-4">
-                      {order.items
-                        .map(
-                          (item) =>
-                            `${item.productName} (${orderQuantity(item)})`,
-                        )
-                        .join(", ")}
-                    </td>
-                    <td className="px-5 py-4">{money(order.total)} RWF</td>
-                    <td className="px-5 py-4">
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}>
-                        {order.status.replaceAll("_", " ")}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4" onClick={(event) => event.stopPropagation()}><OrderActions order={order} saving={saving} onView={setDetailsOrder} onPrint={printSalesOrder} onSetPrices={openPricing} onTransition={(id, status) => void transition(id, status)} /></td>
-                  </tr>
-                ))
+                <tr
+                  key={order._id}
+                  onClick={() => setDetailsOrder(order)}
+                  className="cursor-pointer transition hover:bg-slate-50"
+                >
+                  <td className="px-5 py-4 font-semibold">
+                    {order.orderNumber}
+                  </td>
+                  <td className="px-5 py-4">
+                    <p className="font-semibold text-slate-900">
+                      {order.customer?.businessName ||
+                        order.customer?.fullName ||
+                        "Customer"}
+                    </p>
+                    {order.customer?.businessName && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Contact: {order.customer.fullName}
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-5 py-4">
+                    {order.items
+                      .map(
+                        (item) =>
+                          `${item.productName} (${orderQuantity(item)})`,
+                      )
+                      .join(", ")}
+                  </td>
+                  <td className="px-5 py-4">{money(order.total)} RWF</td>
+                  <td className="px-5 py-4">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}
+                    >
+                      {order.status.replaceAll("_", " ")}
+                    </span>
+                  </td>
+                  <td
+                    className="px-5 py-4"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <OrderActions
+                      order={order}
+                      saving={saving}
+                      onView={setDetailsOrder}
+                      onPrint={printSalesOrder}
+                      onSetPrices={openPricing}
+                      onTransition={(id, status) => void transition(id, status)}
+                    />
+                  </td>
+                </tr>
+              ))
             )}
             {!loading && orders.length === 0 && (
               <tr>
@@ -574,8 +970,353 @@ export default function SalesOrdersPage({ view = "orders" }: { view?: "orders" |
           </tbody>
         </table>
       </div>
-      {detailsOrder && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-label={`Order ${detailsOrder.orderNumber} details`} className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl"><header className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-4"><div><p className="cana-section-kicker text-red-700">Sales order</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">{detailsOrder.orderNumber}</h2><p className="mt-1 text-sm text-slate-500">Created {new Date(detailsOrder.createdAt).toLocaleDateString("en-RW", { dateStyle: "medium" })}</p></div><div className="flex items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(detailsOrder.status)}`}>{detailsOrder.status.replaceAll("_", " ")}</span><button type="button" onClick={() => setDetailsOrder(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></div></header><div className="space-y-5 p-5"><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Customer</p><p className="mt-1 font-bold text-slate-950">{detailsOrder.customer?.businessName || detailsOrder.customer?.fullName || "Customer"}</p>{detailsOrder.customer?.businessName && <p className="mt-1 text-sm text-slate-600">Contact: {detailsOrder.customer.fullName}</p>}<p className="mt-1 text-sm text-slate-600">{detailsOrder.customer?.phone || "No phone"}</p>{detailsOrder.customer?.email && <p className="text-sm text-slate-600">{detailsOrder.customer.email}</p>}</div><div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Delivery</p><p className="mt-1 font-bold text-slate-950">{detailsOrder.requestedDeliveryDate ? new Date(detailsOrder.requestedDeliveryDate).toLocaleDateString("en-RW", { dateStyle: "medium" }) : "Date not requested"}</p><p className="mt-1 text-sm text-slate-600">{detailsOrder.deliveryAddress || detailsOrder.customer?.address || "Address not provided"}</p></div></div><section className="rounded-xl border border-slate-200"><div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Fulfilment summary</p><h3 className="mt-1 font-extrabold text-slate-950">Sales Store issue</h3></div><span className="text-sm font-bold text-slate-950">{detailsOrder.items.reduce((sum, item) => sum + Number(item.stockQuantity || 0), 0)} kg</span></div><div className="divide-y divide-slate-100">{detailsOrder.items.map((item, index) => <div key={`${item.product}-issue-${index}`} className="flex items-center justify-between gap-3 px-4 py-3 text-sm"><div><p className="font-bold text-slate-900">{item.productName}</p><p className="mt-0.5 text-xs text-slate-500">Ordered: {orderQuantity(item)}</p></div><p className="font-bold text-slate-700">{stockIssue(item)} issued from Sales Store</p></div>)}</div></section><div className="overflow-x-auto rounded-xl border border-slate-200"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Product</th><th className="px-4 py-3">Quantity</th><th className="px-4 py-3 text-right">Price</th><th className="px-4 py-3 text-right">Amount</th></tr></thead><tbody className="divide-y divide-slate-100">{detailsOrder.items.map((item, index) => <tr key={`${item.product}-${index}`}><td className="px-4 py-3"><p className="font-bold text-slate-950">{item.productName}</p><p className="text-xs text-slate-500">{item.productCode || "—"}</p></td><td className="px-4 py-3 font-medium text-slate-700">{orderQuantity(item)}</td><td className="px-4 py-3 text-right text-slate-700">{money(item.unitPrice || 0)} RWF</td><td className="px-4 py-3 text-right font-bold text-slate-950">{money(item.total ?? item.quantity * Number(item.unitPrice || 0))} RWF</td></tr>)}</tbody><tfoot className="border-t-2 border-slate-200 bg-slate-50"><tr><td colSpan={3} className="px-4 py-3 text-right text-sm font-bold text-slate-700">Order total</td><td className="px-4 py-3 text-right text-lg font-extrabold text-slate-950">{money(detailsOrder.total)} RWF</td></tr></tfoot></table></div>{detailsOrder.statusHistory && detailsOrder.statusHistory.length > 0 && <section className="rounded-xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Order timeline</p><div className="mt-3 flex flex-wrap gap-2">{detailsOrder.statusHistory.slice().reverse().map((entry, index) => <span key={`${entry.status}-${entry.at}-${index}`} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-700">{entry.status.replaceAll("_", " ")} · {new Date(entry.at).toLocaleDateString("en-RW")}</span>)}</div></section>}{detailsOrder.notes && <div className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Notes</p><p className="mt-1 text-sm leading-6 text-slate-700">{detailsOrder.notes}</p></div>}<div className="flex flex-wrap justify-end gap-2"><OrderActions order={detailsOrder} saving={saving} onView={() => undefined} onPrint={printSalesOrder} onSetPrices={(order) => { setDetailsOrder(null); openPricing(order); }} onTransition={(id, status) => { void transition(id, status); setDetailsOrder(null); }} /></div></div></section></div>}
-      {pricingOrder && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm"><form onSubmit={(event) => { event.preventDefault(); void saveAgreedPrices(pricingOrder); }} className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><p className="cana-section-kicker text-red-700">Commercial review</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Confirm order prices</h2><p className="mt-1 text-sm text-slate-500">{pricingOrder.orderNumber} · {pricingOrder.customer?.businessName || pricingOrder.customer?.fullName}</p></div><button type="button" onClick={() => setPricingOrder(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></header><div className="space-y-3 p-5">{pricingOrder.items.map((item) => <div key={item.product} className="grid gap-3 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_7rem_10rem]"><div><p className="font-bold text-slate-950">{item.productName}</p><p className="mt-0.5 text-xs text-slate-500">{item.productCode || "—"} · {orderQuantity(item)}</p></div><p className="self-center text-sm font-bold text-slate-700">× {item.quantity}</p><label className="text-xs font-bold uppercase tracking-wide text-slate-500">Agreed price / {item.unit === "packs" ? "pack" : item.unit}<input autoFocus required min="0" step="any" type="number" value={agreedPrices[item.product] ?? ""} onChange={(event) => setAgreedPrices((current) => ({ ...current, [item.product]: event.target.value }))} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-950"/></label></div>)}<div className="flex items-center justify-between border-t border-slate-100 pt-4"><span className="text-sm font-bold text-slate-600">Agreed total</span><strong className="text-xl font-extrabold text-slate-950">{money(pricingOrder.items.reduce((sum, item) => sum + item.quantity * Number(agreedPrices[item.product] || 0), 0))} RWF</strong></div></div><footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4"><button type="button" onClick={() => setPricingOrder(null)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700">Cancel</button><button disabled={saving} className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">{saving ? "Saving…" : "Save agreed prices"}</button></footer></form></div>}
+      {detailsOrder && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Order ${detailsOrder.orderNumber} details`}
+            className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+          >
+            <header className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-4">
+              <div>
+                <p className="cana-section-kicker text-red-700">Sales order</p>
+                <h2 className="mt-1 text-xl font-extrabold text-slate-950">
+                  {detailsOrder.orderNumber}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Created{" "}
+                  {new Date(detailsOrder.createdAt).toLocaleDateString(
+                    "en-RW",
+                    { dateStyle: "medium" },
+                  )}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(detailsOrder.status)}`}
+                >
+                  {detailsOrder.status.replaceAll("_", " ")}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDetailsOrder(null)}
+                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </header>
+            <div className="space-y-5 p-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Customer
+                  </p>
+                  <p className="mt-1 font-bold text-slate-950">
+                    {detailsOrder.customer?.businessName ||
+                      detailsOrder.customer?.fullName ||
+                      "Customer"}
+                  </p>
+                  {detailsOrder.customer?.businessName && (
+                    <p className="mt-1 text-sm text-slate-600">
+                      Contact: {detailsOrder.customer.fullName}
+                    </p>
+                  )}
+                  <p className="mt-1 text-sm text-slate-600">
+                    {detailsOrder.customer?.phone || "No phone"}
+                  </p>
+                  {detailsOrder.customer?.email && (
+                    <p className="text-sm text-slate-600">
+                      {detailsOrder.customer.email}
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Delivery
+                  </p>
+                  <p className="mt-1 font-bold text-slate-950">
+                    {detailsOrder.requestedDeliveryDate
+                      ? new Date(
+                          detailsOrder.requestedDeliveryDate,
+                        ).toLocaleDateString("en-RW", { dateStyle: "medium" })
+                      : "Date not requested"}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {detailsOrder.deliveryAddress ||
+                      detailsOrder.customer?.address ||
+                      "Address not provided"}
+                  </p>
+                </div>
+              </div>
+              <section className="rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Fulfilment summary
+                    </p>
+                    <h3 className="mt-1 font-extrabold text-slate-950">
+                      Stock to issue
+                    </h3>
+                  </div>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {detailsOrder.items.map((item, index) => (
+                    <div
+                      key={`${item.product || item.rawMaterial}-issue-${index}`}
+                      className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
+                    >
+                      <div>
+                        <p className="font-bold text-slate-900">
+                          {item.productName}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {item.itemType === "raw_material"
+                            ? "Raw material"
+                            : "Finished product"}{" "}
+                          · Ordered: {orderQuantity(item)}
+                        </p>
+                      </div>
+                      <p className="font-bold text-slate-700">
+                        {stockIssue(item)} issued from{" "}
+                        {item.itemType === "raw_material"
+                          ? "Raw Material Inventory"
+                          : "Sales Store"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">Item</th>
+                      <th className="px-4 py-3">Quantity</th>
+                      <th className="px-4 py-3 text-right">Price</th>
+                      <th className="px-4 py-3 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {detailsOrder.items.map((item, index) => (
+                      <tr key={`${item.product || item.rawMaterial}-${index}`}>
+                        <td className="px-4 py-3">
+                          <p className="font-bold text-slate-950">
+                            {item.productName}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {item.itemType === "raw_material"
+                              ? "Raw material · "
+                              : ""}
+                            {item.productCode || "—"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-slate-700">
+                          {orderQuantity(item)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-700">
+                          {money(item.unitPrice || 0)} RWF
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-950">
+                          {money(
+                            item.total ??
+                              item.quantity * Number(item.unitPrice || 0),
+                          )}{" "}
+                          RWF
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t-2 border-slate-200 bg-slate-50">
+                    <tr>
+                      <td
+                        colSpan={3}
+                        className="px-4 py-3 text-right text-sm font-bold text-slate-700"
+                      >
+                        Order total
+                      </td>
+                      <td className="px-4 py-3 text-right text-lg font-extrabold text-slate-950">
+                        {money(detailsOrder.total)} RWF
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              {detailsOrder.statusHistory &&
+                detailsOrder.statusHistory.length > 0 && (
+                  <section className="rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Order timeline
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {detailsOrder.statusHistory
+                        .slice()
+                        .reverse()
+                        .map((entry, index) => (
+                          <span
+                            key={`${entry.status}-${entry.at}-${index}`}
+                            className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-700"
+                          >
+                            {entry.status.replaceAll("_", " ")} ·{" "}
+                            {new Date(entry.at).toLocaleDateString("en-RW")}
+                          </span>
+                        ))}
+                    </div>
+                  </section>
+                )}
+              {detailsOrder.notes && (
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Notes
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-slate-700">
+                    {detailsOrder.notes}
+                  </p>
+                </div>
+              )}
+              <div className="flex flex-wrap justify-end gap-2">
+                <OrderActions
+                  order={detailsOrder}
+                  saving={saving}
+                  onView={() => undefined}
+                  onPrint={printSalesOrder}
+                  onSetPrices={(order) => {
+                    setDetailsOrder(null);
+                    openPricing(order);
+                  }}
+                  onTransition={(id, status) => {
+                    void transition(id, status);
+                    setDetailsOrder(null);
+                  }}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+      {pricingOrder && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveAgreedPrices(pricingOrder);
+            }}
+            className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl"
+          >
+            <header className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <p className="cana-section-kicker text-red-700">
+                  Commercial review
+                </p>
+                <h2 className="mt-1 text-xl font-extrabold text-slate-950">
+                  Confirm order prices
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {pricingOrder.orderNumber} ·{" "}
+                  {pricingOrder.customer?.businessName ||
+                    pricingOrder.customer?.fullName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPricingOrder(null)}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <div className="space-y-3 p-5">
+              {pricingOrder.items.map((item) => (
+                <div
+                  key={
+                    item.itemType === "raw_material"
+                      ? `raw:${item.rawMaterial}`
+                      : `product:${item.product}`
+                  }
+                  className="grid gap-3 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_7rem_10rem]"
+                >
+                  <div>
+                    <p className="font-bold text-slate-950">
+                      {item.productName}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {item.productCode || "—"} · {orderQuantity(item)}
+                    </p>
+                  </div>
+                  <p className="self-center text-sm font-bold text-slate-700">
+                    × {item.quantity}
+                  </p>
+                  <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Agreed price / {item.unit === "packs" ? "pack" : item.unit}
+                    <input
+                      autoFocus
+                      required
+                      min="0"
+                      step="any"
+                      type="number"
+                      value={
+                        agreedPrices[
+                          item.itemType === "raw_material"
+                            ? `raw:${item.rawMaterial}`
+                            : `product:${item.product}`
+                        ] ?? ""
+                      }
+                      onChange={(event) =>
+                        setAgreedPrices((current) => ({
+                          ...current,
+                          [item.itemType === "raw_material"
+                            ? `raw:${item.rawMaterial}`
+                            : `product:${item.product}`]: event.target.value,
+                        }))
+                      }
+                      className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-950"
+                    />
+                  </label>
+                </div>
+              ))}
+              <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+                <span className="text-sm font-bold text-slate-600">
+                  Agreed total
+                </span>
+                <strong className="text-xl font-extrabold text-slate-950">
+                  {money(
+                    pricingOrder.items.reduce(
+                      (sum, item) =>
+                        sum +
+                        item.quantity *
+                          Number(
+                            agreedPrices[
+                              item.itemType === "raw_material"
+                                ? `raw:${item.rawMaterial}`
+                                : `product:${item.product}`
+                            ] || 0,
+                          ),
+                      0,
+                    ),
+                  )}{" "}
+                  RWF
+                </strong>
+              </div>
+            </div>
+            <footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setPricingOrder(null)}
+                className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={saving}
+                className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
+              >
+                {saving ? "Saving…" : "Save agreed prices"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

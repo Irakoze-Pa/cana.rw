@@ -1,11 +1,12 @@
 import type {
   IssueMaterialPayload,
   MaterialConsumption,
+  MaterialConsumptionItem,
   MaterialConsumptionStats,
 } from "../types/materialConsumption.types";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || (import.meta.env.VITE_API_URL || "/api/v1");
+  import.meta.env.VITE_API_URL || import.meta.env.VITE_API_URL || "/api/v1";
 
 const BASE_URL = `${API_BASE_URL}/material-consumptions`;
 
@@ -16,10 +17,7 @@ interface ApiResponse<T> {
   result?: T;
 }
 
-async function request<T>(
-  url: string,
-  options: RequestInit = {},
-): Promise<T> {
+async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     headers: {
       "Content-Type": "application/json",
@@ -35,23 +33,16 @@ async function request<T>(
   try {
     body = text ? JSON.parse(text) : null;
   } catch {
-    throw new Error(
-      `Server returned invalid JSON (${response.status}).`,
-    );
+    throw new Error(`Server returned invalid JSON (${response.status}).`);
   }
 
   if (!response.ok) {
     throw new Error(
-      body?.message ||
-        `Request failed with status ${response.status}`,
+      body?.message || `Request failed with status ${response.status}`,
     );
   }
 
-  return (
-    body?.data ??
-    body?.result ??
-    (body as T)
-  );
+  return body?.data ?? body?.result ?? (body as T);
 }
 
 export async function getMaterialConsumptions(params?: {
@@ -66,17 +57,11 @@ export async function getMaterialConsumptions(params?: {
   }
 
   if (params?.productionOrder) {
-    searchParams.set(
-      "productionOrder",
-      params.productionOrder,
-    );
+    searchParams.set("productionOrder", params.productionOrder);
   }
 
   if (params?.productionBatch) {
-    searchParams.set(
-      "productionBatch",
-      params.productionBatch,
-    );
+    searchParams.set("productionBatch", params.productionBatch);
   }
 
   const query = searchParams.toString();
@@ -86,29 +71,47 @@ export async function getMaterialConsumptions(params?: {
   );
 }
 
-export async function getMaterialConsumptionById(
-  id: string,
-) {
-  return request<MaterialConsumption>(
-    `${BASE_URL}/${id}`,
-  );
+export async function getMaterialConsumptionById(id: string) {
+  return request<MaterialConsumption>(`${BASE_URL}/${id}`);
 }
 
 export async function getMaterialConsumptionStats() {
-  return request<MaterialConsumptionStats>(
-    `${BASE_URL}/stats`,
-  );
+  return request<MaterialConsumptionStats>(`${BASE_URL}/stats`);
 }
 
 export async function issueMaterialConsumption(
   id: string,
   payload: IssueMaterialPayload,
 ) {
-  return request<MaterialConsumption>(
-    `${BASE_URL}/${id}/issue`,
+  return request<MaterialConsumption>(`${BASE_URL}/${id}/issue`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Updates the batch-specific recipe before material issue. The master formula
+ * is never changed by this request.
+ */
+export async function updateBatchRecipe(
+  id: string,
+  items: Array<Pick<MaterialConsumptionItem, "standardQuantity">>,
+) {
+  return request<MaterialConsumption>(`${BASE_URL}/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ items }),
+  });
+}
+
+export async function saveBatchRecipeAsFormulaVersion(
+  id: string,
+  items: Array<Pick<MaterialConsumptionItem, "standardQuantity">>,
+) {
+  return request<{ consumption: MaterialConsumption }>(
+    `${BASE_URL}/${id}/save-formula-version`,
     {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ items }),
     },
   );
 }
