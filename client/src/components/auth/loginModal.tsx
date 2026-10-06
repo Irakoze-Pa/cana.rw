@@ -41,18 +41,14 @@ function LoginModal({
     return null;
   }
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     });
   };
 
-  const handleSubmit = async (
-    e: React.FormEvent<HTMLFormElement>
-  ) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setError("");
@@ -77,8 +73,16 @@ function LoginModal({
       // Save authentication data
       login(user, token);
 
-      // Close modal
       onClose();
+
+      const isManagementUser = ["admin", "superadmin", "staff"].includes(
+        user.role,
+      );
+
+      if (isManagementUser) {
+        navigate("/management", { replace: true });
+        return;
+      }
 
       /*
        * If the page that opened this modal
@@ -88,7 +92,7 @@ function LoginModal({
        * Example:
        * Products -> Request Quote
        */
-      if (onLoginSuccess) {
+      if (onLoginSuccess && user.role === "customer") {
         onLoginSuccess();
         return;
       }
@@ -98,13 +102,8 @@ function LoginModal({
        * is used somewhere else.
        */
       switch (user.role) {
-        case "admin":
-        case "staff":
-          navigate("/management");
-          break;
-
         case "customer":
-          navigate("/dashboard");
+          navigate("/dashboard", { replace: true });
           break;
 
         default:
@@ -117,7 +116,7 @@ function LoginModal({
       setError(
         err?.response?.data?.message ||
           err?.message ||
-          "Login failed. Please try again."
+          "Login failed. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -151,115 +150,116 @@ function LoginModal({
 
         <div className="px-5 pb-6 pt-6 sm:px-7 sm:pb-7 sm:pt-7">
           <div className="flex items-center gap-3">
-          <img
-            src={logo}
+            <img
+              src={logo}
               alt="CANAN Business Group"
               className="h-12 w-auto object-contain sm:h-14"
-          />
+            />
             <div className="border-l border-gray-200 pl-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-600">Secure access</p>
-              <p className="mt-1 text-xs font-medium text-gray-500">CANAN Business Group</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-600">
+                Secure access
+              </p>
+              <p className="mt-1 text-xs font-medium text-gray-500">
+                CANAN Business Group
+              </p>
             </div>
           </div>
 
           <div className="mt-6">
-            <h2 id="login-modal-title" className="text-2xl font-extrabold tracking-tight text-black sm:text-3xl">Welcome back</h2>
-          </div>
-
-        <form
-          onSubmit={handleSubmit}
-            className="mt-6 space-y-4"
-        >
-          <div>
-            <label
-              htmlFor="phone"
-              className="mb-2 block text-sm font-semibold text-gray-700"
+            <h2
+              id="login-modal-title"
+              className="text-2xl font-extrabold tracking-tight text-black sm:text-3xl"
             >
-              Phone Number
-            </label>
-
-            <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3.5 transition focus-within:border-black focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5">
-              <Phone
-                size={18}
-                className="shrink-0 text-gray-400"
-              />
-
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={handleChange}
-                placeholder="Enter your phone number"
-                className="w-full bg-transparent text-sm text-black outline-none placeholder:text-gray-400"
-              />
-            </div>
+              Welcome back
+            </h2>
           </div>
 
-          <div>
-            <div className="mb-2 flex items-center justify-between">
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <div>
               <label
-                htmlFor="password"
-                className="block text-sm font-semibold text-gray-700"
+                htmlFor="phone"
+                className="mb-2 block text-sm font-semibold text-gray-700"
               >
-                Password
+                Phone Number
               </label>
 
-              <button
-                type="button"
-                onClick={onForgotPassword}
-                className="text-xs font-semibold text-red-600 transition hover:text-black"
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3.5 transition focus-within:border-black focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5">
+                <Phone size={18} className="shrink-0 text-gray-400" />
+
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="Enter your phone number"
+                  className="w-full bg-transparent text-sm text-black outline-none placeholder:text-gray-400"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-semibold text-gray-700"
+                >
+                  Password
+                </label>
+
+                <button
+                  type="button"
+                  onClick={onForgotPassword}
+                  className="text-xs font-semibold text-red-600 transition hover:text-black"
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3.5 transition focus-within:border-black focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5">
+                <Lock size={18} className="shrink-0 text-gray-400" />
+
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Enter your password"
+                  className="w-full bg-transparent text-sm text-black outline-none placeholder:text-gray-400"
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3"
               >
-                Forgot password?
-              </button>
-            </div>
+                <p className="text-sm font-medium text-red-600">{error}</p>
+              </div>
+            )}
 
-            <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3.5 transition focus-within:border-black focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5">
-              <Lock
-                size={18}
-                className="shrink-0 text-gray-400"
-              />
-
-              <input
-                id="password"
-                name="password"
-                type="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Enter your password"
-                className="w-full bg-transparent text-sm text-black outline-none placeholder:text-gray-400"
-              />
-            </div>
-          </div>
-
-          {error && (
-            <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-              <p className="text-sm font-medium text-red-600">
-                {error}
-              </p>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex w-full items-center justify-center rounded-xl bg-black px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-black/10 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loading ? "Logging in..." : "Login"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full items-center justify-center rounded-xl bg-black px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-black/10 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? "Logging in..." : "Login"}
+            </button>
+          </form>
 
           <div className="mt-6 border-t border-gray-100 pt-4 text-center text-sm text-gray-600">
-          <span>Don't have an account?</span>
+            <span>Don't have an account?</span>
 
-          <button
-            type="button"
-            onClick={onRegister}
-            className="ml-2 font-bold text-red-600 transition hover:text-black"
-          >
-            Create account
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={onRegister}
+              className="ml-2 font-bold text-red-600 transition hover:text-black"
+            >
+              Create account
+            </button>
+          </div>
         </div>
       </div>
     </div>

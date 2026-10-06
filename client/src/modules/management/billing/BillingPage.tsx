@@ -95,6 +95,9 @@ export default function BillingPage() {
   const { confirm } = useConfirmation();
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [accountSearch, setAccountSearch] = useState("");
+  const [accountFilter, setAccountFilter] = useState<"all" | "outstanding" | "settled">("outstanding");
+  const [workspaceView, setWorkspaceView] = useState<"accounts" | "invoices" | "openings">("accounts");
   const [invoiceFilter, setInvoiceFilter] = useState<
     "all" | "unpaid" | "paid" | "void"
   >("all");
@@ -482,6 +485,15 @@ export default function BillingPage() {
     () => receivableAccounts.filter((account) => Number(account.balance) > 0),
     [receivableAccounts],
   );
+  const visibleCustomerAccounts = useMemo(() => {
+    const term = accountSearch.trim().toLowerCase();
+    return receivableAccounts.filter((account) => {
+      const matchesSearch = !term || `${account.customer.fullName || ""} ${account.customer.businessName || ""} ${account.customer.phone || ""}`.toLowerCase().includes(term);
+      const balance = Number(account.balance || 0);
+      const matchesStatus = accountFilter === "all" || (accountFilter === "outstanding" && balance > 0) || (accountFilter === "settled" && balance <= 0);
+      return matchesSearch && matchesStatus;
+    });
+  }, [accountFilter, accountSearch, receivableAccounts]);
   const matchingInvoices = invoices.filter((invoice) => {
     const matchesSearch =
       `${invoice.invoiceNumber} ${invoice.customer?.fullName || ""}`
@@ -515,6 +527,7 @@ export default function BillingPage() {
     selectedPaymentOpening?.openingNumber ||
     "";
   const openPaymentForInvoice = (invoice: Invoice) => {
+    setWorkspaceView("invoices");
     setPaymentForm((current) => ({
       ...current,
       invoice: invoice._id,
@@ -547,14 +560,20 @@ export default function BillingPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => setPaymentOpen(true)}
+            onClick={() => {
+              setWorkspaceView("invoices");
+              setPaymentOpen(true);
+            }}
             className="inline-flex items-center gap-2 rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-800"
           >
             <CreditCard size={16} />
             Record payment
           </button>
           <button
-            onClick={() => setOpeningOpen(true)}
+            onClick={() => {
+              setWorkspaceView("openings");
+              setOpeningOpen(true);
+            }}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 transition hover:bg-slate-50"
           >
             <Plus size={16} />
@@ -608,7 +627,25 @@ export default function BillingPage() {
           </div>
         ))}
       </section>
-      <section className="overflow-hidden border border-slate-200 bg-white">
+      <nav className="flex overflow-x-auto border-b border-slate-300 bg-white" aria-label="Billing workspace views">
+        {([
+          ["accounts", "Customer accounts", receivableAccounts.length],
+          ["invoices", "Invoices & receipts", invoices.length],
+          ["openings", "Opening debts", openingBalances.length],
+        ] as const).map(([value, label, count]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setWorkspaceView(value)}
+            aria-pressed={workspaceView === value}
+            className={`relative shrink-0 px-4 py-3 text-xs font-extrabold transition ${workspaceView === value ? "text-slate-950" : "text-slate-500 hover:text-slate-800"}`}
+          >
+            {label} <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] ${workspaceView === value ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600"}`}>{count}</span>
+            {workspaceView === value && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-red-700" />}
+          </button>
+        ))}
+      </nav>
+      <section className={workspaceView === "accounts" ? "overflow-hidden border border-slate-200 bg-white" : "hidden"}>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5">
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
@@ -619,20 +656,37 @@ export default function BillingPage() {
             </h2>
           </div>
           <span className="text-xs font-semibold text-slate-500">
-            {customersWithDebt.length} accounts with debt
+            {customersWithDebt.length} outstanding · {receivableAccounts.length} total
           </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-xs">
-            <thead className="bg-slate-950 uppercase tracking-wide text-white">
+        <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 p-2.5 sm:flex-row sm:items-center">
+          <input
+            value={accountSearch}
+            onChange={(event) => setAccountSearch(event.target.value)}
+            placeholder="Search customer, company or phone"
+            aria-label="Search customer accounts"
+            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-slate-950"
+          />
+          <div className="flex gap-1">
+            {([['outstanding', `Outstanding · ${customersWithDebt.length}`], ['settled', `Settled · ${receivableAccounts.length - customersWithDebt.length}`], ['all', `All · ${receivableAccounts.length}`]] as const).map(([value, label]) => (
+              <button key={value} type="button" onClick={() => setAccountFilter(value)} className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${accountFilter === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"}`}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="h-[340px] overflow-auto overscroll-contain sm:h-[380px]">
+          <table className="min-w-[900px] text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-slate-950 uppercase tracking-wide text-white">
               <tr>
                 <th className="px-3 py-2.5">Customer</th>
-                <th className="px-3 py-2.5 text-right">Payments received</th>
-                <th className="px-3 py-2.5 text-right">Debt due</th>
+                <th className="px-3 py-2.5 text-right">Sales invoices</th>
+                <th className="px-3 py-2.5 text-right">Opening debt</th>
+                <th className="px-3 py-2.5 text-right">Payments</th>
+                <th className="px-3 py-2.5 text-right">Balance due</th>
+                <th className="px-3 py-2.5">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {receivableAccounts.map((account) => (
+              {visibleCustomerAccounts.map((account) => (
                 <tr key={`summary-${account.customer._id}`} className="hover:bg-slate-50">
                   <td className="px-3 py-2.5">
                     <p className="font-bold text-slate-950">
@@ -644,18 +698,29 @@ export default function BillingPage() {
                         : account.customer.phone || "—"}
                     </p>
                   </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-slate-700">
+                    {money(account.invoiceTotal)} RWF
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-slate-700">
+                    {money(account.openingTotal)} RWF
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-emerald-700">
                     {money(account.amountPaid)} RWF
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right font-extrabold text-slate-950">
                     {money(account.balance)} RWF
                   </td>
+                  <td className="whitespace-nowrap px-3 py-2.5">
+                    <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide ${Number(account.balance) <= 0 ? "bg-emerald-50 text-emerald-700" : Number(account.amountPaid) > 0 ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"}`}>
+                      {Number(account.balance) <= 0 ? "Settled" : Number(account.amountPaid) > 0 ? "Part paid" : "Unpaid"}
+                    </span>
+                  </td>
                 </tr>
               ))}
-              {!loading && !customerAccounts.length && (
+              {!loading && !visibleCustomerAccounts.length && (
                 <tr>
-                  <td colSpan={3} className="px-3 py-8 text-center text-sm text-slate-500">
-                    No customer receivables are available yet.
+                  <td colSpan={6} className="px-3 py-8 text-center text-sm text-slate-500">
+                    No customer accounts match this view.
                   </td>
                 </tr>
               )}
@@ -663,7 +728,7 @@ export default function BillingPage() {
           </table>
         </div>
       </section>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+      <div className={`${workspaceView === "invoices" ? "flex" : "hidden"} flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500`}>
         <span>
           Issued invoice value:{" "}
           <strong className="text-slate-800">
@@ -837,7 +902,7 @@ export default function BillingPage() {
           </form>
         </div>
       )}
-      <div className="flex flex-col gap-2 border border-slate-200 bg-slate-50 p-2.5 lg:flex-row lg:items-center">
+      <div className={`${workspaceView === "invoices" ? "flex" : "hidden"} flex-col gap-2 border border-slate-200 bg-slate-50 p-2.5 lg:flex-row lg:items-center`}>
         <input
           aria-label="Search invoices"
           placeholder="Search invoice or customer"
@@ -868,7 +933,7 @@ export default function BillingPage() {
           ))}
         </div>
       </div>
-      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
+      <div className={`${workspaceView === "invoices" ? "grid" : "hidden"} items-start gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]`}>
         <section className="max-h-[620px] space-y-2 overflow-y-auto pr-1 md:hidden">
           {loading ? (
             <p className="border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
@@ -1578,75 +1643,7 @@ export default function BillingPage() {
           </form>
         </div>
       )}
-      <section className="overflow-hidden border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Account composition
-            </p>
-            <h2 className="mt-1 font-extrabold text-slate-950">
-              Detailed customer balance
-            </h2>
-          </div>
-          <span className="text-sm text-slate-500">
-            <strong className="text-slate-950">{customersWithDebt.length}</strong>{" "}
-            accounts outstanding
-          </span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-950 text-xs uppercase tracking-wide text-white">
-              <tr>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3 text-right">Sales invoices</th>
-                <th className="px-4 py-3 text-right">Opening debt</th>
-                <th className="px-4 py-3 text-right">Payments</th>
-                <th className="px-4 py-3 text-right">Balance due</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {receivableAccounts.map((account) => (
-                <tr key={account.customer._id}>
-                  <td className="px-4 py-3">
-                    <p className="font-bold text-slate-950">
-                      {account.customer.businessName ||
-                        account.customer.fullName}
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {account.customer.businessName
-                        ? account.customer.fullName
-                        : account.customer.phone || "—"}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3 text-right text-slate-700">
-                    {money(account.invoiceTotal)} RWF
-                  </td>
-                  <td className="px-4 py-3 text-right text-slate-700">
-                    {money(account.openingTotal)} RWF
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-emerald-700">
-                    {money(account.amountPaid)} RWF
-                  </td>
-                  <td className="px-4 py-3 text-right font-extrabold text-slate-950">
-                    {money(account.balance)} RWF
-                  </td>
-                </tr>
-              ))}
-              {!loading && !customerAccounts.length && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-4 py-10 text-center text-sm text-slate-500"
-                  >
-                    No customer accounts are available yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      <section className="overflow-hidden border border-slate-200 bg-white">
+      <section className={workspaceView === "openings" ? "overflow-hidden border border-slate-200 bg-white" : "hidden"}>
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -1661,9 +1658,9 @@ export default function BillingPage() {
             {openingBalances.length === 1 ? "" : "s"}
           </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-950 text-xs uppercase tracking-wide text-white">
+        <div className="h-[460px] overflow-auto overscroll-contain">
+          <table className="min-w-[960px] text-left text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-wide text-white">
               <tr>
                 <th className="px-4 py-3">Reference</th>
                 <th className="px-4 py-3">Customer</th>

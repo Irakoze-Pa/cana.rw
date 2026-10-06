@@ -365,9 +365,11 @@ const groups: Group[] = [
 export default function ManagementSidebar({
   sidebarOpen,
   onToggle,
+  onNavigate,
 }: {
   sidebarOpen: boolean;
   onToggle: () => void;
+  onNavigate?: () => void;
 }) {
   const { user } = useAuth();
   const location = useLocation();
@@ -442,6 +444,7 @@ export default function ManagementSidebar({
         <NavLink
           to="/management"
           end
+          onClick={onNavigate}
           title={!sidebarOpen ? "Overview" : undefined}
           className={({ isActive }) =>
             `mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${isActive ? "bg-red-600 text-white" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`
@@ -453,6 +456,7 @@ export default function ManagementSidebar({
         {!isAdmin && (
           <NavLink
             to="/management/staff-payments"
+            onClick={onNavigate}
             title={!sidebarOpen ? "My pay & advances" : undefined}
             className={({ isActive }) =>
               `mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${isActive ? "bg-red-600 text-white" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`
@@ -479,7 +483,10 @@ export default function ManagementSidebar({
                         ...current,
                         [group.label]: !expanded,
                       }))
-                    : navigate(group.shortcutTo || group.items[0].to)
+                    : (() => {
+                        navigate(group.shortcutTo || group.items[0].to);
+                        onNavigate?.();
+                      })()
                 }
                 title={!sidebarOpen ? group.label : undefined}
                 className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-sm font-semibold ${active ? "bg-gray-300 text-gray-900" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`}
@@ -513,6 +520,7 @@ export default function ManagementSidebar({
                         <NavLink
                           to={item.to}
                           end={item.end}
+                          onClick={onNavigate}
                           className={({ isActive }) =>
                             `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm ${isActive ? "bg-red-600/15 font-semibold text-red-700" : "text-gray-500 hover:bg-gray-200 hover:text-gray-700"}`
                           }
@@ -534,6 +542,7 @@ export default function ManagementSidebar({
       >
         <NavLink
           to="/management/profile"
+          onClick={onNavigate}
           title={!sidebarOpen ? "My profile & settings" : undefined}
           className={({ isActive }) =>
             `mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${isActive ? "bg-red-600 text-white" : "text-gray-700 hover:bg-gray-300 hover:text-gray-900"}`
