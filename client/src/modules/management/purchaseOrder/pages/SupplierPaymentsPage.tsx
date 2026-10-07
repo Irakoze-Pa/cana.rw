@@ -47,6 +47,7 @@ type Payment = {
   purchaseOrder?: { poNumber?: string; total?: number };
   openingPayable?: { openingNumber?: string; description?: string };
 };
+type TreasuryAccount = { _id: string; name: string; type: "cash" | "bank" | "mobile_money"; balance: number; status: string };
 type Account = {
   supplier: Supplier;
   purchaseOrderTotal: number;
@@ -72,6 +73,7 @@ const emptyPayment = () => ({
   supplier: "",
   amount: "",
   method: "bank_cheque",
+  treasuryAccount: "",
   chequeNumber: "",
   bankName: "",
   chequeDate: new Date().toISOString().slice(0, 10),
@@ -88,6 +90,7 @@ export default function SupplierPaymentsPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [openings, setOpenings] = useState<Opening[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [openingOpen, setOpeningOpen] = useState(false);
   const [error, setError] = useState("");
@@ -108,12 +111,13 @@ export default function SupplierPaymentsPage() {
     setLoading(true);
     setError("");
     try {
-      const [pay, po, supplier, opening, account] = await Promise.all([
+      const [pay, po, supplier, opening, account, treasury] = await Promise.all([
         api.get<{ data: Payment[] }>("/supplier-payments"),
         api.get<{ data: PO[] }>("/purchase-orders"),
         api.get<{ data: Supplier[] }>("/suppliers"),
         api.get<{ data: Opening[] }>("/supplier-payments/opening-payables"),
         api.get<{ data: Account[] }>("/supplier-payments/supplier-accounts"),
+        api.get<{ data: { accounts: TreasuryAccount[] } }>("/accounting/treasury-accounts").catch(() => ({ data: { data: { accounts: [] } } })),
       ]);
       setPayments(pay.data.data || []);
       setOrders(
@@ -124,6 +128,7 @@ export default function SupplierPaymentsPage() {
       setSuppliers((supplier.data.data || []).filter((item) => item));
       setOpenings(opening.data.data || []);
       setAccounts(account.data.data || []);
+      setTreasuryAccounts((treasury.data.data.accounts || []).filter((item) => item.status === "active"));
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -862,13 +867,21 @@ export default function SupplierPaymentsPage() {
               <Field label="Settlement method">
                 <select
                   value={form.method}
-                  onChange={(e) => setForm({ ...form, method: e.target.value })}
+                  onChange={(e) => setForm({ ...form, method: e.target.value, treasuryAccount: "" })}
                 >
                   <option value="bank_cheque">Post-dated bank cheque</option>
                   <option value="bank_transfer">Bank transfer</option>
                   <option value="cash">Cash</option>
                   <option value="mobile_money">Mobile money</option>
                   <option value="other">Other</option>
+                </select>
+              </Field>
+              <Field label="Payment account">
+                <select required value={form.treasuryAccount} onChange={(e) => setForm({ ...form, treasuryAccount: e.target.value })}>
+                  <option value="">Select account</option>
+                  {treasuryAccounts
+                    .filter((item) => item.type === (form.method === "cash" ? "cash" : form.method === "mobile_money" ? "mobile_money" : "bank"))
+                    .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}
                 </select>
               </Field>
               {form.method === "bank_cheque" && (

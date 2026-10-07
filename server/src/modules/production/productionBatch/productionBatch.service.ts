@@ -614,6 +614,11 @@ export async function updateProductionBatch(
   const isCompletingBatch = nextStatus === "Completed";
 
   let consumptionToFinalize: any = null;
+  let automaticIssueItems: Array<{
+    rawMaterial: string;
+    issuedQuantity: number;
+    lotNumber?: string;
+  }> | null = null;
 
   if (isCompletingBatch) {
     consumptionToFinalize = await RawMaterialConsumption.findOne({
@@ -658,13 +663,7 @@ export async function updateProductionBatch(
           ...(lot?.lotNumber ? { lotNumber: lot.lotNumber } : {}),
         });
       }
-      await issueMaterialConsumption(String(consumptionToFinalize._id), {
-        items: automaticItems,
-        notes: `Issued automatically during confirmed completion of batch ${batch.batchNo}.`,
-      });
-      consumptionToFinalize = await RawMaterialConsumption.findById(
-        consumptionToFinalize._id,
-      );
+      automaticIssueItems = automaticItems;
     }
   }
 
@@ -962,6 +961,16 @@ export async function updateProductionBatch(
   // ---------------------------------------------------
   // SAVE
   // ---------------------------------------------------
+
+  if (automaticIssueItems && consumptionToFinalize) {
+    await issueMaterialConsumption(String(consumptionToFinalize._id), {
+      items: automaticIssueItems,
+      notes: `Issued automatically during confirmed completion of batch ${batch.batchNo}.`,
+    });
+    consumptionToFinalize = await RawMaterialConsumption.findById(
+      consumptionToFinalize._id,
+    );
+  }
 
   await batch.save();
 

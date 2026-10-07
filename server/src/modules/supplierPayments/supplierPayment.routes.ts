@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import PurchaseOrder from "../purchaseOrders/purchaseOrder.model";
 import Supplier from "../suppliers/supplier.model";
 import SupplierPayment, { SupplierOpeningPayable } from "./supplierPayment.model";
+import { TreasuryAccount } from "../accounting/accounting.model";
+import { treasuryWorkspace } from "../accounting/accounting.service";
 
 const router = Router();
 const paymentMethods = ["cash", "bank_transfer", "bank_cheque", "mobile_money", "other"];
@@ -14,7 +16,7 @@ const nextNumber = async (prefix: string, model: mongoose.Model<any>, field: str
   const previous = Number(String(latest?.[field] || "").slice(numberPrefix.length));
   return `${numberPrefix}${String((Number.isFinite(previous) ? previous : 0) + 1).padStart(5, "0")}`;
 };
-const populatedPayment = (id: unknown) => SupplierPayment.findById(id).populate("supplier", "name code").populate("purchaseOrder", "poNumber total").populate("openingPayable", "openingNumber amount balance status description").lean();
+const populatedPayment = (id: unknown) => SupplierPayment.findById(id).populate("supplier", "name code").populate("purchaseOrder", "poNumber total").populate("openingPayable", "openingNumber amount balance status description").populate("treasuryAccount", "name type institution accountNumber").lean();
 const clearedFilter = { $or: [{ chequeStatus: "cleared" }, { chequeStatus: { $exists: false } }] };
 async function refreshDueCheques() {
   const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999);
@@ -29,7 +31,7 @@ async function applyOpeningPayment(openingPayable: unknown, amount: number) {
 }
 
 router.get("/", async (_req, res, next) => {
-  try { await refreshDueCheques(); res.json({ data: await SupplierPayment.find().populate("supplier", "name code").populate("purchaseOrder", "poNumber total").populate("openingPayable", "openingNumber amount balance status description").sort({ createdAt: -1 }).lean() }); }
+  try { await refreshDueCheques(); res.json({ data: await SupplierPayment.find().populate("supplier", "name code").populate("purchaseOrder", "poNumber total").populate("openingPayable", "openingNumber amount balance status description").populate("treasuryAccount", "name type institution accountNumber").sort({ createdAt: -1 }).lean() }); }
   catch (error) { next(error); }
 });
 
@@ -79,7 +81,7 @@ router.post("/opening-payables", async (req, res, next) => {
 
 router.post("/", async (req, res, next) => {
   try {
-    const { supplier, purchaseOrder, openingPayable, amount, method, chequeNumber, bankName, chequeDate, reference, paidAt, notes } = req.body || {};
+    const { supplier, purchaseOrder, openingPayable, treasuryAccount, amount, method, chequeNumber, bankName, chequeDate, reference, paidAt, notes } = req.body || {};
     const hasPO = Boolean(purchaseOrder); const hasOpening = Boolean(openingPayable);
     if (!mongoose.Types.ObjectId.isValid(supplier) || hasPO === hasOpening) throw new Error("Select a supplier and one purchase order or opening payable.");
     if (hasPO && !mongoose.Types.ObjectId.isValid(purchaseOrder)) throw new Error("Select a valid purchase order.");
@@ -87,6 +89,11 @@ router.post("/", async (req, res, next) => {
     const paidAmount = amountOf(amount);
     if (!Number.isFinite(paidAmount) || paidAmount <= 0) throw new Error("Payment amount must be greater than zero.");
     if (!paymentMethods.includes(method)) throw new Error("Select a valid payment method.");
+    if (!mongoose.Types.ObjectId.isValid(treasuryAccount)) throw new Error("Select the cash, bank or Mobile Money account used for this payment.");
+    const fundingAccount: any = await TreasuryAccount.findById(treasuryAccount).lean();
+    if (!fundingAccount || fundingAccount.status !== "active") throw new Error("Select an active payment account.");
+    const expectedType = method === "cash" ? "cash" : method === "mobile_money" ? "mobile_money" : "bank";
+    if (method !== "other" && fundingAccount.type !== expectedType) throw new Error("The selected account does not match the payment method.");
     const isCheque = method === "bank_cheque";
     if (isCheque && (!String(chequeNumber || "").trim() || !String(bankName || "").trim() || !chequeDate)) throw new Error("Cheque number, bank and maturity date are required.");
     if (isCheque && !Number.isFinite(new Date(chequeDate).getTime())) throw new Error("Enter a valid cheque maturity date.");
@@ -102,11 +109,16 @@ router.post("/", async (req, res, next) => {
       if (opening.status === "void") throw new Error("A void opening payable cannot receive payment.");
       const pending = await SupplierPayment.aggregate([{ $match: { openingPayable: opening._id, chequeStatus: { $in: activeChequeStatuses } } }, { $group: { _id: null, total: { $sum: "$amount" } } }]);
       if (paidAmount > Number(opening.balance || 0) - Number(pending[0]?.total || 0) + 0.0001) throw new Error("Amount exceeds the opening balance not already covered by pending cheques.");
-      if (!isCheque) await applyOpeningPayment(openingPayable, paidAmount);
     }
     const now = new Date();
     const chequeStatus = isCheque ? (new Date(chequeDate).getTime() <= now.getTime() ? "due" : "issued") : "cleared";
-    const payment = await SupplierPayment.create({ paymentNumber: await nextNumber(isCheque ? "CHQ" : "SPY", SupplierPayment, "paymentNumber"), supplier, ...(hasPO ? { purchaseOrder } : { openingPayable }), amount: paidAmount, method, chequeNumber, bankName, chequeDate: isCheque ? new Date(chequeDate) : undefined, chequeStatus, issuedAt: isCheque ? now : undefined, clearedAt: isCheque ? undefined : new Date(paidAt || now), reference, paidAt: paidAt || now, notes, statusHistory: [{ status: chequeStatus, at: now, note: isCheque ? "Cheque issued to supplier" : "Payment recorded and cleared" }] });
+    if (!isCheque) {
+      const workspace = await treasuryWorkspace();
+      const available = Number((workspace.accounts as any[]).find((item) => String(item._id) === String(treasuryAccount))?.balance || 0);
+      if (paidAmount > available + 0.0001) throw new Error(`Insufficient funds in ${fundingAccount.name}. Available: ${available.toLocaleString("en-RW")} RWF.`);
+      if (hasOpening) await applyOpeningPayment(openingPayable, paidAmount);
+    }
+    const payment = await SupplierPayment.create({ paymentNumber: await nextNumber(isCheque ? "CHQ" : "SPY", SupplierPayment, "paymentNumber"), supplier, ...(hasPO ? { purchaseOrder } : { openingPayable }), treasuryAccount, amount: paidAmount, method, chequeNumber, bankName, chequeDate: isCheque ? new Date(chequeDate) : undefined, chequeStatus, issuedAt: isCheque ? now : undefined, clearedAt: isCheque ? undefined : new Date(paidAt || now), reference, paidAt: paidAt || now, notes, statusHistory: [{ status: chequeStatus, at: now, note: isCheque ? "Cheque issued to supplier" : "Payment recorded and cleared" }] });
     res.status(201).json({ data: await populatedPayment(payment._id) });
   } catch (error) { next(error); }
 });
@@ -122,6 +134,11 @@ router.patch("/:id/cheque-status", async (req, res, next) => {
     if (["cleared", "bounced", "cancelled"].includes(current)) throw new Error(`A ${current} cheque cannot be changed.`);
     if (status === "deposited" && !["issued", "due"].includes(current)) throw new Error("Only an issued or due cheque can be deposited.");
     if (status === "cleared") {
+      if (payment.treasuryAccount) {
+        const workspace = await treasuryWorkspace();
+        const available = Number((workspace.accounts as any[]).find((item) => String(item._id) === String(payment.treasuryAccount))?.balance || 0);
+        if (Number(payment.amount) > available + 0.0001) throw new Error(`Insufficient funds to clear this cheque. Available account balance: ${available.toLocaleString("en-RW")} RWF.`);
+      }
       if (payment.purchaseOrder) {
         const order = await PurchaseOrder.findById(payment.purchaseOrder).lean();
         const paid = await SupplierPayment.aggregate([{ $match: { purchaseOrder: payment.purchaseOrder, _id: { $ne: payment._id }, ...clearedFilter } }, { $group: { _id: null, total: { $sum: "$amount" } } }]);

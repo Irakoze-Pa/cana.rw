@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { TreasuryAccount } from "../accounting/accounting.model";
 import SalesOrder from "../sales/salesOrder.model";
 import User, { UserRole } from "../../models/users";
 import { CustomerOpeningBalance, Invoice, Payment } from "./billing.model";
@@ -207,6 +208,7 @@ export async function recordPayment(
     openingBalance?: string;
     amount: number;
     method: string;
+    treasuryAccount?: string;
     reference?: string;
     notes?: string;
     receivedAt?: string;
@@ -234,6 +236,16 @@ export async function recordPayment(
     )
   )
     throw new Error("Select a valid payment method.");
+  if (input.treasuryAccount) {
+    if (!mongoose.Types.ObjectId.isValid(input.treasuryAccount))
+      throw new Error("Select a valid receiving account.");
+    const treasuryAccount = await TreasuryAccount.findById(input.treasuryAccount).lean();
+    if (!treasuryAccount || treasuryAccount.status !== "active")
+      throw new Error("Select an active receiving account.");
+    const expectedType = input.method === "cash" ? "cash" : input.method === "mobile_money" ? "mobile_money" : "bank";
+    if (input.method !== "other" && treasuryAccount.type !== expectedType)
+      throw new Error(`The selected account does not match the ${input.method.replace(/_/g, " ")} payment method.`);
+  }
   if (
     input.receivedAt &&
     !Number.isFinite(new Date(input.receivedAt).getTime())
@@ -275,6 +287,7 @@ export async function recordPayment(
           customer: receivable.customer,
           amount,
           method: input.method,
+          ...(input.treasuryAccount ? { treasuryAccount: input.treasuryAccount } : {}),
           reference: input.reference || "",
           notes: input.notes || "",
           receivedAt: input.receivedAt

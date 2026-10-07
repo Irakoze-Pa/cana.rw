@@ -387,6 +387,20 @@ const ProductionBatchesPage = () => {
       setSelectedBatch(null);
 
       await loadData(true);
+
+      if (updatedBatch.status === "Completed") {
+        window.setTimeout(async () => {
+          try {
+            const completedBatch = await getProductionBatchById(
+              updatedBatch._id,
+            );
+            setSelectedBatch(completedBatch);
+            setIsDetailsModalOpen(true);
+          } catch {
+            // The register remains refreshed even if the detail refresh fails.
+          }
+        }, 0);
+      }
     } catch (error) {
       console.error("Update Production Batch Error:", error);
 

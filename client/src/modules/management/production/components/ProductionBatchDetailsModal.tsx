@@ -66,13 +66,13 @@ function getStatusClass(status: ProductionBatch["status"]) {
       return "bg-green-50 text-green-700";
 
     case "In Progress":
-      return "bg-slate-50 text-slate-700";
+      return "bg-amber-50 text-amber-800";
 
     case "Paused":
       return "bg-amber-50 text-amber-700";
 
     case "Ready":
-      return "bg-indigo-50 text-indigo-700";
+      return "bg-slate-100 text-slate-700";
 
     case "Cancelled":
       return "bg-red-50 text-red-700";

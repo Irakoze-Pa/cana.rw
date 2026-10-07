@@ -53,6 +53,7 @@ type Payment = {
   invoice?: { invoiceNumber?: string };
   openingBalance?: { openingNumber?: string; description?: string };
 };
+type TreasuryAccount = { _id: string; name: string; type: "cash" | "bank" | "mobile_money"; balance: number; status: string };
 type Customer = {
   _id: string;
   fullName: string;
@@ -111,6 +112,7 @@ export default function BillingPage() {
     [],
   );
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
   const [receiptFrom, setReceiptFrom] = useState("");
   const [receiptTo, setReceiptTo] = useState("");
   const [loading, setLoading] = useState(true);
@@ -129,6 +131,7 @@ export default function BillingPage() {
     openingBalance: "",
     amount: "",
     method: "mobile_money",
+    treasuryAccount: "",
     reference: "",
     notes: "",
   });
@@ -150,18 +153,21 @@ export default function BillingPage() {
         openingData,
         accountData,
         paymentData,
+        treasuryData,
       ] = await Promise.all([
         api.get<{ data: Customer[] }>("/users/customers"),
         api.get<{ data: Invoice[] }>("/billing/invoices"),
         api.get<{ data: OpeningBalance[] }>("/billing/opening-balances"),
         api.get<{ data: CustomerAccount[] }>("/billing/customer-accounts"),
         api.get<{ data: Payment[] }>("/billing/payments"),
+        api.get<{ data: { accounts: TreasuryAccount[] } }>("/accounting/treasury-accounts").catch(() => ({ data: { data: { accounts: [] } } })),
       ]);
       setCustomers(customerData.data.data || []);
       setInvoices(invoiceData.data.data || []);
       setOpeningBalances(openingData.data.data || []);
       setCustomerAccounts(accountData.data.data || []);
       setPayments(paymentData.data.data || []);
+      setTreasuryAccounts((treasuryData.data.data.accounts || []).filter((item) => item.status === "active"));
       setLastUpdated(new Date());
     } catch (cause) {
       setError(
@@ -232,6 +238,7 @@ export default function BillingPage() {
         openingBalance: "",
         amount: "",
         method: "mobile_money",
+        treasuryAccount: "",
         reference: "",
         notes: "",
       });
@@ -1454,6 +1461,7 @@ export default function BillingPage() {
                     setPaymentForm({
                       ...paymentForm,
                       method: event.target.value,
+                      treasuryAccount: "",
                     })
                   }
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
@@ -1462,6 +1470,17 @@ export default function BillingPage() {
                   <option value="bank_transfer">Bank transfer</option>
                   <option value="cash">Cash</option>
                   <option value="card">Card</option>
+                </select>
+                <select
+                  required
+                  value={paymentForm.treasuryAccount}
+                  onChange={(event) => setPaymentForm({ ...paymentForm, treasuryAccount: event.target.value })}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
+                >
+                  <option value="">Receiving account</option>
+                  {treasuryAccounts
+                    .filter((item) => item.type === (paymentForm.method === "cash" ? "cash" : paymentForm.method === "mobile_money" ? "mobile_money" : "bank"))
+                    .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}
                 </select>
                 <input
                   value={paymentForm.reference}

@@ -8,6 +8,7 @@ const expenseSchema = new Schema({
   payee: { type: String, trim: true, default: "" },
   amount: { type: Number, required: true, min: 0.01 },
   method: { type: String, required: true, enum: ["cash", "bank_transfer", "bank_cheque", "mobile_money", "other"] },
+  treasuryAccount: { type: Schema.Types.ObjectId, ref: "TreasuryAccount", index: true },
   reference: { type: String, trim: true, default: "" },
   chequeNumber: { type: String, trim: true, default: "" },
   bankName: { type: String, trim: true, default: "" },

@@ -106,8 +106,9 @@ export default function RawMaterialLotsPage() {
     if (!order) { setPurchaseReceiptLines([]); return; }
     const supplier = typeof order.supplier === "string" ? order.supplier : order.supplier._id;
     setMaterialId("");
-    setPurchaseReceiptLines(order.items.map((item) => ({ rawMaterial: typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial._id || "", name: typeof item.rawMaterial === "string" ? "Raw material" : item.rawMaterial.name || "Raw material", code: typeof item.rawMaterial === "string" ? "" : item.rawMaterial.code || "", unit: item.unit, orderedQuantity: Number(item.quantity || 0), receivedQuantity: "", unitCost: item.unitPrice ? String(item.unitPrice) : "", lotNumber: "" })));
+    setPurchaseReceiptLines(order.items.map((item) => ({ rawMaterial: typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial._id || "", name: typeof item.rawMaterial === "string" ? "Raw material" : item.rawMaterial.name || "Raw material", code: typeof item.rawMaterial === "string" ? "" : item.rawMaterial.code || "", unit: item.unit, orderedQuantity: Number(item.quantity || 0), receivedQuantity: order.status === "approved" ? String(item.quantity || "") : "", unitCost: item.unitPrice ? String(item.unitPrice) : "", lotNumber: "" })));
     setForm((previous) => ({ ...previous, supplier }));
+    setOpen(true);
   }, [purchaseOrderId, purchaseOrders]);
   const selectedPurchaseOrder = purchaseOrders.find((order) => order._id === purchaseOrderId);
   const selectedMaterial = materials.find((item) => item._id === materialId);
@@ -121,7 +122,7 @@ export default function RawMaterialLotsPage() {
     if (!order) { setPurchaseReceiptLines([]); return; }
     const supplier = typeof order.supplier === "string" ? order.supplier : order.supplier._id;
     setMaterialId("");
-    setPurchaseReceiptLines(order.items.map((item) => ({ rawMaterial: typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial._id || "", name: typeof item.rawMaterial === "string" ? "Raw material" : item.rawMaterial.name || "Raw material", code: typeof item.rawMaterial === "string" ? "" : item.rawMaterial.code || "", unit: item.unit, orderedQuantity: Number(item.quantity || 0), receivedQuantity: "", unitCost: item.unitPrice ? String(item.unitPrice) : "", lotNumber: "" })));
+    setPurchaseReceiptLines(order.items.map((item) => ({ rawMaterial: typeof item.rawMaterial === "string" ? item.rawMaterial : item.rawMaterial._id || "", name: typeof item.rawMaterial === "string" ? "Raw material" : item.rawMaterial.name || "Raw material", code: typeof item.rawMaterial === "string" ? "" : item.rawMaterial.code || "", unit: item.unit, orderedQuantity: Number(item.quantity || 0), receivedQuantity: order.status === "approved" ? String(item.quantity || "") : "", unitCost: item.unitPrice ? String(item.unitPrice) : "", lotNumber: "" })));
     setForm((previous) => ({ ...previous, supplier, receivedQuantity: "" }));
   };
   const summary = useMemo(() => {

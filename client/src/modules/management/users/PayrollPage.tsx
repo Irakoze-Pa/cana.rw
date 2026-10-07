@@ -49,6 +49,7 @@ type Attendance = {
   staff: { _id: string };
   status: "present" | "absent" | "leave" | "half_day";
 };
+type TreasuryAccount = { _id: string; name: string; balance: number; status: string };
 const money = (value: number) =>
   `${Number(value || 0).toLocaleString("en-RW")} RWF`;
 const periodLabel = (value: string) =>
@@ -73,6 +74,8 @@ export default function PayrollPage() {
   const [runs, setRuns] = useState<Run[]>([]),
     [staff, setStaff] = useState<Staff[]>([]),
     [advances, setAdvances] = useState<Advance[]>([]);
+  const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
+  const [payrollAccount, setPayrollAccount] = useState("");
   const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7)),
     [attendanceDate, setAttendanceDate] = useState(
       new Date().toISOString().slice(0, 10),
@@ -83,10 +86,11 @@ export default function PayrollPage() {
     [error, setError] = useState("");
   const load = async () => {
     try {
-      const [r, s, a] = await Promise.all([
+      const [r, s, a, treasury] = await Promise.all([
         api.get<{ data: Run[] }>("/payroll"),
         api.get<{ data: Staff[] }>("/users/workforce"),
         api.get<{ data: Advance[] }>("/staff-payments"),
+        api.get<{ data: { accounts: TreasuryAccount[] } }>("/accounting/treasury-accounts").catch(() => ({ data: { data: { accounts: [] } } })),
       ]);
       setRuns(r.data.data || []);
       setStaff(
@@ -103,6 +107,7 @@ export default function PayrollPage() {
             (item.status === "paid" && Number(item.remainingAmount || 0) > 0),
         ),
       );
+      setTreasuryAccounts((treasury.data.data.accounts || []).filter((item) => item.status === "active"));
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Unable to load payroll.",
@@ -155,11 +160,12 @@ export default function PayrollPage() {
     }
   };
   const updateRun = async (id: string, status: string) => {
+    if (status === "paid" && !payrollAccount) return setError("Select the account used to pay payroll.");
     const confirmed = await confirm({ title: status === "paid" ? "Mark payroll paid" : "Approve payroll", description: status === "paid" ? "Confirm that this payroll has been paid. This records the payment status for all included staff." : "Approve this payroll run for payment? Review salaries and deductions before continuing.", confirmLabel: status === "paid" ? "Mark paid" : "Approve payroll", tone: "warning" });
     if (!confirmed) return;
     try {
       setBusy(true);
-      await api.patch(`/payroll/${id}/status`, { status });
+      await api.patch(`/payroll/${id}/status`, { status, treasuryAccount: status === "paid" ? payrollAccount : undefined });
       toast(
         `Payroll ${status === "paid" ? "marked paid" : status}.`,
         "success",
@@ -177,11 +183,12 @@ export default function PayrollPage() {
     id: string,
     status: "approved" | "rejected" | "paid",
   ) => {
+    if (status === "paid" && !payrollAccount) return setError("Select the account used to pay this advance.");
     const confirmed = await confirm({ title: status === "rejected" ? "Reject staff advance" : status === "paid" ? "Mark advance paid" : "Approve staff advance", description: status === "rejected" ? "Reject this advance request?" : status === "paid" ? "Confirm that this advance has been paid to the staff member." : "Approve this advance for payment and payroll deduction.", confirmLabel: status === "rejected" ? "Reject advance" : status === "paid" ? "Mark paid" : "Approve advance", tone: status === "rejected" ? "danger" : "warning" });
     if (!confirmed) return;
     try {
       setBusy(true);
-      await api.patch(`/staff-payments/${id}`, { status });
+      await api.patch(`/staff-payments/${id}`, { status, treasuryAccount: status === "paid" ? payrollAccount : undefined });
       toast(`Advance ${status}.`, "success");
       await load();
     } catch (cause) {
@@ -434,6 +441,13 @@ export default function PayrollPage() {
                         <Printer size={16} />
                       </button>
                       {next && (next === "reviewed" || isAdministrator) && (
+                        <>
+                        {next === "paid" && (
+                          <select value={payrollAccount} onChange={(event) => setPayrollAccount(event.target.value)} className="max-w-48 rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs">
+                            <option value="">Payment account</option>
+                            {treasuryAccounts.map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)}</option>)}
+                          </select>
+                        )}
                         <button
                           disabled={busy}
                           onClick={() => void updateRun(run._id, next)}
@@ -445,6 +459,7 @@ export default function PayrollPage() {
                               ? "Approve"
                               : "Mark paid"}
                         </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -577,6 +592,11 @@ export default function PayrollPage() {
                       </>
                     )}
                     {isAdministrator && advance.status === "approved" && (
+                      <>
+                      <select value={payrollAccount} onChange={(event) => setPayrollAccount(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs">
+                        <option value="">Payment account</option>
+                        {treasuryAccounts.map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)}</option>)}
+                      </select>
                       <button
                         disabled={busy}
                         onClick={() => void updateAdvance(advance._id, "paid")}
@@ -584,6 +604,7 @@ export default function PayrollPage() {
                       >
                         Mark paid
                       </button>
+                      </>
                     )}
                     {advance.status === "paid" && (
                       <span className="text-gray-500">Ready for recovery</span>

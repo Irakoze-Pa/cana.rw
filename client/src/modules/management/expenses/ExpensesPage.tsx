@@ -15,6 +15,7 @@ type Expense = {
   chequeNumber?: string;
   bankName?: string;
 };
+type TreasuryAccount = { _id: string; name: string; type: "cash" | "bank" | "mobile_money"; balance: number; status: string };
 const categories = [
   "transport",
   "utilities",
@@ -96,6 +97,7 @@ const emptyExpenseForm = () => ({
   payee: "",
   amount: "",
   method: "cash",
+  treasuryAccount: "",
   reference: "",
   chequeNumber: "",
   bankName: "",
@@ -107,6 +109,7 @@ const money = (v: number) =>
 const label = (v: string) => v.replaceAll("_", " ");
 export default function ExpensesPage() {
   const [items, setItems] = useState<Expense[]>([]);
+  const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -117,8 +120,12 @@ export default function ExpensesPage() {
   const [lines, setLines] = useState([emptyExpenseLine()]);
   const load = async () => {
     try {
-      const response = await api.get<{ data: Expense[] }>("/expenses");
+      const [response, treasury] = await Promise.all([
+        api.get<{ data: Expense[] }>("/expenses"),
+        api.get<{ data: { accounts: TreasuryAccount[] } }>("/accounting/treasury-accounts").catch(() => ({ data: { data: { accounts: [] } } })),
+      ]);
       setItems(response.data.data || []);
+      setTreasuryAccounts((treasury.data.data.accounts || []).filter((item) => item.status === "active"));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load expenses.");
     }
@@ -448,7 +455,7 @@ export default function ExpensesPage() {
                 Payment method
                 <select
                   value={form.method}
-                  onChange={(e) => setForm({ ...form, method: e.target.value })}
+                  onChange={(e) => setForm({ ...form, method: e.target.value, treasuryAccount: "" })}
                   className="mt-1 w-full rounded-xl border p-2.5"
                 >
                   <option value="cash">Cash</option>
@@ -456,6 +463,20 @@ export default function ExpensesPage() {
                   <option value="bank_cheque">Bank cheque</option>
                   <option value="mobile_money">Mobile money</option>
                   <option value="other">Other</option>
+                </select>
+              </label>
+              <label className="text-sm font-bold">
+                Payment account
+                <select
+                  required
+                  value={form.treasuryAccount}
+                  onChange={(e) => setForm({ ...form, treasuryAccount: e.target.value })}
+                  className="mt-1 w-full rounded-xl border p-2.5"
+                >
+                  <option value="">Select account</option>
+                  {treasuryAccounts
+                    .filter((item) => item.type === (form.method === "cash" ? "cash" : form.method === "mobile_money" ? "mobile_money" : "bank"))
+                    .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}
                 </select>
               </label>
               <label className="text-sm font-bold">

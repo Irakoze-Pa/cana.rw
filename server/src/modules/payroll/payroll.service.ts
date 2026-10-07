@@ -1,6 +1,9 @@
 import PayrollRun from "./payrollRun.model";
 import User, { UserRole, UserStatus } from "../../models/users";
 import StaffPayment from "../staffFinance/staffPayment.model";
+import mongoose from "mongoose";
+import { TreasuryAccount } from "../accounting/accounting.model";
+import { treasuryWorkspace } from "../accounting/accounting.service";
 
 export async function createPayrollRun(period: string, createdBy: string) {
   if (!/^\d{4}-\d{2}$/.test(period)) throw new Error("Payroll period must use YYYY-MM.");
@@ -21,10 +24,17 @@ export async function createPayrollRun(period: string, createdBy: string) {
   return PayrollRun.create({ payrollNumber: `PAY-${period.replace("-", "")}`, period, lines, createdBy });
 }
 
-export async function markPayrollPaid(id: string) {
+export async function markPayrollPaid(id: string, treasuryAccountId?: string) {
   const run = await PayrollRun.findById(id);
   if (!run) throw new Error("Payroll run not found.");
   if (run.status !== "approved") throw new Error("Only an approved payroll run can be marked as paid.");
+  if (!treasuryAccountId || !mongoose.Types.ObjectId.isValid(treasuryAccountId)) throw new Error("Select the cash, bank or Mobile Money account used for payroll.");
+  const paymentAccount: any = await TreasuryAccount.findById(treasuryAccountId).lean();
+  if (!paymentAccount || paymentAccount.status !== "active") throw new Error("Select an active payroll payment account.");
+  const payrollTotal = (run.lines as any[]).reduce((sum, line) => sum + Number(line.netPay || 0), 0);
+  const treasury = await treasuryWorkspace();
+  const available = Number((treasury.accounts as any[]).find((item) => String(item._id) === String(treasuryAccountId))?.balance || 0);
+  if (payrollTotal > available + 0.0001) throw new Error(`Insufficient funds in ${paymentAccount.name}. Available: ${available.toLocaleString("en-RW")} RWF.`);
 
   for (const line of run.lines as any[]) {
     for (const allocation of line.advanceAllocations || []) {
@@ -45,6 +55,7 @@ export async function markPayrollPaid(id: string) {
     line.paymentStatus = "paid";
   }
   run.status = "paid";
+  run.treasuryAccount = treasuryAccountId as any;
   run.paidAt = new Date();
   await run.save();
   return run;

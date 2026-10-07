@@ -13,6 +13,7 @@ const staffPaymentSchema = new Schema({
   reason: { type: String, trim: true, default: "" },
   status: { type: String, enum: ["pending", "approved", "rejected", "paid", "deducted"], default: "pending", index: true },
   paymentDate: { type: Date },
+  treasuryAccount: { type: Schema.Types.ObjectId, ref: "TreasuryAccount", index: true },
   notes: { type: String, trim: true, default: "" },
 }, { timestamps: true });
 

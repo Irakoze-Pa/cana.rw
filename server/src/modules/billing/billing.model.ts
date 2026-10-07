@@ -32,7 +32,6 @@ const invoiceSchema = new Schema(
     customer: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: true,
       index: true,
     },
     lines: { type: [invoiceLineSchema], required: true },
@@ -63,6 +62,11 @@ const paymentSchema = new Schema(
       type: String,
       enum: ["cash", "bank_transfer", "mobile_money", "card", "other"],
       required: true,
+    },
+    treasuryAccount: {
+      type: Schema.Types.ObjectId,
+      ref: "TreasuryAccount",
+      index: true,
     },
     reference: { type: String, trim: true, default: "" },
     notes: { type: String, trim: true, default: "" },
