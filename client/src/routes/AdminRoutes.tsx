@@ -14,10 +14,10 @@ const access: Record<string, string[]> = {
 };
 const permissionAccess: Record<string, string[]> = {
   sales: ["/management/products", "/management/quotations", "/management/sales", "/management/billing", "/management/customers"],
-  production: ["/management/production", "/management/raw-materials", "/management/inventory"],
+  production: ["/management/production", "/management/raw-materials", "/management/inventory", "/management/compliance"],
   inventory: ["/management/inventory", "/management/raw-materials"],
   procurement: ["/management/suppliers", "/management/supplier-materials", "/management/purchase-orders", "/management/supplier-payments", "/management/procurement-report", "/management/raw-materials", "/management/inventory"],
-  finance: ["/management/accounting", "/management/billing", "/management/supplier-payments", "/management/expenses", "/management/purchase-orders"],
+  finance: ["/management/accounting", "/management/billing", "/management/sales", "/management/supplier-payments", "/management/expenses", "/management/purchase-orders"],
   staff: ["/management/payroll"],
   reports: ["/management/reports", "/management/general-report", "/management/procurement-report"],
   sites: ["/management/sites"],

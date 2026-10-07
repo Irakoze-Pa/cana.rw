@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   CreditCard,
   Eye,
@@ -36,7 +37,7 @@ type Invoice = {
   balance: number;
   status: string;
   customer?: { fullName?: string };
-  salesOrder?: { orderNumber?: string };
+  salesOrder?: { _id?: string; orderNumber?: string };
 };
 type Payment = {
   receivedAt: string;
@@ -90,6 +91,8 @@ const statusStyle = (status: string) =>
         : "bg-red-50 text-red-700";
 
 export default function BillingPage() {
+  const [searchParams] = useSearchParams();
+  const linkedInvoiceId = searchParams.get("invoice");
   const { user } = useAuth();
   const { toast } = useToast();
   const { confirm } = useConfirmation();
@@ -171,6 +174,21 @@ export default function BillingPage() {
   useEffect(() => {
     void load();
   }, []);
+  useEffect(() => {
+    if (!linkedInvoiceId || loading) return;
+    const linkedInvoice = invoices.find(
+      (invoice) => invoice._id === linkedInvoiceId,
+    );
+    if (!linkedInvoice) return;
+    setWorkspaceView("invoices");
+    setInvoiceFilter("all");
+    setInvoiceDetails(linkedInvoice);
+    window.setTimeout(() => {
+      document
+        .getElementById(`invoice-${linkedInvoiceId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
+  }, [linkedInvoiceId, invoices, loading]);
   const receivePayment = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
@@ -943,8 +961,9 @@ export default function BillingPage() {
             matchingInvoices.map((invoice) => (
               <article
                 key={invoice._id}
+                id={`invoice-${invoice._id}`}
                 onClick={() => setInvoiceDetails(invoice)}
-                className="cursor-pointer border border-slate-200 bg-white p-4 transition hover:border-slate-950"
+                className={`cursor-pointer border bg-white p-4 transition hover:border-slate-950 ${linkedInvoiceId === invoice._id ? "border-red-500 ring-2 ring-red-100" : "border-slate-200"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -1056,8 +1075,9 @@ export default function BillingPage() {
                 matchingInvoices.map((invoice) => (
                   <tr
                     key={invoice._id}
+                    id={`invoice-${invoice._id}`}
                     onClick={() => setInvoiceDetails(invoice)}
-                    className="cursor-pointer transition hover:bg-slate-50"
+                    className={`cursor-pointer transition hover:bg-slate-50 ${linkedInvoiceId === invoice._id ? "bg-red-50" : ""}`}
                   >
                     <td className="px-3 py-2.5 font-semibold">
                       {invoice.invoiceNumber}

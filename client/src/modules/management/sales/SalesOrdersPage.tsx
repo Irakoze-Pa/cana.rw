@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Eye, Plus, Printer, RefreshCw, ShoppingCart, X } from "lucide-react";
+import { Eye, Plus, Printer, ReceiptText, RefreshCw, ShoppingCart, X } from "lucide-react";
 import CustomerForm from "../users/CustomerForm";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
@@ -71,6 +71,15 @@ type RawMaterial = {
   costPerUnit?: number;
   availableQuantity?: number;
   status: string;
+};
+type InvoiceSummary = {
+  _id: string;
+  invoiceNumber: string;
+  total: number;
+  amountPaid: number;
+  balance: number;
+  status: string;
+  salesOrder?: string | { _id?: string; orderNumber?: string };
 };
 type SalesLine = {
   itemType: "product" | "raw_material";
@@ -166,6 +175,7 @@ function printSalesOrder(order: Order) {
 }
 function OrderActions({
   order,
+  invoice,
   saving,
   onView,
   onPrint,
@@ -173,6 +183,7 @@ function OrderActions({
   onTransition,
 }: {
   order: Order;
+  invoice?: InvoiceSummary;
   saving: boolean;
   onView: (order: Order) => void;
   onPrint: (order: Order) => void;
@@ -189,6 +200,15 @@ function OrderActions({
         <Eye size={13} />
         Details
       </button>
+      {invoice && (
+        <Link
+          to={`/management/billing?invoice=${invoice._id}`}
+          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-100"
+        >
+          <ReceiptText size={13} />
+          {invoice.invoiceNumber}
+        </Link>
+      )}
       <button
         type="button"
         onClick={() => onPrint(order)}
@@ -238,6 +258,7 @@ export default function SalesOrdersPage({
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
@@ -287,16 +308,28 @@ export default function SalesOrdersPage({
     }),
     [orders],
   );
+  const invoiceByOrder = useMemo(() => {
+    const result = new Map<string, InvoiceSummary>();
+    invoices.forEach((invoice) => {
+      const orderId =
+        typeof invoice.salesOrder === "string"
+          ? invoice.salesOrder
+          : invoice.salesOrder?._id;
+      if (orderId) result.set(orderId, invoice);
+    });
+    return result;
+  }, [invoices]);
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const [sales, customerData, productData, rawMaterialData] =
+      const [sales, customerData, productData, rawMaterialData, invoiceData] =
         await Promise.all([
           api.get<{ data: Order[] }>("/sales-orders"),
           api.get<{ data: Customer[] }>("/users/customers"),
           api.get<{ data: Product[] }>("/products"),
           api.get<{ data: RawMaterial[] }>("/raw-materials"),
+          api.get<{ data: InvoiceSummary[] }>("/billing/invoices"),
         ]);
       setOrders(sales.data.data || []);
       setCustomers(customerData.data.data || []);
@@ -310,6 +343,7 @@ export default function SalesOrdersPage({
           (material) => material.status === "Active",
         ),
       );
+      setInvoices(invoiceData.data.data || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to load sales data.");
     } finally {
@@ -341,6 +375,12 @@ export default function SalesOrdersPage({
       setOrders((current) =>
         current.map((order) => (order._id === id ? response.data.data : order)),
       );
+      if (status === "delivered") {
+        const invoiceData = await api.get<{ data: InvoiceSummary[] }>(
+          "/billing/invoices",
+        );
+        setInvoices(invoiceData.data.data || []);
+      }
       toast(status === "delivered" ? "Order delivered, stock updated, and invoice issued." : "Sales order status updated.", "success");
     } catch (e) {
       setError(
@@ -909,6 +949,7 @@ export default function SalesOrdersPage({
               >
                 <OrderActions
                   order={order}
+                  invoice={invoiceByOrder.get(order._id)}
                   saving={saving}
                   onView={setDetailsOrder}
                   onPrint={printSalesOrder}
@@ -988,6 +1029,7 @@ export default function SalesOrdersPage({
                   >
                     <OrderActions
                       order={order}
+                      invoice={invoiceByOrder.get(order._id)}
                       saving={saving}
                       onView={setDetailsOrder}
                       onPrint={printSalesOrder}
@@ -1216,6 +1258,7 @@ export default function SalesOrdersPage({
               <div className="flex flex-wrap justify-end gap-2">
                 <OrderActions
                   order={detailsOrder}
+                  invoice={invoiceByOrder.get(detailsOrder._id)}
                   saving={saving}
                   onView={() => undefined}
                   onPrint={printSalesOrder}

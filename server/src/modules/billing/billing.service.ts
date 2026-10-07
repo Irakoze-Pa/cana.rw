@@ -32,6 +32,9 @@ const populateInvoice = (query: ReturnType<typeof Invoice.find>) =>
     .populate("salesOrder", "orderNumber status");
 
 export async function listInvoices() {
+  // Keep the register complete for orders delivered before automatic invoice
+  // creation was introduced, or if an earlier delivery request was interrupted.
+  await createMissingDeliveredInvoices();
   return populateInvoice(Invoice.find().sort({ createdAt: -1 })).lean();
 }
 export async function listOpeningBalances() {
