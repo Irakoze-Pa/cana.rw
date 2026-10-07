@@ -26,6 +26,7 @@ import {
   Wrench,
   ClipboardCheck,
   MapPinned,
+  Landmark,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/authContext";
@@ -39,6 +40,7 @@ type Item = {
   departments?: string[];
   companies?: string[];
   roles?: string[];
+  permissions?: string[];
   end?: boolean;
 };
 type Group = {
@@ -50,7 +52,7 @@ type Group = {
 };
 const groups: Group[] = [
   {
-    label: "Inventory & procurement",
+    label: "Stock & purchasing",
     icon: Boxes,
     shortcutTo: "/management/inventory",
     companies: ["cana_paints", "cana_group"],
@@ -62,6 +64,7 @@ const groups: Group[] = [
         category: "Stock & stores",
         end: true,
         departments: ["procurement", "warehouse", "production", "management"],
+        permissions: ["inventory", "procurement", "production"],
       },
       {
         label: "Finished goods & transfers",
@@ -69,6 +72,7 @@ const groups: Group[] = [
         icon: PackageCheck,
         category: "Stock & stores",
         departments: ["sales", "warehouse", "production", "management"],
+        permissions: ["inventory", "sales", "production"],
       },
       {
         label: "Stock movements",
@@ -76,6 +80,7 @@ const groups: Group[] = [
         icon: History,
         category: "Stock & stores",
         departments: ["procurement", "warehouse", "production", "management"],
+        permissions: ["inventory", "procurement", "production"],
       },
       {
         label: "Goods receipts",
@@ -83,6 +88,7 @@ const groups: Group[] = [
         icon: ArrowDownToLine,
         category: "Stock & stores",
         departments: ["procurement", "warehouse", "management"],
+        permissions: ["inventory", "procurement"],
       },
       {
         label: "Inventory reports",
@@ -90,6 +96,7 @@ const groups: Group[] = [
         icon: FileBarChart,
         category: "Stock & stores",
         departments: ["procurement", "warehouse", "production", "management"],
+        permissions: ["inventory", "procurement", "production", "reports"],
       },
       {
         label: "Suppliers",
@@ -97,6 +104,7 @@ const groups: Group[] = [
         icon: Truck,
         category: "Procurement",
         departments: ["procurement", "management"],
+        permissions: ["procurement"],
       },
       {
         label: "Materials Setup",
@@ -104,6 +112,7 @@ const groups: Group[] = [
         icon: PackageOpen,
         category: "Procurement",
         departments: ["procurement", "warehouse", "production", "management"],
+        permissions: ["inventory", "procurement", "production"],
       },
       {
         label: "Purchase orders",
@@ -111,6 +120,7 @@ const groups: Group[] = [
         icon: ClipboardList,
         category: "Procurement",
         departments: ["procurement", "finance", "management"],
+        permissions: ["procurement", "finance"],
       },
       {
         label: "Supplier material offers",
@@ -118,6 +128,7 @@ const groups: Group[] = [
         icon: PackageOpen,
         category: "Procurement",
         departments: ["procurement", "management"],
+        permissions: ["procurement"],
       },
       {
         label: "Material lots & traceability",
@@ -125,6 +136,7 @@ const groups: Group[] = [
         icon: Layers,
         category: "Procurement",
         departments: ["procurement", "warehouse", "production", "management"],
+        permissions: ["inventory", "procurement", "production"],
       },
     ],
   },
@@ -141,6 +153,7 @@ const groups: Group[] = [
         category: "Production operations",
         end: true,
         departments: ["production", "management"],
+        permissions: ["production"],
       },
       {
         label: "Batches",
@@ -148,6 +161,7 @@ const groups: Group[] = [
         icon: Layers,
         category: "Production operations",
         departments: ["production", "management"],
+        permissions: ["production"],
       },
       {
         label: "Formulas",
@@ -155,6 +169,7 @@ const groups: Group[] = [
         icon: FlaskConical,
         category: "Formulation & control",
         departments: ["production", "management"],
+        permissions: ["production"],
       },
       {
         label: "Material consumption",
@@ -162,6 +177,7 @@ const groups: Group[] = [
         icon: PackageCheck,
         category: "Formulation & control",
         departments: ["production", "management"],
+        permissions: ["production"],
       },
       {
         label: "Quality & release queue",
@@ -169,6 +185,7 @@ const groups: Group[] = [
         icon: ClipboardList,
         category: "Formulation & control",
         departments: ["production", "management"],
+        permissions: ["production"],
       },
       {
         label: "Output variance",
@@ -176,6 +193,7 @@ const groups: Group[] = [
         icon: FileBarChart,
         category: "Review & history",
         departments: ["production", "management"],
+        permissions: ["production", "reports"],
       },
       {
         label: "Production history",
@@ -183,11 +201,12 @@ const groups: Group[] = [
         icon: History,
         category: "Review & history",
         departments: ["production", "management"],
+        permissions: ["production", "reports"],
       },
     ],
   },
   {
-    label: "Sales & finance",
+    label: "Sales & customers",
     icon: ShoppingCart,
     shortcutTo: "/management/sales",
     items: [
@@ -198,6 +217,7 @@ const groups: Group[] = [
         category: "Catalogue",
         companies: ["cana_paints", "cana_group"],
         departments: ["sales", "management"],
+        permissions: ["sales"],
       },
       {
         label: "Customers",
@@ -205,6 +225,7 @@ const groups: Group[] = [
         icon: UserCog,
         category: "Customer pipeline",
         departments: ["sales", "customer_service", "marketing", "management"],
+        permissions: ["sales"],
       },
       {
         label: "Quotation queue",
@@ -212,6 +233,7 @@ const groups: Group[] = [
         icon: FileText,
         category: "Customer pipeline",
         departments: ["sales", "customer_service", "marketing", "management"],
+        permissions: ["sales"],
       },
       {
         label: "Sales & orders",
@@ -220,6 +242,7 @@ const groups: Group[] = [
         category: "Sales operations",
         end: true,
         departments: ["sales", "customer_service", "finance", "management"],
+        permissions: ["sales", "finance"],
       },
       {
         label: "Fulfilment & delivery",
@@ -233,6 +256,7 @@ const groups: Group[] = [
           "warehouse",
           "management",
         ],
+        permissions: ["sales", "inventory", "production"],
       },
       {
         label: "Proforma builder",
@@ -240,6 +264,7 @@ const groups: Group[] = [
         icon: FileText,
         category: "Billing & documents",
         departments: ["sales", "customer_service", "management"],
+        permissions: ["sales"],
       },
       {
         label: "Invoices & receipts",
@@ -247,20 +272,30 @@ const groups: Group[] = [
         icon: ReceiptText,
         category: "Billing & documents",
         departments: ["sales", "finance", "management"],
+        permissions: ["sales", "finance"],
       },
     ],
   },
   {
-    label: "Finance & reports",
-    icon: ReceiptText,
-    shortcutTo: "/management/general-report",
+    label: "Finance & accounting",
+    icon: Landmark,
+    shortcutTo: "/management/accounting",
     items: [
+      {
+        label: "Accounting workspace",
+        to: "/management/accounting",
+        icon: Landmark,
+        category: "Accounting control",
+        departments: ["finance", "management"],
+        permissions: ["finance"],
+      },
       {
         label: "Supplier payments",
         to: "/management/supplier-payments",
         icon: Banknote,
         category: "Payables & expenses",
         departments: ["procurement", "finance", "management"],
+        permissions: ["finance", "procurement"],
       },
       {
         label: "Expenses",
@@ -268,6 +303,7 @@ const groups: Group[] = [
         icon: ClipboardList,
         category: "Payables & expenses",
         departments: ["finance", "management"],
+        permissions: ["finance"],
       },
       {
         label: "General activity report",
@@ -275,6 +311,7 @@ const groups: Group[] = [
         icon: FileBarChart,
         category: "Reports",
         departments: ["finance", "management"],
+        permissions: ["reports", "finance"],
       },
       {
         label: "Profit & loss",
@@ -288,6 +325,7 @@ const groups: Group[] = [
           "production",
           "management",
         ],
+        permissions: ["reports"],
       },
       {
         label: "Materials & payments report",
@@ -295,11 +333,12 @@ const groups: Group[] = [
         icon: FileBarChart,
         category: "Reports",
         departments: ["procurement", "finance", "management"],
+        permissions: ["reports", "procurement", "finance"],
       },
     ],
   },
   {
-    label: "People & payroll",
+    label: "People",
     icon: Banknote,
     items: [
       {
@@ -307,29 +346,32 @@ const groups: Group[] = [
         to: "/management/staff",
         icon: UserCog,
         roles: ["superadmin"],
+        permissions: ["staff"],
       },
       {
         label: "Payroll workspace",
         to: "/management/payroll",
         icon: Banknote,
-        roles: ["admin", "superadmin"],
+        roles: ["staff", "admin", "superadmin"],
+        permissions: ["staff"],
       },
     ],
   },
   {
-    label: "Sites & field work",
+    label: "Sites & projects",
     icon: MapPinned,
     items: [
       {
         label: "Site management",
         to: "/management/sites",
         icon: MapPinned,
-        departments: ["sales", "customer_service", "marketing", "management"],
+        departments: ["sales", "customer_service", "marketing", "sites", "management"],
+        permissions: ["sites"],
       },
     ],
   },
   {
-    label: "Factory Compliance",
+    label: "Factory records",
     icon: ShieldCheck,
     companies: ["cana_paints", "cana_group"],
     items: [
@@ -339,24 +381,28 @@ const groups: Group[] = [
         icon: ShieldCheck,
         end: true,
         departments: ["production", "management", "warehouse"],
+        permissions: ["production", "inventory"],
       },
       {
         label: "Daily cleaning register",
         to: "/management/compliance/cleaning",
         icon: ClipboardCheck,
         departments: ["production", "management", "warehouse"],
+        permissions: ["production", "inventory"],
       },
       {
         label: "Maintenance register",
         to: "/management/compliance/maintenance",
         icon: Wrench,
         departments: ["production", "management"],
+        permissions: ["production"],
       },
       {
         label: "Safety & HSE register",
         to: "/management/compliance/safety",
         icon: HardHat,
         departments: ["production", "management", "warehouse"],
+        permissions: ["production", "inventory"],
       },
     ],
   },
@@ -384,20 +430,26 @@ export default function ManagementSidebar({
             !group.companies ||
             group.companies.includes(user?.company || ""),
         )
-        .map((group) => ({
-          ...group,
-          items: group.items.filter((item) =>
-            item.roles
-              ? item.roles.includes(user?.role || "")
-              : isAdmin ||
-                ((!item.companies ||
-                  item.companies.includes(user?.company || "")) &&
-                  (!item.departments ||
-                    item.departments.includes(user?.department || ""))),
-          ),
-        }))
+        .map((group) => {
+          const items = group.items.filter((item) => {
+            if (item.roles && !item.roles.includes(user?.role || "")) return false;
+            if (isAdmin) return true;
+            if (item.companies && !item.companies.includes(user?.company || "")) return false;
+            if (user?.permissions?.length && item.permissions) {
+              return item.permissions.some((permission) => user.permissions?.includes(permission));
+            }
+            return !item.departments || item.departments.includes(user?.department || "");
+          });
+          return {
+            ...group,
+            items,
+            shortcutTo: items.some((item) => item.to === group.shortcutTo)
+              ? group.shortcutTo
+              : items[0]?.to,
+          };
+        })
         .filter((group) => group.items.length > 0),
-    [isAdmin, user?.company, user?.department, user?.role],
+    [isAdmin, user?.company, user?.department, user?.permissions, user?.role],
   );
   const [open, setOpen] = useState<Record<string, boolean>>({});
   useEffect(() => {

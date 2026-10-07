@@ -11,6 +11,7 @@ import {
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
 import { useConfirmation } from "@/context/confirmationContext";
+import { useAuth } from "@/context/authContext";
 import { cananLetterheadMarkup, officialApprovalMarkup } from "@/modules/management/utils/printCanaDocument";
 
 type Staff = {
@@ -65,6 +66,8 @@ const escapeHtml = (value: string) =>
   );
 
 export default function PayrollPage() {
+  const { user } = useAuth();
+  const isAdministrator = user?.role === "admin" || user?.role === "superadmin";
   const { toast } = useToast();
   const { confirm } = useConfirmation();
   const [runs, setRuns] = useState<Run[]>([]),
@@ -82,7 +85,7 @@ export default function PayrollPage() {
     try {
       const [r, s, a] = await Promise.all([
         api.get<{ data: Run[] }>("/payroll"),
-        api.get<{ data: Staff[] }>("/users"),
+        api.get<{ data: Staff[] }>("/users/workforce"),
         api.get<{ data: Advance[] }>("/staff-payments"),
       ]);
       setRuns(r.data.data || []);
@@ -194,7 +197,7 @@ export default function PayrollPage() {
     if (!Number.isFinite(baseSalary) || baseSalary < 0)
       return setError("Base salary must be zero or more.");
     try {
-      await api.patch(`/users/${person._id}`, { baseSalary });
+      await api.patch(`/users/workforce/${person._id}/salary`, { baseSalary });
       setStaff((list) =>
         list.map((item) =>
           item._id === person._id ? { ...item, baseSalary } : item,
@@ -430,7 +433,7 @@ export default function PayrollPage() {
                       >
                         <Printer size={16} />
                       </button>
-                      {next && (
+                      {next && (next === "reviewed" || isAdministrator) && (
                         <button
                           disabled={busy}
                           onClick={() => void updateRun(run._id, next)}
@@ -551,7 +554,7 @@ export default function PayrollPage() {
                   </p>
                   <p className="mt-1 text-xs text-gray-500">{advance.reason}</p>
                   <div className="mt-3 flex gap-3 text-xs font-bold">
-                    {advance.status === "pending" && (
+                    {isAdministrator && advance.status === "pending" && (
                       <>
                         <button
                           disabled={busy}
@@ -573,7 +576,7 @@ export default function PayrollPage() {
                         </button>
                       </>
                     )}
-                    {advance.status === "approved" && (
+                    {isAdministrator && advance.status === "approved" && (
                       <button
                         disabled={busy}
                         onClick={() => void updateAdvance(advance._id, "paid")}

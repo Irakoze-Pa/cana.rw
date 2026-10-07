@@ -24,6 +24,7 @@ export enum Department {
   PROCUREMENT = "procurement",
   CUSTOMER_SERVICE = "customer_service",
   MANAGEMENT = "management",
+  SITES = "sites",
 }
 
 export enum UserStatus {

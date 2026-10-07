@@ -15,7 +15,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/authContext";
 import api from "@/services/api";
@@ -40,6 +40,7 @@ const titles: Record<string, string> = {
   "/management/sales/orders": "Sales orders",
   "/management/sales/fulfilment": "Fulfilment & delivery",
   "/management/billing": "Invoices & payments",
+  "/management/accounting": "Finance & accounting",
   "/management/reports": "Operational reports",
   "/management/general-report": "General activity report",
   "/management/staff": "Staff & access",
@@ -83,6 +84,8 @@ export default function DashboardTopbar() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [now, setNow] = useState(new Date());
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
   const isManagement =
     user?.role === "admin" ||
     user?.role === "superadmin" ||
@@ -118,6 +121,34 @@ export default function DashboardTopbar() {
     const timer = window.setInterval(() => setNow(new Date()), 30000);
     return () => window.clearInterval(timer);
   }, []);
+  useEffect(() => {
+    const closeOpenMenus = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (noticeOpen && !noticeRef.current?.contains(target)) {
+        setNoticeOpen(false);
+      }
+      if (profileOpen && !profileRef.current?.contains(target)) {
+        setProfileOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setNoticeOpen(false);
+        setProfileOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOpenMenus);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOpenMenus);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [noticeOpen, profileOpen]);
+  useEffect(() => {
+    setNoticeOpen(false);
+    setProfileOpen(false);
+  }, [location.pathname]);
 
   const loadNotices = useCallback(async () => {
     if (!user) return;
@@ -415,10 +446,12 @@ export default function DashboardTopbar() {
         >
           <LayoutDashboard size={19} />
         </button>
-        <div className="relative">
+        <div ref={noticeRef} className="relative">
           <button
             type="button"
             aria-label="Open notifications"
+            aria-haspopup="dialog"
+            aria-expanded={noticeOpen}
             onClick={() => {
               setNoticeOpen((value) => !value);
               setProfileOpen(false);
@@ -433,7 +466,7 @@ export default function DashboardTopbar() {
             )}
           </button>
           {noticeOpen && (
-            <section className="absolute right-0 mt-2 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <section className="absolute right-0 z-50 mt-2 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                 <div>
                   <p className="font-bold text-slate-900">Notifications</p>
@@ -522,14 +555,17 @@ export default function DashboardTopbar() {
             </section>
           )}
         </div>
-        <div className="relative">
+        <div ref={profileRef} className="relative">
           <button
             type="button"
+            aria-label="Open account menu"
+            aria-haspopup="menu"
+            aria-expanded={profileOpen}
             onClick={() => {
               setProfileOpen((value) => !value);
               setNoticeOpen(false);
             }}
-            className="flex h-9 items-center gap-2 border border-slate-200 bg-white px-1.5 pr-2.5 transition hover:border-slate-950 hover:bg-slate-50"
+            className={`flex h-9 items-center gap-2 border bg-white px-1.5 pr-2.5 transition hover:border-slate-950 hover:bg-slate-50 ${profileOpen ? "border-slate-950" : "border-slate-200"}`}
           >
             <span className="flex h-7 w-7 items-center justify-center bg-slate-950 text-[11px] font-bold text-white">
               {initials}
@@ -542,42 +578,70 @@ export default function DashboardTopbar() {
                 {user?.role}
               </span>
             </span>
-            <ChevronDown size={15} className="text-slate-400" />
+            <ChevronDown
+              size={15}
+              className={`text-slate-400 transition-transform ${profileOpen ? "rotate-180" : ""}`}
+            />
           </button>
           {profileOpen && (
-            <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
-              <div className="border-b border-slate-100 px-3 py-2.5">
-                <p className="text-sm font-bold text-slate-900">
-                  {user?.fullName}
-                </p>
-                <p className="mt-0.5 text-xs capitalize text-slate-500">
-                  {user?.department || "General workspace"}
-                </p>
-              </div>
-              <a
-                href="/"
-                className="mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-red-50 hover:text-red-700"
-              >
-                <span className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600">
-                    <ExternalLink size={15} />
+            <div className="absolute right-0 z-50 mt-2 w-[min(19rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl" role="menu">
+              <div className="border-b border-slate-200 bg-slate-50 px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-slate-950 text-sm font-extrabold text-white">
+                    {initials}
                   </span>
-                  View CANA website
-                </span>
-                <ExternalLink size={14} className="text-slate-400" />
-              </a>
-              <div className="mt-1 border-t border-slate-100 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    logout();
-                    navigate("/", { replace: true });
-                  }}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"
-                >
-                  <LogOut size={16} />
-                  Sign out securely
-                </button>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-extrabold text-slate-950">
+                      {user?.fullName}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {user?.email || user?.phone}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                  <span className="border border-slate-300 bg-white px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-700">
+                    {user?.role}
+                  </span>
+                  {(user?.jobTitle || user?.department) && (
+                    <span className="truncate border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold capitalize text-slate-500">
+                      {user?.jobTitle || user?.department?.replaceAll("_", " ")}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="p-2">
+                {isManagement && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      navigate("/management/profile");
+                    }}
+                    className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
+                    role="menuitem"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Settings2 size={16} />
+                      Profile & settings
+                    </span>
+                    <span className="text-slate-400">›</span>
+                  </button>
+                )}
+                <div className="mt-1 border-t border-slate-100 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      logout();
+                      navigate("/", { replace: true });
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"
+                    role="menuitem"
+                  >
+                    <LogOut size={16} />
+                    Sign out securely
+                  </button>
+                </div>
               </div>
             </div>
           )}

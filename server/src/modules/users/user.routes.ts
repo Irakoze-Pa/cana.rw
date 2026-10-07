@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import User, { Company, Department, UserRole, UserStatus } from "../../models/users";
-import { authorizeRoles, protect, AuthRequest } from "../../middleware/auth.middleware";
+import { authorizeArea, authorizeRoles, protect, AuthRequest } from "../../middleware/auth.middleware";
 import { hashPassword } from "../../utils/password";
 
 const router = Router();
@@ -9,7 +9,7 @@ const ACCESS_AREAS = ["sales", "production", "inventory", "procurement", "financ
 const defaultPermissions = (role: UserRole, department?: Department) => {
   if (role === UserRole.SUPERADMIN || role === UserRole.ADMIN) return [...ACCESS_AREAS];
   if (role === UserRole.CUSTOMER) return [];
-  const departmentAccess: Partial<Record<Department, string[]>> = { sales: ["sales", "sites"], production: ["production"], warehouse: ["inventory"], procurement: ["procurement"], finance: ["finance"], marketing: ["sales", "reports", "sites"], hr: ["staff"], customer_service: ["sales", "sites"], management: ["reports", "sales", "production", "inventory", "procurement", "finance", "sites"] };
+  const departmentAccess: Partial<Record<Department, string[]>> = { sales: ["sales", "sites"], production: ["production"], warehouse: ["inventory"], procurement: ["procurement", "inventory"], finance: ["finance", "reports"], marketing: ["sales", "reports", "sites"], hr: ["staff"], customer_service: ["sales", "sites"], sites: ["sites"], management: ["reports", "sales", "production", "inventory", "procurement", "finance", "staff", "sites"] };
   return departmentAccess[department as Department] || [];
 };
 router.use(protect);
@@ -87,12 +87,29 @@ router.patch("/customers/:id", authorizeRoles(UserRole.ADMIN, UserRole.STAFF), a
   } catch (error) { next(error); }
 });
 
+router.get("/workforce", authorizeArea("staff"), async (_req, res, next) => {
+  try {
+    const users = await User.find({ role: { $in: [UserRole.STAFF, UserRole.ADMIN] } }).select("fullName role company department jobTitle baseSalary status").sort({ fullName: 1 }).lean();
+    res.json({ data: users });
+  } catch (error) { next(error); }
+});
+
+router.patch("/workforce/:id/salary", authorizeArea("staff"), async (req, res, next) => {
+  try {
+    const baseSalary = Number(req.body?.baseSalary);
+    if (!Number.isFinite(baseSalary) || baseSalary < 0) return res.status(400).json({ message: "Base salary must be zero or more." });
+    const user = await User.findOneAndUpdate({ _id: req.params.id, role: { $in: [UserRole.STAFF, UserRole.ADMIN] } }, { $set: { baseSalary } }, { new: true, runValidators: true }).select("fullName role company department jobTitle baseSalary status");
+    if (!user) return res.status(404).json({ message: "Staff member not found." });
+    res.json({ data: user });
+  } catch (error) { next(error); }
+});
+
 // Administrators retain all operational modules; only SuperAdmin manages accounts.
 router.use(authorizeRoles(UserRole.SUPERADMIN));
 
 router.post("/", async (req, res, next) => {
   try {
-    const { fullName, phone, email, password, role = UserRole.STAFF, company = Company.CANA_GROUP, department, jobTitle, baseSalary = 0 } = req.body as Record<string, unknown>;
+    const { fullName, phone, email, password, role = UserRole.STAFF, company = Company.CANA_GROUP, department, jobTitle, baseSalary = 0, permissions } = req.body as Record<string, unknown>;
     if (typeof fullName !== "string" || fullName.trim().length < 3 || typeof phone !== "string" || phone.trim().length < 6 || typeof password !== "string" || password.length < 8) {
       return res.status(400).json({ error: { code: "INVALID_USER_INPUT", message: "Name, phone, and a temporary password of at least 8 characters are required." } });
     }
@@ -102,7 +119,9 @@ router.post("/", async (req, res, next) => {
     const normalizedPhone = phone.trim().replace(/[\s()-]/g, "");
     const exists = await User.exists({ $or: [{ phone: normalizedPhone }, ...(typeof email === "string" && email.trim() ? [{ email: email.trim().toLowerCase() }] : [])] });
     if (exists) return res.status(409).json({ error: { code: "USER_EXISTS", message: "A user already exists with this phone number or email." } });
-    const user = await User.create({ fullName: fullName.trim(), phone: normalizedPhone, ...(typeof email === "string" && email.trim() ? { email: email.trim().toLowerCase() } : {}), password: await hashPassword(password), role: role as UserRole, company: company as Company, department: department ? department as Department : undefined, jobTitle: typeof jobTitle === "string" ? jobTitle.trim() : "", baseSalary: Number(baseSalary), status: UserStatus.ACTIVE, permissions: defaultPermissions(role as UserRole, department as Department | undefined) } as any) as any;
+    if (permissions !== undefined && (!Array.isArray(permissions) || !permissions.every((item) => typeof item === "string" && ACCESS_AREAS.includes(item as typeof ACCESS_AREAS[number])))) return res.status(400).json({ error: { code: "INVALID_PERMISSIONS", message: "One or more access areas are invalid." } });
+    const assignedPermissions = role === UserRole.ADMIN || role === UserRole.SUPERADMIN ? [...ACCESS_AREAS] : Array.isArray(permissions) ? [...new Set(permissions)] : defaultPermissions(role as UserRole, department as Department | undefined);
+    const user = await User.create({ fullName: fullName.trim(), phone: normalizedPhone, ...(typeof email === "string" && email.trim() ? { email: email.trim().toLowerCase() } : {}), password: await hashPassword(password), role: role as UserRole, company: company as Company, department: department ? department as Department : undefined, jobTitle: typeof jobTitle === "string" ? jobTitle.trim() : "", baseSalary: Number(baseSalary), status: UserStatus.ACTIVE, permissions: assignedPermissions } as any) as any;
     const safe = user.toObject() as { password?: string; [key: string]: unknown }; delete safe.password;
     res.status(201).json({ data: safe });
   } catch (error) { next(error); }

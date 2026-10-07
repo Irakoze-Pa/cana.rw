@@ -105,6 +105,7 @@ import ExpensesPage from "@/modules/management/expenses/ExpensesPage";
 import GeneralActivityReportPage from "@/modules/management/reports/GeneralActivityReportPage";
 import ProcurementReportPage from "@/modules/management/reports/ProcurementReportPage";
 import SiteManagementPage from "@/modules/management/sites/SiteManagementPage";
+import AccountingPage from "@/modules/management/accounting/AccountingPage";
 
 // =====================================================
 // CANA PAINTS
@@ -332,6 +333,7 @@ const router = createBrowserRouter([
         element: <SupplierPaymentsPage />,
       },
       { path: "expenses", element: <ExpensesPage /> },
+      { path: "accounting", element: <AccountingPage /> },
       { path: "general-report", element: <GeneralActivityReportPage /> },
       { path: "procurement-report", element: <ProcurementReportPage /> },
 

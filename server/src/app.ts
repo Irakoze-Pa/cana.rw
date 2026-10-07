@@ -32,6 +32,7 @@ import supplierPaymentRoutes from "./modules/supplierPayments/supplierPayment.ro
 import expenseRoutes from "./modules/expenses/expense.routes";
 import proformaRoutes from "./modules/proformas/proforma.routes";
 import siteRoutes from "./modules/sites/site.routes";
+import accountingRoutes from "./modules/accounting/accounting.routes";
 
 const app = express();
 const api = Router();
@@ -102,6 +103,7 @@ api.use("/supplier-payments", supplierPaymentRoutes);
 api.use("/expenses", expenseRoutes);
 api.use("/proformas", proformaRoutes);
 api.use("/sites", siteRoutes);
+api.use("/accounting", accountingRoutes);
 
 // =====================================================
 // SUPPLIERS

@@ -123,7 +123,7 @@ export default function AdminDashboard() {
             <p className="mt-1 max-w-2xl text-sm text-slate-500">Sales, production, stock, procurement and collections.</p>
           </div>
           <div className="grid grid-cols-[1fr_auto] gap-2 sm:flex sm:flex-wrap">
-            <Link to="/management/quotations" className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-700 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-red-800 sm:px-4 sm:text-sm"><FileText size={16} />Review quotations</Link>
+            <Link to="/management/sales" className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-700 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-red-800 sm:px-4 sm:text-sm"><ShoppingCart size={16} />Sales workspace</Link>
             <button type="button" onClick={() => void load()} aria-label="Refresh dashboard" className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 sm:px-4 sm:text-sm"><RefreshCw size={16} className={loading ? "animate-spin" : ""} /><span className="hidden sm:inline">Refresh</span></button>
           </div>
         </div>

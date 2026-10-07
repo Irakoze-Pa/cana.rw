@@ -19,8 +19,9 @@ type User = {
     | "cana_group"
     | "cana_paints"
     | "cana_services";
-  department?: "sales" | "production" | "warehouse" | "finance" | "marketing" | "hr" | "procurement" | "customer_service" | "management" | "transport";
+  department?: "sales" | "production" | "warehouse" | "finance" | "marketing" | "hr" | "procurement" | "customer_service" | "management" | "transport" | "sites";
   jobTitle?: string;
+  permissions?: string[];
 };
 
 type AuthContextType = {

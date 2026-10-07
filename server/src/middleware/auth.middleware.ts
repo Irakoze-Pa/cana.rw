@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import User from "../models/users";
 
 export interface AuthRequest extends Request {
   user?: {
@@ -80,4 +81,30 @@ export const authorizeRoles = (...roles: string[]) => (
   }
 
   next();
+};
+
+export const authorizeArea = (...areas: string[]) => async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (req.user?.role === "admin" || req.user?.role === "superadmin") return next();
+    if (req.user?.role !== "staff") return res.status(403).json({ message: "Staff access is required." });
+    const user = await User.findById(req.user.id).select("department permissions status").lean();
+    const legacyDepartmentAreas: Record<string, string[]> = {
+      sales: ["sales", "sites"], production: ["production"], warehouse: ["inventory"],
+      procurement: ["procurement", "inventory"], finance: ["finance", "reports"],
+      marketing: ["sales", "reports", "sites"], hr: ["staff"],
+      customer_service: ["sales", "sites"], sites: ["sites"],
+      management: ["sales", "production", "inventory", "procurement", "finance", "staff", "reports", "sites"],
+    };
+    const assigned = user?.permissions?.length ? user.permissions : legacyDepartmentAreas[String(user?.department)] || [];
+    if (!user || user.status !== "active" || !areas.some((area) => assigned.includes(area))) {
+      return res.status(403).json({ message: "You do not have access to this workspace." });
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
 };
