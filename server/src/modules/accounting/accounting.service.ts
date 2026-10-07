@@ -77,7 +77,7 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
     Payment.find({ status: { $ne: "void" } }).populate("customer", "fullName businessName").lean(),
     CustomerOpeningBalance.find({ status: { $ne: "void" } }).populate("customer", "fullName businessName").lean(),
     RawMaterialLot.find().populate("rawMaterial", "name code").populate("supplier", "name code").lean(),
-    SupplierPayment.find().populate("supplier", "name code").lean(),
+    SupplierPayment.find({ $or: [{ chequeStatus: "cleared" }, { chequeStatus: { $exists: false } }] }).populate("supplier", "name code").lean(),
     SupplierOpeningPayable.find({ status: { $ne: "void" } }).populate("supplier", "name code").lean(),
     Expense.find().lean(),
     SalesOrder.find({ status: "delivered" }).lean(),

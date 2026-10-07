@@ -113,6 +113,23 @@ const classifyLegacyPackaging = async () => {
   ]);
 };
 
+/** Whiting is purchased and controlled in standard 50 kg bags. */
+const standardizeWhitingPackaging = async () => {
+  const whitingMaterials = await RawMaterial.find({ name: /whiting/i }).select("_id").lean();
+  if (!whitingMaterials.length) return;
+  const ids = whitingMaterials.map((material) => material._id);
+  await Promise.all([
+    RawMaterial.updateMany(
+      { _id: { $in: ids } },
+      { $set: { unit: "kg", packSizes: [50] } },
+    ),
+    Inventory.updateMany(
+      { rawMaterial: { $in: ids } },
+      { $set: { unit: "kg" } },
+    ),
+  ]);
+};
+
 /**
  * =========================================================
  * CREATE RAW MATERIAL
@@ -194,9 +211,9 @@ export const createRawMaterial = async (
       category:
         data.category.trim(),
 
-      unit: data.unit.trim(),
+      unit: /whiting/i.test(data.name) ? "kg" : data.unit.trim(),
 
-      packSizes: normalizePackSizes(data.packSizes),
+      packSizes: /whiting/i.test(data.name) ? [50] : normalizePackSizes(data.packSizes),
 
       quantity,
 
@@ -246,7 +263,7 @@ export const createRawMaterial = async (
  */
 export const getRawMaterials =
   async () => {
-    await Promise.all([reconcileAvailableQuantities(), classifyLegacyPackaging()]);
+    await Promise.all([reconcileAvailableQuantities(), classifyLegacyPackaging(), standardizeWhitingPackaging()]);
     const materials = await RawMaterial.find()
       .populate(
         "supplier",
@@ -291,7 +308,7 @@ export const getRawMaterials =
  */
 export const getRawMaterialById =
   async (id: string) => {
-    await reconcileAvailableQuantities();
+    await Promise.all([reconcileAvailableQuantities(), standardizeWhitingPackaging()]);
     return await RawMaterial.findById(
       id
     ).populate(
@@ -320,6 +337,12 @@ export const updateRawMaterial =
       throw new Error(
         "Raw material not found"
       );
+    }
+
+    const effectiveName = data.name?.trim() || existingRawMaterial.name;
+    if (/whiting/i.test(effectiveName)) {
+      data.unit = "kg";
+      data.packSizes = [50];
     }
 
     if (data.quantity !== undefined) {

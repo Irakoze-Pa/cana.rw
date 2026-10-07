@@ -46,6 +46,7 @@ type SupplierPayment = {
   paidAt: string;
   amount: number;
   method: string;
+  chequeStatus?: string;
   supplier?: { name?: string };
 };
 type Expense = {
@@ -218,8 +219,10 @@ export default function OperationalReportsPage() {
       (invoice) => inside(invoice.createdAt) && invoice.status !== "void",
     );
     const received = payments.filter((payment) => inside(payment.receivedAt));
-    const supplier = supplierPayments.filter((payment) =>
-      inside(payment.paidAt),
+    const supplier = supplierPayments.filter(
+      (payment) =>
+        inside(payment.paidAt) &&
+        (!payment.chequeStatus || payment.chequeStatus === "cleared"),
     );
     const operating = expenses.filter((expense) => inside(expense.date));
     const costedBatches = batches.filter(

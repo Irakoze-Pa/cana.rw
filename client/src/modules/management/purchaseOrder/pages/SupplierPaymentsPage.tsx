@@ -1,39 +1,983 @@
 import { useEffect, useMemo, useState } from "react";
-import { CreditCard, Plus, RefreshCw, X } from "lucide-react";
+import {
+  Banknote,
+  CheckCircle2,
+  CreditCard,
+  Plus,
+  RefreshCw,
+  X,
+  XCircle,
+} from "lucide-react";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
 import { useConfirmation } from "@/context/confirmationContext";
 
 type Supplier = { _id: string; name: string; code?: string; phone?: string };
-type PO = { _id: string; poNumber: string; total: number; supplier: Supplier | string; status: string };
-type Opening = { _id: string; openingNumber: string; supplier?: Supplier; amount: number; amountPaid: number; balance: number; status: string; openingDate: string; description: string };
-type Payment = { _id: string; paymentNumber: string; amount: number; method: string; paidAt: string; chequeNumber?: string; bankName?: string; supplier?: Supplier; purchaseOrder?: { poNumber?: string; total?: number }; openingPayable?: { openingNumber?: string; description?: string } };
-type Account = { supplier: Supplier; purchaseOrderTotal: number; openingTotal: number; amountPaid: number; balance: number };
-const money = (value: number) => Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 });
-const statusStyle = (status: string) => status === "paid" ? "bg-emerald-50 text-emerald-700" : status === "void" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-700";
-const emptyPayment = () => ({ purchaseOrder: "", openingPayable: "", supplier: "", amount: "", method: "bank_cheque", chequeNumber: "", bankName: "", chequeDate: new Date().toISOString().slice(0, 10), reference: "", paidAt: new Date().toISOString().slice(0, 10), notes: "" });
+type PO = {
+  _id: string;
+  poNumber: string;
+  total: number;
+  supplier: Supplier | string;
+  status: string;
+};
+type Opening = {
+  _id: string;
+  openingNumber: string;
+  supplier?: Supplier;
+  amount: number;
+  amountPaid: number;
+  balance: number;
+  status: string;
+  openingDate: string;
+  description: string;
+};
+type ChequeStatus =
+  "issued" | "due" | "deposited" | "cleared" | "bounced" | "cancelled";
+type Payment = {
+  _id: string;
+  paymentNumber: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  chequeNumber?: string;
+  bankName?: string;
+  chequeDate?: string;
+  chequeStatus?: ChequeStatus;
+  supplier?: Supplier;
+  purchaseOrder?: { poNumber?: string; total?: number };
+  openingPayable?: { openingNumber?: string; description?: string };
+};
+type Account = {
+  supplier: Supplier;
+  purchaseOrderTotal: number;
+  openingTotal: number;
+  amountPaid: number;
+  pendingCheques: number;
+  expectedBalance: number;
+  balance: number;
+};
+const money = (value: number) =>
+  Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 });
+const statusStyle = (status: string) =>
+  ["paid", "cleared"].includes(status)
+    ? "bg-emerald-50 text-emerald-700"
+    : ["void", "bounced", "cancelled"].includes(status)
+      ? "bg-red-50 text-red-700"
+      : status === "due"
+        ? "bg-amber-50 text-amber-800"
+        : "bg-slate-100 text-slate-700";
+const emptyPayment = () => ({
+  purchaseOrder: "",
+  openingPayable: "",
+  supplier: "",
+  amount: "",
+  method: "bank_cheque",
+  chequeNumber: "",
+  bankName: "",
+  chequeDate: new Date().toISOString().slice(0, 10),
+  reference: "",
+  paidAt: new Date().toISOString().slice(0, 10),
+  notes: "",
+});
 
 export default function SupplierPaymentsPage() {
   const { toast } = useToast();
   const { confirm } = useConfirmation();
-  const [payments, setPayments] = useState<Payment[]>([]); const [orders, setOrders] = useState<PO[]>([]); const [suppliers, setSuppliers] = useState<Supplier[]>([]); const [openings, setOpenings] = useState<Opening[]>([]); const [accounts, setAccounts] = useState<Account[]>([]);
-  const [paymentOpen, setPaymentOpen] = useState(false); const [openingOpen, setOpeningOpen] = useState(false); const [error, setError] = useState(""); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState(emptyPayment()); const [openingForm, setOpeningForm] = useState({ supplier: "", amount: "", openingDate: new Date().toISOString().slice(0, 10), dueDate: "", description: "Opening supplier balance", notes: "" });
-  const load = async () => { setLoading(true); setError(""); try { const [pay, po, supplier, opening, account] = await Promise.all([api.get<{ data: Payment[] }>("/supplier-payments"), api.get<{ data: PO[] }>("/purchase-orders"), api.get<{ data: Supplier[] }>("/suppliers"), api.get<{ data: Opening[] }>("/supplier-payments/opening-payables"), api.get<{ data: Account[] }>("/supplier-payments/supplier-accounts")]); setPayments(pay.data.data || []); setOrders((po.data.data || []).filter((item) => ["received", "partially_received"].includes(item.status))); setSuppliers((supplier.data.data || []).filter((item) => item)); setOpenings(opening.data.data || []); setAccounts(account.data.data || []); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load supplier finance."); } finally { setLoading(false); } };
-  useEffect(() => { void load(); }, []);
-  const selectedOrder = orders.find((item) => item._id === form.purchaseOrder); const selectedOpening = openings.find((item) => item._id === form.openingPayable);
-  const poPaid = useMemo(() => payments.filter((item) => item.purchaseOrder?.poNumber === selectedOrder?.poNumber).reduce((sum, item) => sum + item.amount, 0), [payments, selectedOrder]);
-  const balance = selectedOrder ? Math.max(0, Number(selectedOrder.total || 0) - poPaid) : Number(selectedOpening?.balance || 0);
-  const submitPayment = async (event: React.FormEvent) => { event.preventDefault(); if (saving) return; if (!form.supplier || (!form.purchaseOrder && !form.openingPayable)) return setError("Select a purchase order or an opening payable."); if (!await confirm({ title: "Record supplier payment", description: `Record a supplier payment of ${money(Number(form.amount || 0))} RWF? This will reduce the payable balance.`, confirmLabel: "Record payment", tone: "warning" })) return; setSaving(true); setError(""); try { await api.post("/supplier-payments", { ...form, amount: Number(form.amount) }); setPaymentOpen(false); setForm(emptyPayment()); await load(); toast("Supplier payment recorded.", "success"); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not record supplier payment."); } finally { setSaving(false); } };
-  const submitOpening = async (event: React.FormEvent) => { event.preventDefault(); if (saving) return; if (!await confirm({ title: "Record opening supplier debt", description: `Add an opening payable of ${money(Number(openingForm.amount || 0))} RWF to this supplier account?`, confirmLabel: "Record opening payable", tone: "warning" })) return; setSaving(true); setError(""); try { await api.post("/supplier-payments/opening-payables", { ...openingForm, amount: Number(openingForm.amount) }); setOpeningOpen(false); setOpeningForm({ supplier: "", amount: "", openingDate: new Date().toISOString().slice(0, 10), dueDate: "", description: "Opening supplier balance", notes: "" }); await load(); toast("Opening supplier payable recorded.", "success"); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not record opening payable."); } finally { setSaving(false); } };
-  return <div className="mx-auto max-w-7xl space-y-4"><header className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center"><div><p className="cana-section-kicker">Procurement finance</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">Supplier payments</h1></div><div className="flex flex-wrap gap-2"><button onClick={() => void load()} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700"><RefreshCw size={15} className={loading ? "animate-spin" : ""}/>Refresh</button><button onClick={() => setOpeningOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800"><Plus size={15}/>Opening payable</button><button onClick={() => setPaymentOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white"><CreditCard size={15}/>Record payment</button></div></header>{error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-    <section className="grid gap-3 sm:grid-cols-3"><Metric label="Purchase-order payables" value={money(accounts.reduce((sum, item) => sum + item.purchaseOrderTotal, 0))}/><Metric label="Opening payables" value={money(accounts.reduce((sum, item) => sum + item.openingTotal, 0))}/><Metric label="Outstanding supplier balance" value={money(accounts.reduce((sum, item) => sum + item.balance, 0))}/></section>
-    <section className="grid items-start gap-4 xl:grid-cols-2"><section className="cana-panel overflow-hidden"><div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Payment history</p><h2 className="mt-1 font-extrabold text-slate-950">Supplier payment register</h2></div><span className="text-sm text-slate-500">{payments.length} records</span></div><div className="max-h-[540px] overflow-auto"><table className="min-w-full text-left text-sm"><thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Payment</th><th className="px-4 py-3">Supplier / applied to</th><th className="px-4 py-3">Method</th><th className="px-4 py-3 text-right">Amount</th></tr></thead><tbody className="divide-y divide-slate-100">{payments.map((item) => <tr key={item._id}><td className="px-4 py-3"><p className="font-bold text-slate-950">{item.paymentNumber}</p><p className="mt-0.5 text-xs text-slate-500">{new Date(item.paidAt).toLocaleDateString("en-RW")}</p></td><td className="px-4 py-3"><p className="font-semibold text-slate-800">{item.supplier?.name || "Supplier"}</p><p className="mt-0.5 text-xs text-slate-500">{item.purchaseOrder?.poNumber || item.openingPayable?.openingNumber || "Opening payable"}</p></td><td className="px-4 py-3 text-slate-600">{item.method.replaceAll("_", " ")}{item.chequeNumber ? ` · ${item.chequeNumber}` : ""}</td><td className="px-4 py-3 text-right font-bold text-slate-950">{money(item.amount)} RWF</td></tr>)}{!loading && !payments.length && <tr><td colSpan={4} className="px-4 py-10 text-center text-slate-500">No supplier payments recorded.</td></tr>}</tbody></table></div></section>
-      <section className="cana-panel overflow-hidden"><div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Brought forward</p><h2 className="mt-1 font-extrabold text-slate-950">Opening supplier payables</h2></div><span className="text-sm text-slate-500">{openings.length} records</span></div><div className="max-h-[540px] overflow-auto"><table className="min-w-full text-left text-sm"><thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Reference</th><th className="px-4 py-3">Supplier</th><th className="px-4 py-3 text-right">Balance</th><th className="px-4 py-3">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{openings.map((item) => <tr key={item._id}><td className="px-4 py-3"><p className="font-bold text-slate-950">{item.openingNumber}</p><p className="mt-0.5 text-xs text-slate-500">{new Date(item.openingDate).toLocaleDateString("en-RW")}</p></td><td className="px-4 py-3"><p className="font-semibold text-slate-800">{item.supplier?.name || "Supplier"}</p><p className="mt-0.5 text-xs text-slate-500">{item.description}</p></td><td className="px-4 py-3 text-right"><p className="font-bold text-slate-950">{money(item.balance)} RWF</p><p className="mt-0.5 text-xs text-emerald-700">Paid {money(item.amountPaid)}</p></td><td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(item.status)}`}>{item.status.replaceAll("_", " ")}</span></td></tr>)}{!loading && !openings.length && <tr><td colSpan={4} className="px-4 py-10 text-center text-slate-500">No opening payables recorded.</td></tr>}</tbody></table></div></section></section>
-    <section className="cana-panel overflow-hidden"><div className="border-b border-slate-100 px-4 py-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Supplier accounts</p><h2 className="mt-1 font-extrabold text-slate-950">Debt and payment summary</h2></div><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Supplier</th><th className="px-4 py-3 text-right">PO payables</th><th className="px-4 py-3 text-right">Opening payable</th><th className="px-4 py-3 text-right">Paid</th><th className="px-4 py-3 text-right">Balance due</th></tr></thead><tbody className="divide-y divide-slate-100">{accounts.map((item) => <tr key={item.supplier._id}><td className="px-4 py-3"><p className="font-bold text-slate-950">{item.supplier.name}</p><p className="mt-0.5 text-xs text-slate-500">{item.supplier.code || item.supplier.phone || "—"}</p></td><td className="px-4 py-3 text-right text-slate-700">{money(item.purchaseOrderTotal)} RWF</td><td className="px-4 py-3 text-right text-slate-700">{money(item.openingTotal)} RWF</td><td className="px-4 py-3 text-right font-semibold text-emerald-700">{money(item.amountPaid)} RWF</td><td className="px-4 py-3 text-right font-extrabold text-slate-950">{money(item.balance)} RWF</td></tr>)}{!loading && !accounts.length && <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">No supplier accounts available.</td></tr>}</tbody></table></div></section>
-    {openingOpen && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4"><form onSubmit={submitOpening} className="w-full max-w-xl rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><p className="cana-section-kicker text-red-700">Opening payable</p><h2 className="mt-1 text-xl font-extrabold">Record supplier opening debt</h2></div><button type="button" onClick={() => setOpeningOpen(false)} className="rounded-lg p-2 text-slate-500"><X size={18}/></button></header><div className="grid gap-4 p-5 sm:grid-cols-2"><Field label="Supplier"><select required value={openingForm.supplier} onChange={(e) => setOpeningForm({ ...openingForm, supplier: e.target.value })}><option value="">Select supplier</option>{suppliers.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}</select></Field><Field label="Opening debt (RWF)"><input required min="0.01" type="number" value={openingForm.amount} onChange={(e) => setOpeningForm({ ...openingForm, amount: e.target.value })}/></Field><Field label="Opening date"><input required type="date" value={openingForm.openingDate} onChange={(e) => setOpeningForm({ ...openingForm, openingDate: e.target.value })}/></Field><Field label="Due date (optional)"><input type="date" value={openingForm.dueDate} onChange={(e) => setOpeningForm({ ...openingForm, dueDate: e.target.value })}/></Field><Field label="Reason / description"><input required value={openingForm.description} onChange={(e) => setOpeningForm({ ...openingForm, description: e.target.value })}/></Field><Field label="Notes"><input value={openingForm.notes} onChange={(e) => setOpeningForm({ ...openingForm, notes: e.target.value })}/></Field></div><footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4"><button type="button" onClick={() => setOpeningOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold">Cancel</button><button disabled={saving} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white">{saving ? "Saving…" : "Record opening payable"}</button></footer></form></div>}
-    {paymentOpen && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4"><form onSubmit={submitPayment} className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><p className="cana-section-kicker text-red-700">Procurement payment</p><h2 className="mt-1 text-xl font-extrabold">Record supplier payment</h2></div><button type="button" onClick={() => setPaymentOpen(false)} className="rounded-lg p-2 text-slate-500"><X size={18}/></button></header><div className="grid gap-4 p-5 sm:grid-cols-2"><Field label="Purchase order"><select value={form.purchaseOrder} onChange={(e) => { const order = orders.find((item) => item._id === e.target.value); setForm({ ...form, purchaseOrder: e.target.value, openingPayable: "", supplier: order && typeof order.supplier !== "string" ? order.supplier._id : "", amount: "" }); }}><option value="">Select received purchase order</option>{orders.map((item) => <option key={item._id} value={item._id}>{item.poNumber} · {typeof item.supplier === "string" ? "Supplier" : item.supplier.name}</option>)}</select></Field><Field label="Or opening payable"><select value={form.openingPayable} onChange={(e) => { const opening = openings.find((item) => item._id === e.target.value); setForm({ ...form, openingPayable: e.target.value, purchaseOrder: "", supplier: opening?.supplier?._id || "", amount: "" }); }}><option value="">Select opening payable</option>{openings.filter((item) => item.balance > 0 && item.status !== "void").map((item) => <option key={item._id} value={item._id}>{item.openingNumber} · {item.supplier?.name} · {money(item.balance)}</option>)}</select></Field>{(selectedOrder || selectedOpening) && <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700 sm:col-span-2">Remaining balance: <strong>{money(balance)} RWF</strong></div>}<Field label="Amount (RWF)"><input required min="1" max={balance || undefined} type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}/></Field><Field label="Payment method"><select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}><option value="bank_cheque">Bank cheque</option><option value="bank_transfer">Bank transfer</option><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="other">Other</option></select></Field>{form.method === "bank_cheque" && <><Field label="Cheque number"><input required value={form.chequeNumber} onChange={(e) => setForm({ ...form, chequeNumber: e.target.value })}/></Field><Field label="Bank name"><input required value={form.bankName} onChange={(e) => setForm({ ...form, bankName: e.target.value })}/></Field></>}<Field label="Payment date"><input type="date" value={form.paidAt} onChange={(e) => setForm({ ...form, paidAt: e.target.value })}/></Field><Field label="Reference"><input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })}/></Field></div><footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4"><button type="button" onClick={() => setPaymentOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold">Cancel</button><button disabled={saving} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white">{saving ? "Saving…" : "Record payment"}</button></footer></form></div>}</div>;
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [orders, setOrders] = useState<PO[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [openings, setOpenings] = useState<Opening[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [openingOpen, setOpeningOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [settlementSearch, setSettlementSearch] = useState("");
+  const [settlementStatus, setSettlementStatus] = useState("all");
+  const [form, setForm] = useState(emptyPayment());
+  const [openingForm, setOpeningForm] = useState({
+    supplier: "",
+    amount: "",
+    openingDate: new Date().toISOString().slice(0, 10),
+    dueDate: "",
+    description: "Opening supplier balance",
+    notes: "",
+  });
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [pay, po, supplier, opening, account] = await Promise.all([
+        api.get<{ data: Payment[] }>("/supplier-payments"),
+        api.get<{ data: PO[] }>("/purchase-orders"),
+        api.get<{ data: Supplier[] }>("/suppliers"),
+        api.get<{ data: Opening[] }>("/supplier-payments/opening-payables"),
+        api.get<{ data: Account[] }>("/supplier-payments/supplier-accounts"),
+      ]);
+      setPayments(pay.data.data || []);
+      setOrders(
+        (po.data.data || []).filter((item) =>
+          ["received", "partially_received"].includes(item.status),
+        ),
+      );
+      setSuppliers((supplier.data.data || []).filter((item) => item));
+      setOpenings(opening.data.data || []);
+      setAccounts(account.data.data || []);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not load supplier finance.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  const selectedOrder = orders.find((item) => item._id === form.purchaseOrder);
+  const selectedOpening = openings.find(
+    (item) => item._id === form.openingPayable,
+  );
+  const poPaid = useMemo(
+    () =>
+      payments
+        .filter(
+          (item) =>
+            item.purchaseOrder?.poNumber === selectedOrder?.poNumber &&
+            (!item.chequeStatus ||
+              ["issued", "due", "deposited", "cleared"].includes(
+                item.chequeStatus,
+              )),
+        )
+        .reduce((sum, item) => sum + item.amount, 0),
+    [payments, selectedOrder],
+  );
+  const filteredPayments = useMemo(
+    () =>
+      payments.filter((item) => {
+        const status =
+          item.method === "bank_cheque"
+            ? item.chequeStatus || "cleared"
+            : "cleared";
+        const text =
+          `${item.paymentNumber} ${item.chequeNumber || ""} ${item.supplier?.name || ""} ${item.purchaseOrder?.poNumber || ""} ${item.openingPayable?.openingNumber || ""}`.toLowerCase();
+        return (
+          (settlementStatus === "all" || status === settlementStatus) &&
+          text.includes(settlementSearch.trim().toLowerCase())
+        );
+      }),
+    [payments, settlementSearch, settlementStatus],
+  );
+  const balance = selectedOrder
+    ? Math.max(0, Number(selectedOrder.total || 0) - poPaid)
+    : Number(selectedOpening?.balance || 0);
+  const submitPayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+    if (!form.supplier || (!form.purchaseOrder && !form.openingPayable))
+      return setError("Select a purchase order or an opening payable.");
+    const isCheque = form.method === "bank_cheque";
+    if (
+      !(await confirm({
+        title: isCheque ? "Issue supplier cheque" : "Record supplier payment",
+        description: isCheque
+          ? `Register cheque ${form.chequeNumber || ""} for ${money(Number(form.amount || 0))} RWF? The payable will remain outstanding until the cheque clears.`
+          : `Record a cleared supplier payment of ${money(Number(form.amount || 0))} RWF?`,
+        confirmLabel: isCheque ? "Issue cheque" : "Record payment",
+        tone: "warning",
+      }))
+    )
+      return;
+    setSaving(true);
+    setError("");
+    try {
+      await api.post("/supplier-payments", {
+        ...form,
+        amount: Number(form.amount),
+      });
+      setPaymentOpen(false);
+      setForm(emptyPayment());
+      await load();
+      toast(
+        isCheque
+          ? "Cheque added to the register. Payable remains open until clearance."
+          : "Supplier payment recorded.",
+        "success",
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not record supplier settlement.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  const updateCheque = async (
+    payment: Payment,
+    status: "deposited" | "cleared" | "bounced" | "cancelled",
+  ) => {
+    if (saving) return;
+    const clears = status === "cleared";
+    if (
+      !(await confirm({
+        title: `${status[0].toUpperCase()}${status.slice(1)} cheque`,
+        description: clears
+          ? `Confirm that cheque ${payment.chequeNumber} cleared the bank? This will reduce the supplier payable by ${money(payment.amount)} RWF.`
+          : `Mark cheque ${payment.chequeNumber} as ${status}?`,
+        confirmLabel: `Mark ${status}`,
+        tone:
+          status === "bounced" || status === "cancelled" ? "danger" : "warning",
+      }))
+    )
+      return;
+    setSaving(true);
+    setError("");
+    try {
+      await api.patch(`/supplier-payments/${payment._id}/cheque-status`, {
+        status,
+      });
+      await load();
+      toast(`Cheque marked ${status}.`, "success");
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not update cheque.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  const submitOpening = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+    if (
+      !(await confirm({
+        title: "Record opening supplier debt",
+        description: `Add an opening payable of ${money(Number(openingForm.amount || 0))} RWF to this supplier account?`,
+        confirmLabel: "Record opening payable",
+        tone: "warning",
+      }))
+    )
+      return;
+    setSaving(true);
+    setError("");
+    try {
+      await api.post("/supplier-payments/opening-payables", {
+        ...openingForm,
+        amount: Number(openingForm.amount),
+      });
+      setOpeningOpen(false);
+      setOpeningForm({
+        supplier: "",
+        amount: "",
+        openingDate: new Date().toISOString().slice(0, 10),
+        dueDate: "",
+        description: "Opening supplier balance",
+        notes: "",
+      });
+      await load();
+      toast("Opening supplier payable recorded.", "success");
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not record opening payable.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="mx-auto max-w-7xl space-y-4">
+      <header className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
+        <div>
+          <p className="cana-section-kicker">Procurement finance</p>
+          <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
+            Supplier finance
+          </h1>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => void load()}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700"
+          >
+            <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+            Refresh
+          </button>
+          <button
+            onClick={() => setOpeningOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800"
+          >
+            <Plus size={15} />
+            Opening payable
+          </button>
+          <button
+            onClick={() => setPaymentOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white"
+          >
+            <CreditCard size={15} />
+            New settlement
+          </button>
+        </div>
+      </header>
+      {error && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric
+          label="Outstanding payables"
+          value={money(accounts.reduce((sum, item) => sum + item.balance, 0))}
+        />
+        <Metric
+          label="Pending cheques"
+          value={money(
+            accounts.reduce(
+              (sum, item) => sum + Number(item.pendingCheques || 0),
+              0,
+            ),
+          )}
+        />
+        <Metric
+          label="Expected after clearance"
+          value={money(
+            accounts.reduce(
+              (sum, item) => sum + Number(item.expectedBalance ?? item.balance),
+              0,
+            ),
+          )}
+        />
+        <Metric
+          label="Cleared payments"
+          value={money(
+            accounts.reduce((sum, item) => sum + item.amountPaid, 0),
+          )}
+        />
+      </section>
+      <section className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm sm:flex-row">
+        <input
+          aria-label="Search supplier settlements"
+          placeholder="Search supplier, cheque or reference"
+          value={settlementSearch}
+          onChange={(event) => setSettlementSearch(event.target.value)}
+          className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-slate-500"
+        />
+        <select
+          aria-label="Filter settlement status"
+          value={settlementStatus}
+          onChange={(event) => setSettlementStatus(event.target.value)}
+          className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+        >
+          <option value="all">All settlements</option>
+          <option value="issued">Issued cheques</option>
+          <option value="due">Due cheques</option>
+          <option value="deposited">Deposited</option>
+          <option value="cleared">Cleared payments</option>
+          <option value="bounced">Bounced</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </section>
+      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,.85fr)]">
+        <section className="cana-panel overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Settlement control
+              </p>
+              <h2 className="mt-1 font-extrabold text-slate-950">
+                Payments & cheque register
+              </h2>
+            </div>
+            <span className="text-sm text-slate-500">
+              {filteredPayments.length} of {payments.length}
+            </span>
+          </div>
+          <div className="max-h-[520px] overflow-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-950 text-[11px] uppercase tracking-wide text-white">
+                <tr>
+                  <th className="px-4 py-3">Reference</th>
+                  <th className="px-4 py-3">Supplier / target</th>
+                  <th className="px-4 py-3">Settlement</th>
+                  <th className="px-4 py-3 text-right">Amount / action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredPayments.map((item) => {
+                  const chequeStatus =
+                    item.method === "bank_cheque"
+                      ? item.chequeStatus || "cleared"
+                      : "cleared";
+                  const actionable =
+                    item.method === "bank_cheque" &&
+                    !["cleared", "bounced", "cancelled"].includes(chequeStatus);
+                  return (
+                    <tr
+                      key={item._id}
+                      className={
+                        chequeStatus === "due"
+                          ? "bg-amber-50/60"
+                          : "transition hover:bg-slate-50"
+                      }
+                    >
+                      <td className="px-4 py-3">
+                        <p className="font-bold text-slate-950">
+                          {item.paymentNumber}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {item.chequeDate
+                            ? `Matures ${new Date(item.chequeDate).toLocaleDateString("en-RW")}`
+                            : new Date(item.paidAt).toLocaleDateString("en-RW")}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-slate-800">
+                          {item.supplier?.name || "Supplier"}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {item.purchaseOrder?.poNumber ||
+                            item.openingPayable?.openingNumber ||
+                            "Opening payable"}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="capitalize text-slate-600">
+                          {item.method.replaceAll("_", " ")}
+                          {item.chequeNumber ? ` · ${item.chequeNumber}` : ""}
+                        </p>
+                        <span
+                          className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${statusStyle(chequeStatus)}`}
+                        >
+                          {chequeStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <p className="font-bold text-slate-950">
+                          {money(item.amount)} RWF
+                        </p>
+                        {actionable && (
+                          <div className="mt-2 flex justify-end gap-1">
+                            {chequeStatus !== "deposited" && (
+                              <button
+                                title="Mark deposited"
+                                onClick={() =>
+                                  void updateCheque(item, "deposited")
+                                }
+                                className="rounded border border-slate-200 p-1.5 text-slate-600"
+                              >
+                                <Banknote size={13} />
+                              </button>
+                            )}
+                            <button
+                              title="Mark cleared"
+                              onClick={() => void updateCheque(item, "cleared")}
+                              className="rounded bg-emerald-700 p-1.5 text-white"
+                            >
+                              <CheckCircle2 size={13} />
+                            </button>
+                            <button
+                              title="Mark bounced"
+                              onClick={() => void updateCheque(item, "bounced")}
+                              className="rounded border border-red-200 p-1.5 text-red-700"
+                            >
+                              <XCircle size={13} />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!loading && !filteredPayments.length && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-4 py-10 text-center text-slate-500"
+                    >
+                      No settlements match this view.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section className="cana-panel overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Brought forward
+              </p>
+              <h2 className="mt-1 font-extrabold text-slate-950">
+                Opening supplier payables
+              </h2>
+            </div>
+            <span className="text-sm text-slate-500">
+              {openings.length} records
+            </span>
+          </div>
+          <div className="max-h-[520px] overflow-auto">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-950 text-[11px] uppercase tracking-wide text-white">
+                <tr>
+                  <th className="px-4 py-3">Reference</th>
+                  <th className="px-4 py-3">Supplier</th>
+                  <th className="px-4 py-3 text-right">Balance</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {openings.map((item) => (
+                  <tr key={item._id} className="transition hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <p className="font-bold text-slate-950">
+                        {item.openingNumber}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {new Date(item.openingDate).toLocaleDateString("en-RW")}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-slate-800">
+                        {item.supplier?.name || "Supplier"}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {item.description}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <p className="font-bold text-slate-950">
+                        {money(item.balance)} RWF
+                      </p>
+                      <p className="mt-0.5 text-xs text-emerald-700">
+                        Paid {money(item.amountPaid)}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(item.status)}`}
+                      >
+                        {item.status.replaceAll("_", " ")}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {!loading && !openings.length && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-4 py-10 text-center text-slate-500"
+                    >
+                      No opening payables recorded.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+      <section className="cana-panel overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Supplier accounts
+            </p>
+            <h2 className="mt-1 font-extrabold text-slate-950">
+              Payables and expected settlement
+            </h2>
+          </div>
+          <span className="text-sm text-slate-500">
+            {accounts.length} suppliers
+          </span>
+        </div>
+        <div className="max-h-[380px] overflow-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-950 text-[11px] uppercase tracking-wide text-white">
+              <tr>
+                <th className="px-4 py-3">Supplier</th>
+                <th className="px-4 py-3 text-right">Cleared</th>
+                <th className="px-4 py-3 text-right">Pending cheques</th>
+                <th className="px-4 py-3 text-right">Actual balance</th>
+                <th className="px-4 py-3 text-right">After clearance</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {accounts.map((item) => (
+                <tr
+                  key={item.supplier._id}
+                  className="transition hover:bg-slate-50"
+                >
+                  <td className="px-4 py-3">
+                    <p className="font-bold text-slate-950">
+                      {item.supplier.name}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {item.supplier.code || item.supplier.phone || "—"}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-emerald-700">
+                    {money(item.amountPaid)} RWF
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-amber-700">
+                    {money(item.pendingCheques || 0)} RWF
+                  </td>
+                  <td className="px-4 py-3 text-right font-extrabold text-slate-950">
+                    {money(item.balance)} RWF
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold text-slate-700">
+                    {money(item.expectedBalance ?? item.balance)} RWF
+                  </td>
+                </tr>
+              ))}
+              {!loading && !accounts.length && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-4 py-10 text-center text-slate-500"
+                  >
+                    No supplier accounts available.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {openingOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4">
+          <form
+            onSubmit={submitOpening}
+            className="w-full max-w-xl rounded-2xl bg-white shadow-2xl"
+          >
+            <header className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <p className="cana-section-kicker text-red-700">
+                  Opening payable
+                </p>
+                <h2 className="mt-1 text-xl font-extrabold">
+                  Record supplier opening debt
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpeningOpen(false)}
+                className="rounded-lg p-2 text-slate-500"
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <div className="grid gap-4 p-5 sm:grid-cols-2">
+              <Field label="Supplier">
+                <select
+                  required
+                  value={openingForm.supplier}
+                  onChange={(e) =>
+                    setOpeningForm({ ...openingForm, supplier: e.target.value })
+                  }
+                >
+                  <option value="">Select supplier</option>
+                  {suppliers.map((item) => (
+                    <option key={item._id} value={item._id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Opening debt (RWF)">
+                <input
+                  required
+                  min="0.01"
+                  type="number"
+                  value={openingForm.amount}
+                  onChange={(e) =>
+                    setOpeningForm({ ...openingForm, amount: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Opening date">
+                <input
+                  required
+                  type="date"
+                  value={openingForm.openingDate}
+                  onChange={(e) =>
+                    setOpeningForm({
+                      ...openingForm,
+                      openingDate: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Due date (optional)">
+                <input
+                  type="date"
+                  value={openingForm.dueDate}
+                  onChange={(e) =>
+                    setOpeningForm({ ...openingForm, dueDate: e.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Reason / description">
+                <input
+                  required
+                  value={openingForm.description}
+                  onChange={(e) =>
+                    setOpeningForm({
+                      ...openingForm,
+                      description: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Notes">
+                <input
+                  value={openingForm.notes}
+                  onChange={(e) =>
+                    setOpeningForm({ ...openingForm, notes: e.target.value })
+                  }
+                />
+              </Field>
+            </div>
+            <footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setOpeningOpen(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={saving}
+                className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white"
+              >
+                {saving ? "Saving…" : "Record opening payable"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+      {paymentOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4">
+          <form
+            onSubmit={submitPayment}
+            className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+          >
+            <header className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <p className="cana-section-kicker text-red-700">
+                  Supplier settlement
+                </p>
+                <h2 className="mt-1 text-xl font-extrabold">
+                  Payment or post-dated cheque
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaymentOpen(false)}
+                className="rounded-lg p-2 text-slate-500"
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <div className="grid gap-4 p-5 sm:grid-cols-2">
+              <Field label="Purchase order">
+                <select
+                  value={form.purchaseOrder}
+                  onChange={(e) => {
+                    const order = orders.find(
+                      (item) => item._id === e.target.value,
+                    );
+                    setForm({
+                      ...form,
+                      purchaseOrder: e.target.value,
+                      openingPayable: "",
+                      supplier:
+                        order && typeof order.supplier !== "string"
+                          ? order.supplier._id
+                          : "",
+                      amount: "",
+                    });
+                  }}
+                >
+                  <option value="">Select received purchase order</option>
+                  {orders.map((item) => (
+                    <option key={item._id} value={item._id}>
+                      {item.poNumber} ·{" "}
+                      {typeof item.supplier === "string"
+                        ? "Supplier"
+                        : item.supplier.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Or opening payable">
+                <select
+                  value={form.openingPayable}
+                  onChange={(e) => {
+                    const opening = openings.find(
+                      (item) => item._id === e.target.value,
+                    );
+                    setForm({
+                      ...form,
+                      openingPayable: e.target.value,
+                      purchaseOrder: "",
+                      supplier: opening?.supplier?._id || "",
+                      amount: "",
+                    });
+                  }}
+                >
+                  <option value="">Select opening payable</option>
+                  {openings
+                    .filter(
+                      (item) => item.balance > 0 && item.status !== "void",
+                    )
+                    .map((item) => (
+                      <option key={item._id} value={item._id}>
+                        {item.openingNumber} · {item.supplier?.name} ·{" "}
+                        {money(item.balance)}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+              {(selectedOrder || selectedOpening) && (
+                <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700 sm:col-span-2">
+                  Available to settle: <strong>{money(balance)} RWF</strong>
+                </div>
+              )}
+              <Field label="Amount (RWF)">
+                <input
+                  required
+                  min="1"
+                  max={balance || undefined}
+                  type="number"
+                  value={form.amount}
+                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                />
+              </Field>
+              <Field label="Settlement method">
+                <select
+                  value={form.method}
+                  onChange={(e) => setForm({ ...form, method: e.target.value })}
+                >
+                  <option value="bank_cheque">Post-dated bank cheque</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="cash">Cash</option>
+                  <option value="mobile_money">Mobile money</option>
+                  <option value="other">Other</option>
+                </select>
+              </Field>
+              {form.method === "bank_cheque" && (
+                <>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900 sm:col-span-2">
+                    The cheque is registered as pending. Supplier debt and bank
+                    balance change only after Finance confirms clearance.
+                  </div>
+                  <Field label="Cheque number">
+                    <input
+                      required
+                      value={form.chequeNumber}
+                      onChange={(e) =>
+                        setForm({ ...form, chequeNumber: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field label="Issuing bank">
+                    <input
+                      required
+                      value={form.bankName}
+                      onChange={(e) =>
+                        setForm({ ...form, bankName: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field label="Cheque maturity date">
+                    <input
+                      required
+                      type="date"
+                      value={form.chequeDate}
+                      onChange={(e) =>
+                        setForm({ ...form, chequeDate: e.target.value })
+                      }
+                    />
+                  </Field>
+                </>
+              )}{" "}
+              {form.method !== "bank_cheque" && (
+                <Field label="Payment date">
+                  <input
+                    type="date"
+                    value={form.paidAt}
+                    onChange={(e) =>
+                      setForm({ ...form, paidAt: e.target.value })
+                    }
+                  />
+                </Field>
+              )}
+              <Field label="Reference">
+                <input
+                  value={form.reference}
+                  onChange={(e) =>
+                    setForm({ ...form, reference: e.target.value })
+                  }
+                />
+              </Field>
+            </div>
+            <footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setPaymentOpen(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={saving}
+                className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white"
+              >
+                {saving
+                  ? "Saving…"
+                  : form.method === "bank_cheque"
+                    ? "Issue cheque"
+                    : "Record payment"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function Metric({ label, value }: { label: string; value: string }) { return <div className="cana-panel p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-xl font-extrabold text-slate-950">{value} <span className="text-sm">RWF</span></p></div>; }
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-sm font-bold text-slate-700">{label}<span className="mt-1.5 block [&_input]:w-full [&_input]:rounded-lg [&_input]:border [&_input]:border-slate-200 [&_input]:px-3 [&_input]:py-2.5 [&_select]:w-full [&_select]:rounded-lg [&_select]:border [&_select]:border-slate-200 [&_select]:bg-white [&_select]:px-3 [&_select]:py-2.5">{children}</span></label>; }
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-slate-200 bg-white px-4 py-3.5 shadow-sm">
+      <p className="text-[11px] font-bold uppercase tracking-[.08em] text-slate-500">
+        {label}
+      </p>
+      <p className="mt-1.5 text-xl font-extrabold tabular-nums text-slate-950">
+        {value} <span className="text-xs font-bold text-slate-500">RWF</span>
+      </p>
+    </div>
+  );
+}
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block text-sm font-bold text-slate-700">
+      {label}
+      <span className="mt-1.5 block [&_input]:w-full [&_input]:rounded-lg [&_input]:border [&_input]:border-slate-200 [&_input]:px-3 [&_input]:py-2.5 [&_select]:w-full [&_select]:rounded-lg [&_select]:border [&_select]:border-slate-200 [&_select]:bg-white [&_select]:px-3 [&_select]:py-2.5">
+        {children}
+      </span>
+    </label>
+  );
+}

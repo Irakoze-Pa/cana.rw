@@ -40,7 +40,7 @@ const counts: Count[] = [
   { name: "Texanol", quantity: 6.7, packSizes: [20], unit: "kg" },
   { name: "Tylose 250", quantity: 9.5, packSizes: [25] },
   { name: "Whiting 15", quantity: 100, packSizes: [50] },
-  { name: "Whiting 16", quantity: 1000 },
+  { name: "Whiting 16", quantity: 1000, packSizes: [50] },
   { name: "Marble Sand", quantity: 9900, packSizes: [50] },
 ];
 

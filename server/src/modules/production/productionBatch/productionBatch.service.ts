@@ -8,9 +8,11 @@ import Product from "../../product/product.model";
 import FinishedGoodsStoreBalance from "../../finishedGoods/storeBalance.model";
 import InventoryTransaction from "../../inventory/inventoryTransaction.model";
 import RawMaterialConsumption from "../materialConsumption/materialConsumption.model";
+import RawMaterialLot from "../../raw-materials/rawMaterialLot.model";
 import {
   completeMaterialConsumption,
   createMaterialConsumption,
+  issueMaterialConsumption,
   updateMaterialConsumption,
 } from "../materialConsumption/materialConsumption.service";
 
@@ -627,9 +629,41 @@ export async function updateProductionBatch(
     }
 
     if (consumptionToFinalize.status === "Draft") {
-      throw new ProductionBatchServiceError(
-        "Issue the raw materials for this batch before completing it.",
-        409,
+      if (currentStatus !== "In Progress") {
+        throw new ProductionBatchServiceError(
+          "Resume this batch before completion so its raw materials can be issued automatically.",
+          409,
+        );
+      }
+      const automaticItems = [] as Array<{
+        rawMaterial: string;
+        issuedQuantity: number;
+        lotNumber?: string;
+      }>;
+      for (const item of consumptionToFinalize.items || []) {
+        const quantity = Number(item.standardQuantity || 0);
+        const lot = await RawMaterialLot.findOne({
+          rawMaterial: item.rawMaterial,
+          status: "available",
+          availableQuantity: { $gte: quantity },
+          $or: [
+            { expiresAt: { $exists: false } },
+            { expiresAt: null },
+            { expiresAt: { $gt: new Date() } },
+          ],
+        }).sort({ expiresAt: 1, receivedAt: 1 });
+        automaticItems.push({
+          rawMaterial: String(item.rawMaterial),
+          issuedQuantity: quantity,
+          ...(lot?.lotNumber ? { lotNumber: lot.lotNumber } : {}),
+        });
+      }
+      await issueMaterialConsumption(String(consumptionToFinalize._id), {
+        items: automaticItems,
+        notes: `Issued automatically during confirmed completion of batch ${batch.batchNo}.`,
+      });
+      consumptionToFinalize = await RawMaterialConsumption.findById(
+        consumptionToFinalize._id,
       );
     }
   }

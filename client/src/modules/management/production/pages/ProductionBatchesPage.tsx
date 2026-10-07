@@ -59,16 +59,16 @@ function getStatusClass(status: ProductionBatchStatus): string {
       return "bg-slate-100 text-slate-700";
 
     case "Ready":
-      return "bg-green-100 text-green-700";
+      return "bg-slate-100 text-slate-700";
 
     case "In Progress":
-      return "bg-orange-100 text-orange-700";
+      return "bg-amber-50 text-amber-800";
 
     case "Paused":
-      return "bg-yellow-100 text-yellow-700";
+      return "bg-slate-100 text-slate-600";
 
     case "Completed":
-      return "bg-emerald-100 text-emerald-700";
+      return "bg-emerald-50 text-emerald-700";
 
     case "Cancelled":
       return "bg-red-100 text-red-700";
@@ -123,7 +123,7 @@ function canEditBatch(batch: ProductionBatch): boolean {
 // =====================================================
 
 function canDeleteBatch(batch: ProductionBatch): boolean {
-  return batch.status === "Planned" || batch.status === "Cancelled";
+  return batch.status === "Planned";
 }
 
 function printBatchRecord(batch: ProductionBatch) {
@@ -362,6 +362,16 @@ const ProductionBatchesPage = () => {
       throw new Error("No production batch selected.");
     }
 
+    if (data.status === "Completed" && selectedBatch.status !== "Completed") {
+      const approved = await confirm({
+        title: "Complete production batch",
+        description: `Complete ${selectedBatch.batchNo} with ${formatNumber(data.actualQuantity ?? selectedBatch.actualQuantity)} ${selectedBatch.unit} output? Required raw materials will be issued automatically from available lots, consumption will be locked, and finished goods will be posted to the Production Store.`,
+        confirmLabel: "Complete & post stock",
+        tone: "warning",
+      });
+      if (!approved) return;
+    }
+
     try {
       const updatedBatch = await updateProductionBatch(selectedBatch._id, data);
 
@@ -440,7 +450,7 @@ const ProductionBatchesPage = () => {
 
   const handleDelete = async (batch: ProductionBatch) => {
     if (!canDeleteBatch(batch)) {
-      alert("Only Planned or Cancelled production batches can be deleted.");
+      alert("Only Planned production batches can be deleted. Started, completed and cancelled records remain for audit history.");
 
       return;
     }
