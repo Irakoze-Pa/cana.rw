@@ -44,8 +44,8 @@ type Payment = {
   chequeDate?: string;
   chequeStatus?: ChequeStatus;
   supplier?: Supplier;
-  purchaseOrder?: { poNumber?: string; total?: number };
-  openingPayable?: { openingNumber?: string; description?: string };
+  purchaseOrder?: { _id?: string; poNumber?: string; total?: number };
+  openingPayable?: { _id?: string; openingNumber?: string; description?: string };
 };
 type TreasuryAccount = { _id: string; name: string; type: "cash" | "bank" | "mobile_money"; balance: number; status: string };
 type Account = {
@@ -142,23 +142,39 @@ export default function SupplierPaymentsPage() {
   useEffect(() => {
     void load();
   }, []);
+  const reservesPayable = (item: Payment) =>
+    !item.chequeStatus ||
+    ["issued", "due", "deposited", "cleared"].includes(item.chequeStatus);
+  const purchaseOrderBalance = (order: PO) => {
+    const committed = payments
+      .filter(
+        (item) =>
+          reservesPayable(item) &&
+          (item.purchaseOrder?._id === order._id ||
+            item.purchaseOrder?.poNumber === order.poNumber),
+      )
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    return Math.max(0, Number(order.total || 0) - committed);
+  };
+  const openingBalance = (opening: Opening) => {
+    const pendingCheques = payments
+      .filter(
+        (item) =>
+          item.method === "bank_cheque" &&
+          ["issued", "due", "deposited"].includes(item.chequeStatus || "") &&
+          (item.openingPayable?._id === opening._id ||
+            item.openingPayable?.openingNumber === opening.openingNumber),
+      )
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    return Math.max(0, Number(opening.balance || 0) - pendingCheques);
+  };
+  const unpaidOrders = orders.filter((item) => purchaseOrderBalance(item) > 0.0001);
+  const unpaidOpenings = openings.filter(
+    (item) => item.status !== "void" && openingBalance(item) > 0.0001,
+  );
   const selectedOrder = orders.find((item) => item._id === form.purchaseOrder);
   const selectedOpening = openings.find(
     (item) => item._id === form.openingPayable,
-  );
-  const poPaid = useMemo(
-    () =>
-      payments
-        .filter(
-          (item) =>
-            item.purchaseOrder?.poNumber === selectedOrder?.poNumber &&
-            (!item.chequeStatus ||
-              ["issued", "due", "deposited", "cleared"].includes(
-                item.chequeStatus,
-              )),
-        )
-        .reduce((sum, item) => sum + item.amount, 0),
-    [payments, selectedOrder],
   );
   const filteredPayments = useMemo(
     () =>
@@ -177,8 +193,10 @@ export default function SupplierPaymentsPage() {
     [payments, settlementSearch, settlementStatus],
   );
   const balance = selectedOrder
-    ? Math.max(0, Number(selectedOrder.total || 0) - poPaid)
-    : Number(selectedOpening?.balance || 0);
+    ? purchaseOrderBalance(selectedOrder)
+    : selectedOpening
+      ? openingBalance(selectedOpening)
+      : 0;
   const submitPayment = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
@@ -809,13 +827,15 @@ export default function SupplierPaymentsPage() {
                     });
                   }}
                 >
-                  <option value="">Select received purchase order</option>
-                  {orders.map((item) => (
+                  <option value="">
+                    {unpaidOrders.length ? "Select unpaid purchase order" : "No unpaid purchase orders"}
+                  </option>
+                  {unpaidOrders.map((item) => (
                     <option key={item._id} value={item._id}>
                       {item.poNumber} ·{" "}
                       {typeof item.supplier === "string"
                         ? "Supplier"
-                        : item.supplier.name}
+                        : item.supplier.name} · {money(purchaseOrderBalance(item))} RWF due
                     </option>
                   ))}
                 </select>
@@ -836,15 +856,13 @@ export default function SupplierPaymentsPage() {
                     });
                   }}
                 >
-                  <option value="">Select opening payable</option>
-                  {openings
-                    .filter(
-                      (item) => item.balance > 0 && item.status !== "void",
-                    )
-                    .map((item) => (
+                  <option value="">
+                    {unpaidOpenings.length ? "Select unpaid opening payable" : "No unpaid opening payables"}
+                  </option>
+                  {unpaidOpenings.map((item) => (
                       <option key={item._id} value={item._id}>
                         {item.openingNumber} · {item.supplier?.name} ·{" "}
-                        {money(item.balance)}
+                        {money(openingBalance(item))} RWF due
                       </option>
                     ))}
                 </select>

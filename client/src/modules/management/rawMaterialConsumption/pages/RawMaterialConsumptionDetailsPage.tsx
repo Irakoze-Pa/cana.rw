@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 
 import {
   ArrowLeft,
@@ -12,6 +17,7 @@ import {
   Package,
   PackageCheck,
   RefreshCw,
+  Send,
   XCircle,
 } from "lucide-react";
 
@@ -22,11 +28,13 @@ import type {
 
 import {
   getMaterialConsumptionById,
-  saveBatchRecipeAsFormulaVersion,
   updateBatchRecipe,
 } from "../services/materialConsumption.service";
 
 import IssueMaterialsModal from "../components/IssueMaterialsModal";
+import { updateProductionBatch } from "../../production/services/productionBatch.service";
+import { useConfirmation } from "@/context/confirmationContext";
+import { useToast } from "@/context/toastContext";
 
 /* ========================================================================== */
 /* HELPERS                                                                    */
@@ -133,6 +141,9 @@ export default function RawMaterialConsumptionDetailsPage() {
   const { id } = useParams<{ id: string }>();
 
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { confirm } = useConfirmation();
+  const { toast } = useToast();
 
   const [consumption, setConsumption] = useState<MaterialConsumption | null>(
     null,
@@ -143,6 +154,7 @@ export default function RawMaterialConsumptionDetailsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [issueModalOpen, setIssueModalOpen] = useState<boolean>(false);
+  const [postingBatch, setPostingBatch] = useState<boolean>(false);
 
   const [recipeEditorOpen, setRecipeEditorOpen] = useState<boolean>(false);
 
@@ -152,8 +164,7 @@ export default function RawMaterialConsumptionDetailsPage() {
 
   const [recipeError, setRecipeError] = useState<string>("");
 
-  const [saveAsFormulaVersion, setSaveAsFormulaVersion] =
-    useState<boolean>(false);
+  const [finishedOutput, setFinishedOutput] = useState<string>("");
 
   /* ------------------------------------------------------------------------ */
   /* LOAD DATA                                                                */
@@ -205,6 +216,18 @@ export default function RawMaterialConsumptionDetailsPage() {
   useEffect(() => {
     void loadConsumption();
   }, [loadConsumption]);
+
+  useEffect(() => {
+    if (!consumption || finishedOutput) return;
+    const requestedOutput = safeNumber(searchParams.get("actualQuantity"));
+    const savedOutput =
+      typeof consumption.productionBatch === "object"
+        ? safeNumber(consumption.productionBatch.actualQuantity)
+        : 0;
+    if (requestedOutput > 0 || savedOutput > 0) {
+      setFinishedOutput(String(requestedOutput || savedOutput));
+    }
+  }, [consumption, finishedOutput, searchParams]);
 
   /* ------------------------------------------------------------------------ */
   /* NORMALIZE ITEMS                                                          */
@@ -308,8 +331,6 @@ export default function RawMaterialConsumptionDetailsPage() {
   /* SUMMARY VALUES                                                           */
   /* ------------------------------------------------------------------------ */
 
-  const totalStandard = safeNumber(consumption.totalStandardQuantity);
-
   const totalIssued = safeNumber(consumption.totalIssuedQuantity);
 
   const totalActual = safeNumber(consumption.totalActualQuantity);
@@ -317,8 +338,6 @@ export default function RawMaterialConsumptionDetailsPage() {
   const totalWaste = safeNumber(consumption.totalWasteQuantity);
 
   const totalReturn = safeNumber(consumption.totalReturnQuantity);
-
-  const totalVariance = safeNumber(consumption.totalVarianceQuantity);
 
   const accountedQuantity = totalActual + totalWaste + totalReturn;
 
@@ -329,11 +348,83 @@ export default function RawMaterialConsumptionDetailsPage() {
 
   const isDraft = consumption.status === "Draft";
 
-  const canIssue = isDraft;
+  const completionRequested = searchParams.get("completeBatch") === "1";
+  const completionQuantity = safeNumber(finishedOutput);
+  const completionUnit =
+    searchParams.get("unit") ||
+    (typeof consumption.productionBatch === "object"
+      ? consumption.productionBatch.unit
+      : undefined) ||
+    "kg";
+  const batchStatus =
+    typeof consumption.productionBatch === "object"
+      ? consumption.productionBatch.status
+      : undefined;
+  const canIssue = isDraft && batchStatus === "In Progress";
+  const showCompletion =
+    consumption.status !== "Cancelled" &&
+    consumption.status !== "Consumed" &&
+    (completionRequested ||
+      ["In Progress", "Paused"].includes(batchStatus || ""));
+  const productionBatchId =
+    typeof consumption.productionBatch === "string"
+      ? consumption.productionBatch
+      : consumption.productionBatch?._id;
+
+  const completeAndPostBatch = async () => {
+    if (!productionBatchId) {
+      toast("The production batch reference is missing.", "error");
+      return;
+    }
+    if (completionQuantity <= 0) {
+      toast("The finished output quantity must be greater than zero.", "error");
+      return;
+    }
+    if (batchStatus !== "In Progress") {
+      toast("Resume the production batch before completing it.", "error");
+      return;
+    }
+    if (isDraft) {
+      toast("Issue the reviewed raw materials before completing the batch.", "error");
+      setIssueModalOpen(true);
+      return;
+    }
+    if (consumption.status === "Cancelled") {
+      toast("A cancelled material consumption cannot complete a batch.", "error");
+      return;
+    }
+
+    const approved = await confirm({
+      title: "Post completed production",
+      description: `Confirm ${getBatchName(consumption.productionBatch)} with ${formatNumber(completionQuantity)} ${completionUnit} finished output. Issued materials will be locked as consumed and finished goods will be posted to the Production Store.`,
+      confirmLabel: "Confirm & post stock",
+      tone: "warning",
+    });
+    if (!approved) return;
+
+    try {
+      setPostingBatch(true);
+      await updateProductionBatch(productionBatchId, {
+        status: "Completed",
+        actualQuantity: completionQuantity,
+      });
+      window.dispatchEvent(new Event("cana:stock-updated"));
+      toast("Production batch completed and stock posted.", "success");
+      navigate("/management/production/batches");
+    } catch (cause) {
+      toast(
+        cause instanceof Error
+          ? cause.message
+          : "Failed to complete and post the production batch.",
+        "error",
+      );
+    } finally {
+      setPostingBatch(false);
+    }
+  };
 
   const openRecipeEditor = () => {
     setRecipeError("");
-    setSaveAsFormulaVersion(false);
     setRecipeQuantities(items.map((item) => String(item.standardQuantity)));
     setRecipeEditorOpen(true);
   };
@@ -350,28 +441,16 @@ export default function RawMaterialConsumptionDetailsPage() {
       setRecipeError("Enter a quantity for at least one raw material.");
       return;
     }
-    if (saveAsFormulaVersion && quantities.some((quantity) => quantity <= 0)) {
-      setRecipeError(
-        "A new formula version needs a positive quantity for every listed raw material. Keep this as a batch-only recipe if one material is not used.",
-      );
-      return;
-    }
-
     try {
       setSavingRecipe(true);
       setRecipeError("");
       const recipeItems = quantities.map((standardQuantity) => ({
         standardQuantity,
       }));
-      const updated = saveAsFormulaVersion
-        ? await saveBatchRecipeAsFormulaVersion(consumption._id, recipeItems)
-        : await updateBatchRecipe(consumption._id, recipeItems);
-      setConsumption(
-        saveAsFormulaVersion
-          ? (updated as any)?.consumption
-          : ((updated as any)?.data ?? updated),
-      );
+      const updated = await updateBatchRecipe(consumption._id, recipeItems);
+      setConsumption((updated as any)?.data ?? updated);
       setRecipeEditorOpen(false);
+      toast("Batch recipe saved for this production only.", "success");
     } catch (err) {
       setRecipeError(
         err instanceof Error
@@ -442,18 +521,81 @@ export default function RawMaterialConsumptionDetailsPage() {
               </button>
             )}
 
-            {canIssue && (
-              <button
-                type="button"
-                onClick={() => setIssueModalOpen(true)}
-                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
-              >
-                <PackageCheck size={17} />
-                Issue Materials
-              </button>
-            )}
           </div>
         </div>
+
+        {showCompletion && (
+          <section className="rounded-2xl border border-red-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-red-700">
+                    Completion review
+                  </span>
+                  <span className="text-sm font-semibold text-slate-600">
+                    {getBatchName(consumption.productionBatch)}
+                  </span>
+                </div>
+                <p className="mt-2 text-lg font-extrabold text-slate-950">
+                  Confirm finished production
+                </p>
+                <div className="mt-3 flex max-w-sm items-center overflow-hidden rounded-xl border border-slate-300 bg-white focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-100">
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={finishedOutput}
+                    onChange={(event) => setFinishedOutput(event.target.value)}
+                    placeholder="Finished quantity"
+                    className="h-11 min-w-0 flex-1 px-3 text-sm font-bold text-slate-950 outline-none"
+                  />
+                  <span className="border-l border-slate-200 bg-slate-50 px-3 py-3 text-xs font-bold text-slate-600">
+                    {completionUnit}
+                  </span>
+                </div>
+                {batchStatus === "Paused" ? (
+                  <p className="mt-2 text-sm font-semibold text-amber-700">
+                    Resume the batch before issuing materials or completing production.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-600">
+                    {isDraft
+                      ? "Review the batch recipe, then issue materials from the correct lots."
+                      : "Materials are issued. Confirm the real finished output to post stock."}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  isDraft
+                    ? setIssueModalOpen(true)
+                    : void completeAndPostBatch()
+                }
+                disabled={
+                  postingBatch ||
+                  consumption.status === "Cancelled" ||
+                  batchStatus === "Paused"
+                }
+                className="inline-flex min-w-52 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {postingBatch ? (
+                  <RefreshCw size={17} className="animate-spin" />
+                ) : isDraft ? (
+                  <PackageCheck size={17} />
+                ) : (
+                  <Send size={17} />
+                )}
+                {postingBatch
+                  ? "Posting stock..."
+                  : isDraft
+                    ? "Issue materials first"
+                    : "Complete & post batch"}
+              </button>
+            </div>
+          </section>
+        )}
 
         {/* ================================================================ */}
         {/* INFORMATION CARDS                                                */}
@@ -502,101 +644,33 @@ export default function RawMaterialConsumptionDetailsPage() {
         </div>
 
         {/* ================================================================ */}
-        {/* SUMMARY                                                           */}
-        {/* ================================================================ */}
-
-        <div>
-          <h2 className="mb-2 text-base font-bold text-slate-900">
-            Quantities
-          </h2>
-
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
-            <SummaryCard
-              label="Standard"
-              value={totalStandard}
-              icon={<ClipboardCheck size={17} />}
-            />
-
-            <SummaryCard
-              label="Issued"
-              value={totalIssued}
-              icon={<ArrowUpIcon />}
-            />
-
-            <SummaryCard
-              label="Actual"
-              value={totalActual}
-              icon={<CheckCircle2 size={17} />}
-            />
-
-            <SummaryCard
-              label="Waste"
-              value={totalWaste}
-              icon={<TrashIcon />}
-            />
-
-            <SummaryCard
-              label="Return"
-              value={totalReturn}
-              icon={<ArrowDownIcon />}
-            />
-
-            <SummaryCard
-              label="Variance"
-              value={totalVariance}
-              icon={<RefreshCw size={17} />}
-            />
-          </div>
-        </div>
-
-        {/* ================================================================ */}
         {/* RECONCILIATION                                                    */}
         {/* ================================================================ */}
 
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-3">
-            <h2 className="text-base font-bold text-slate-900">
-              Reconciliation
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 p-4 md:grid-cols-4">
-            <ReconciliationCard label="Issued" value={totalIssued} />
-
-            <ReconciliationCard label="Actual" value={totalActual} />
-
-            <ReconciliationCard label="Waste" value={totalWaste} />
-
-            <ReconciliationCard label="Return" value={totalReturn} />
-          </div>
-
-          <div className="border-t border-slate-100 px-5 py-4">
-            <div className="flex flex-col gap-2 text-sm md:flex-row md:items-center md:justify-between">
-              <span className="font-medium text-slate-600">
-                Accounted Quantity
-              </span>
-
-              <span className="font-bold text-slate-900">
-                {formatNumber(accountedQuantity)}
-              </span>
-            </div>
-
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-red-600 transition-all"
-                style={{
-                  width: `${reconciliationPercentage}%`,
-                }}
-              />
-            </div>
-
-            <div className="mt-2 flex justify-between text-xs text-slate-500">
-              <span>{formatNumber(accountedQuantity)} accounted</span>
-
-              <span>{formatNumber(totalIssued)} issued</span>
+        {totalIssued > 0 && (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="grid grid-cols-2 gap-x-7 gap-y-2 sm:grid-cols-4">
+                <CompactQuantity label="Issued" value={totalIssued} />
+                <CompactQuantity label="Used" value={totalActual} />
+                <CompactQuantity label="Waste" value={totalWaste} />
+                <CompactQuantity label="Returned" value={totalReturn} />
+              </div>
+              <div className="min-w-64 lg:w-80">
+                <div className="flex justify-between text-xs font-semibold text-slate-600">
+                  <span>Material reconciliation</span>
+                  <span>{formatNumber(reconciliationPercentage)}%</span>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-red-600 transition-all"
+                    style={{ width: `${reconciliationPercentage}%` }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* ================================================================ */}
         {/* MATERIAL ITEMS                                                    */}
@@ -635,26 +709,24 @@ export default function RawMaterialConsumptionDetailsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px]">
+              <table className={`w-full ${isDraft ? "min-w-[560px]" : "min-w-[900px]"}`}>
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50">
                     <TableHeader align="left">Raw Material</TableHeader>
 
                     <TableHeader>Standard</TableHeader>
 
-                    <TableHeader>Issued</TableHeader>
+                    {!isDraft && <TableHeader>Issued</TableHeader>}
 
-                    <TableHeader>Actual</TableHeader>
+                    {!isDraft && <TableHeader>Used</TableHeader>}
 
-                    <TableHeader>Waste</TableHeader>
+                    {!isDraft && <TableHeader>Waste</TableHeader>}
 
-                    <TableHeader>Return</TableHeader>
+                    {!isDraft && <TableHeader>Returned</TableHeader>}
 
-                    <TableHeader>Variance</TableHeader>
+                    {!isDraft && <TableHeader>Variance</TableHeader>}
 
-                    <TableHeader>Variance %</TableHeader>
-
-                    <TableHeader align="left">Lot</TableHeader>
+                    {!isDraft && <TableHeader align="left">Lot</TableHeader>}
                   </tr>
                 </thead>
 
@@ -671,10 +743,6 @@ export default function RawMaterialConsumptionDetailsPage() {
                     const returned = safeNumber(item.returnQuantity);
 
                     const variance = safeNumber(item.varianceQuantity);
-
-                    const variancePercentage = safeNumber(
-                      item.variancePercentage,
-                    );
 
                     return (
                       <tr
@@ -695,55 +763,40 @@ export default function RawMaterialConsumptionDetailsPage() {
                           <QuantityCell value={standard} unit={item.unit} />
                         </td>
 
-                        <td className="px-5 py-4 text-right">
-                          <QuantityCell value={issued} unit={item.unit} />
-                        </td>
-
-                        <td className="px-5 py-4 text-right">
-                          <QuantityCell value={actual} unit={item.unit} />
-                        </td>
-
-                        <td className="px-5 py-4 text-right">
-                          <QuantityCell value={waste} unit={item.unit} />
-                        </td>
-
-                        <td className="px-5 py-4 text-right">
-                          <QuantityCell value={returned} unit={item.unit} />
-                        </td>
-
-                        <td className="px-5 py-4 text-right">
-                          <span
-                            className={
-                              variance > 0
-                                ? "font-semibold text-red-600"
-                                : variance < 0
-                                  ? "font-semibold text-emerald-600"
-                                  : "font-medium text-slate-700"
-                            }
-                          >
-                            {formatNumber(variance)}
-                          </span>
-                        </td>
-
-                        <td className="px-5 py-4 text-right">
-                          <span
-                            className={
-                              variancePercentage > 0
-                                ? "font-semibold text-red-600"
-                                : variancePercentage < 0
-                                  ? "font-semibold text-emerald-600"
-                                  : "font-medium text-slate-700"
-                            }
-                          >
-                            {formatNumber(variancePercentage)}%
-                          </span>
-                        </td>
-
-                        <td className="px-5 py-4">
-                          <span className="text-sm font-medium text-slate-700">
-                            {item.lotNumber || "-"}
-                          </span>
-                        </td>
+                        {!isDraft && (
+                          <>
+                            <td className="px-5 py-4 text-right">
+                              <QuantityCell value={issued} unit={item.unit} />
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              <QuantityCell value={actual} unit={item.unit} />
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              <QuantityCell value={waste} unit={item.unit} />
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              <QuantityCell value={returned} unit={item.unit} />
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              <span
+                                className={
+                                  variance > 0
+                                    ? "font-semibold text-red-600"
+                                    : variance < 0
+                                      ? "font-semibold text-emerald-600"
+                                      : "font-medium text-slate-700"
+                                }
+                              >
+                                {formatNumber(variance)}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="text-sm font-medium text-slate-700">
+                                {item.lotNumber || "-"}
+                              </span>
+                            </td>
+                          </>
+                        )}
                       </tr>
                     );
                   })}
@@ -827,11 +880,11 @@ export default function RawMaterialConsumptionDetailsPage() {
                   This production batch only
                 </p>
                 <h2 className="mt-1 text-lg font-extrabold text-slate-950">
-                  Enter batch recipe
+                  Edit this batch recipe
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Save a batch-only recipe, or promote it as the next formula
-                  version for future batches.
+                  Changes apply only to this production batch. The approved
+                  formula remains unchanged.
                 </p>
               </div>
               <button
@@ -885,26 +938,6 @@ export default function RawMaterialConsumptionDetailsPage() {
                   </span>
                 </label>
               ))}
-              <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={saveAsFormulaVersion}
-                  onChange={(event) =>
-                    setSaveAsFormulaVersion(event.target.checked)
-                  }
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300"
-                />
-                <span>
-                  <strong className="block text-slate-950">
-                    Save as new formula version
-                  </strong>
-                  <small className="mt-0.5 block leading-5 text-slate-500">
-                    Use this only when the changed recipe should become the
-                    standard for future batches. The current formula remains in
-                    history and this becomes the next active version.
-                  </small>
-                </span>
-              </label>
             </div>
             <footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
               <button
@@ -921,11 +954,7 @@ export default function RawMaterialConsumptionDetailsPage() {
                 disabled={savingRecipe}
                 className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
               >
-                {savingRecipe
-                  ? "Saving…"
-                  : saveAsFormulaVersion
-                    ? "Save new version"
-                    : "Save batch recipe"}
+                {savingRecipe ? "Saving…" : "Save batch recipe"}
               </button>
             </footer>
           </section>
@@ -978,40 +1007,10 @@ function InfoCard({
 }
 
 /* ========================================================================== */
-/* SUMMARY CARD                                                               */
+/* COMPACT QUANTITY                                                           */
 /* ========================================================================== */
 
-function SummaryCard({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: number;
-  icon: ReactNode;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-        {icon}
-      </div>
-
-      <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        {label}
-      </p>
-
-      <p className="mt-1 text-xl font-bold text-slate-900">
-        {formatNumber(value)}
-      </p>
-    </div>
-  );
-}
-
-/* ========================================================================== */
-/* RECONCILIATION CARD                                                        */
-/* ========================================================================== */
-
-function ReconciliationCard({
+function CompactQuantity({
   label,
   value,
 }: {
@@ -1019,14 +1018,9 @@ function ReconciliationCard({
   value: number;
 }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-        {label}
-      </p>
-
-      <p className="mt-1 text-lg font-bold text-slate-900">
-        {formatNumber(value)}
-      </p>
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-0.5 text-sm font-extrabold text-slate-900">{formatNumber(value)}</p>
     </div>
   );
 }
@@ -1095,20 +1089,4 @@ function ActivityItem({
       </div>
     </div>
   );
-}
-
-/* ========================================================================== */
-/* SMALL ICONS                                                                */
-/* ========================================================================== */
-
-function ArrowUpIcon() {
-  return <span className="text-[18px] font-bold">↑</span>;
-}
-
-function ArrowDownIcon() {
-  return <span className="text-[18px] font-bold">↓</span>;
-}
-
-function TrashIcon() {
-  return <span className="text-[17px] font-bold">×</span>;
 }

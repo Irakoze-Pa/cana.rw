@@ -211,7 +211,7 @@ function getAllowedStatuses(
       return ["In Progress", "Paused", "Completed"];
 
     case "Paused":
-      return ["Paused", "In Progress", "Completed", "Cancelled"];
+      return ["Paused", "In Progress", "Cancelled"];
 
     case "Completed":
       return ["Completed"];
@@ -1144,44 +1144,6 @@ export default function ProductionBatchModal({
             </div>
 
             {/* ============================================================ */}
-            {/* CREATE INFO                                                    */}
-            {/* ============================================================ */}
-
-            {!isEdit && (
-              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">
-                  Automatic batch values
-                </p>
-
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <p className="text-xs text-slate-700">Batch Number</p>
-
-                    <p className="mt-1 text-sm font-semibold text-slate-950">
-                      Generated automatically
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-slate-700">Status</p>
-
-                    <p className="mt-1 text-sm font-semibold text-slate-950">
-                      Planned
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-slate-700">Actual Quantity</p>
-
-                    <p className="mt-1 text-sm font-semibold text-slate-950">
-                      0 {unit}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ============================================================ */}
             {/* EDIT VALUES                                                    */}
             {/* ============================================================ */}
 
@@ -1214,13 +1176,11 @@ export default function ProductionBatchModal({
                     )}
                   </div>
 
-                  <p className="mt-1.5 text-xs text-gray-500">
-                    {actualQuantityLocked
-                      ? currentStatus === "Completed"
-                        ? "Completed batches are locked."
-                        : "Actual quantity can be entered only while production is In Progress or Paused."
-                      : "Enter finished output. A short yield can be completed and scheduled later as a make-up batch."}
-                  </p>
+                  {actualQuantityLocked && (
+                    <p className="mt-1.5 text-xs text-gray-500">
+                      Actual output is available while production is active.
+                    </p>
+                  )}
                 </div>
 
                 {/* STATUS */}
@@ -1248,9 +1208,6 @@ export default function ProductionBatchModal({
                     ))}
                   </select>
 
-                  <p className="mt-1.5 text-xs text-gray-500">
-                    Only valid production status transitions are available.
-                  </p>
                 </div>
               </div>
             )}

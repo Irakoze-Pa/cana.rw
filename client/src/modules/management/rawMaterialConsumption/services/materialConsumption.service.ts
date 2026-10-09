@@ -66,9 +66,23 @@ export async function getMaterialConsumptions(params?: {
 
   const query = searchParams.toString();
 
-  return request<MaterialConsumption[]>(
+  const response = await request<
+    | MaterialConsumption[]
+    | {
+        data?: MaterialConsumption[];
+        items?: MaterialConsumption[];
+        results?: MaterialConsumption[];
+      }
+  >(
     `${BASE_URL}${query ? `?${query}` : ""}`,
   );
+
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.items)) return response.items;
+  if (Array.isArray(response?.results)) return response.results;
+
+  return [];
 }
 
 export async function getMaterialConsumptionById(id: string) {

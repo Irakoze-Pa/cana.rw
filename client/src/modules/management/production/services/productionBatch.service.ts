@@ -54,6 +54,15 @@ async function parseResponse<T>(
       if (typeof body.error === "string") {
         throw new Error(body.error);
       }
+
+      if (
+        typeof body.error === "object" &&
+        body.error !== null &&
+        "message" in body.error &&
+        typeof (body.error as { message?: unknown }).message === "string"
+      ) {
+        throw new Error((body.error as { message: string }).message);
+      }
     }
 
     if (

@@ -1472,12 +1472,16 @@ export default function BillingPage() {
                   <option value="card">Card</option>
                 </select>
                 <select
-                  required
+                  disabled={!treasuryAccounts.length}
                   value={paymentForm.treasuryAccount}
                   onChange={(event) => setPaymentForm({ ...paymentForm, treasuryAccount: event.target.value })}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
                 >
-                  <option value="">Receiving account</option>
+                  <option value="">
+                    {treasuryAccounts.length
+                      ? "Receiving account (optional)"
+                      : "Accounting not configured"}
+                  </option>
                   {treasuryAccounts
                     .filter((item) => item.type === (paymentForm.method === "cash" ? "cash" : paymentForm.method === "mobile_money" ? "mobile_money" : "bank"))
                     .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}

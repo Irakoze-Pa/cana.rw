@@ -8,7 +8,6 @@ import {
   Plus,
   Search,
   Eye,
-  Pencil,
   Trash2,
   Power,
   FlaskConical,
@@ -33,7 +32,6 @@ import {
   getFormulas,
   createFormula,
   createNewFormulaVersion,
-  updateFormula,
   deactivateFormula,
   deleteFormula,
 } from "../services/formula.service";
@@ -302,39 +300,6 @@ export default function FormulasPage() {
   };
 
   // =====================================================
-  // UPDATE EXISTING FORMULA
-  // =====================================================
-
-  const handleUpdate = async (
-    data: CreateFormulaData
-  ) => {
-    if (!editingFormula) {
-      return;
-    }
-
-    try {
-      await updateFormula(
-        editingFormula._id,
-        data
-      );
-
-      await loadFormulas(true);
-
-      closeModal();
-    } catch (error: any) {
-      console.error(
-        "Update Formula Error:",
-        error
-      );
-
-      throw new Error(
-        error?.response?.data?.message ||
-          "Failed to update formula."
-      );
-    }
-  };
-
-  // =====================================================
   // CLOSE MODAL
   // =====================================================
 
@@ -350,18 +315,6 @@ export default function FormulasPage() {
 
   const openCreateModal = () => {
     setEditingFormula(null);
-    setCreateNewVersion(false);
-    setIsModalOpen(true);
-  };
-
-  // =====================================================
-  // OPEN EDIT
-  // =====================================================
-
-  const openEditModal = (
-    formula: Formula
-  ) => {
-    setEditingFormula(formula);
     setCreateNewVersion(false);
     setIsModalOpen(true);
   };
@@ -991,22 +944,6 @@ export default function FormulasPage() {
                               <Eye size={17} />
                             </button>
 
-                            {/* EDIT */}
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openEditModal(
-                                  formula
-                                )
-                              }
-                              title="Edit formula"
-                              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-gray-500 transition hover:bg-red-50 hover:text-red-600"
-                            >
-                              <Pencil size={16} />
-                              <span className="hidden text-xs font-semibold xl:inline">Update</span>
-                            </button>
-
                             {/* NEW VERSION */}
 
                             <button
@@ -1143,9 +1080,6 @@ export default function FormulasPage() {
          * New Formula
          *    -> handleCreate
          *
-         * Edit
-         *    -> handleUpdate
-         *
          * New Version
          *    -> handleCreateNewVersion
          */
@@ -1153,9 +1087,7 @@ export default function FormulasPage() {
         onSubmit={
           createNewVersion
             ? handleCreateNewVersion
-            : editingFormula
-              ? handleUpdate
-              : handleCreate
+            : handleCreate
         }
 
         editingFormula={editingFormula}
@@ -1176,11 +1108,11 @@ export default function FormulasPage() {
           setShowDetails(false);
           setSelectedFormula(null);
         }}
-        onEdit={(formula) => {
+        onNewVersion={(formula) => {
           setShowDetails(false);
           setSelectedFormula(null);
 
-          openEditModal(formula);
+          openNewVersionModal(formula);
         }}
         onDeactivate={
           handleDeactivate

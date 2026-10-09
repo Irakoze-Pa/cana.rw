@@ -100,6 +100,27 @@ function handleProductionBatchError(
     });
   }
 
+  if (error instanceof Error && error.message.trim()) {
+    return res.status(409).json({
+      success: false,
+      message: error.message,
+    });
+  }
+
+  if (typeof mongoError?.message === "string" && mongoError.message.trim()) {
+    return res.status(409).json({
+      success: false,
+      message: mongoError.message,
+    });
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return res.status(409).json({
+      success: false,
+      message: error,
+    });
+  }
+
   return res.status(500).json({
     success: false,
     message: fallbackMessage,

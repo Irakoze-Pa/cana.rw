@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Boxes,
   ChevronDown,
@@ -27,6 +27,9 @@ import {
   ClipboardCheck,
   MapPinned,
   Landmark,
+  BookOpen,
+  Scale,
+  WalletCards,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/authContext";
@@ -266,14 +269,6 @@ const groups: Group[] = [
         departments: ["sales", "customer_service", "management"],
         permissions: ["sales"],
       },
-      {
-        label: "Invoices & receipts",
-        to: "/management/billing",
-        icon: ReceiptText,
-        category: "Billing & documents",
-        departments: ["sales", "finance", "management"],
-        permissions: ["sales", "finance"],
-      },
     ],
   },
   {
@@ -282,18 +277,27 @@ const groups: Group[] = [
     shortcutTo: "/management/accounting",
     items: [
       {
-        label: "Accounting workspace",
+        label: "Finance overview",
         to: "/management/accounting",
         icon: Landmark,
-        category: "Accounting control",
+        category: "Finance operations",
         departments: ["finance", "management"],
         permissions: ["finance"],
+        end: true,
+      },
+      {
+        label: "Invoices & customer payments",
+        to: "/management/billing",
+        icon: ReceiptText,
+        category: "Finance operations",
+        departments: ["sales", "finance", "management"],
+        permissions: ["sales", "finance"],
       },
       {
         label: "Supplier payments",
         to: "/management/supplier-payments",
         icon: Banknote,
-        category: "Payables & expenses",
+        category: "Finance operations",
         departments: ["procurement", "finance", "management"],
         permissions: ["finance", "procurement"],
       },
@@ -301,7 +305,39 @@ const groups: Group[] = [
         label: "Expenses",
         to: "/management/expenses",
         icon: ClipboardList,
-        category: "Payables & expenses",
+        category: "Finance operations",
+        departments: ["finance", "management"],
+        permissions: ["finance"],
+      },
+      {
+        label: "Cash, bank & Mobile Money",
+        to: "/management/accounting?tab=treasury",
+        icon: WalletCards,
+        category: "Accounting control",
+        departments: ["finance", "management"],
+        permissions: ["finance"],
+      },
+      {
+        label: "General ledger",
+        to: "/management/accounting?tab=ledger",
+        icon: BookOpen,
+        category: "Accounting control",
+        departments: ["finance", "management"],
+        permissions: ["finance"],
+      },
+      {
+        label: "Trial balance",
+        to: "/management/accounting?tab=trial",
+        icon: Scale,
+        category: "Accounting control",
+        departments: ["finance", "management"],
+        permissions: ["finance"],
+      },
+      {
+        label: "Manual journals",
+        to: "/management/accounting?tab=journals",
+        icon: BookOpen,
+        category: "Accounting control",
         departments: ["finance", "management"],
         permissions: ["finance"],
       },
@@ -421,6 +457,14 @@ export default function ManagementSidebar({
   const location = useLocation();
   const navigate = useNavigate();
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
+  const itemIsActive = useCallback((item: Item) => {
+    const [pathname, query = ""] = item.to.split("?");
+    if (location.pathname !== pathname && !location.pathname.startsWith(`${pathname}/`))
+      return false;
+    if (!query) return item.end ? location.pathname === pathname && !location.search : true;
+    const expected = new URLSearchParams(query).get("tab");
+    return new URLSearchParams(location.search).get("tab") === expected;
+  }, [location.pathname, location.search]);
   const visibleGroups = useMemo(
     () =>
       groups
@@ -454,15 +498,10 @@ export default function ManagementSidebar({
   const [open, setOpen] = useState<Record<string, boolean>>({});
   useEffect(() => {
     const active = visibleGroups.find((group) =>
-      group.items.some(
-        (item) =>
-          location.pathname === item.to ||
-          (item.to !== "/management" &&
-            location.pathname.startsWith(`${item.to}/`)),
-      ),
+      group.items.some(itemIsActive),
     );
     if (active) setOpen((current) => ({ ...current, [active.label]: true }));
-  }, [location.pathname, visibleGroups]);
+  }, [itemIsActive, visibleGroups]);
   return (
     <div className="flex h-full flex-col border-r border-slate-200 bg-slate-100 text-slate-700 shadow-[4px_0_20px_rgba(15,23,42,.025)]">
       <div
@@ -521,11 +560,7 @@ export default function ManagementSidebar({
         {visibleGroups.map((group) => {
           const Icon = group.icon;
           const expanded = open[group.label] ?? false;
-          const active = group.items.some(
-            (item) =>
-              location.pathname === item.to ||
-              location.pathname.startsWith(`${item.to}/`),
-          );
+          const active = group.items.some(itemIsActive);
           return (
             <div key={group.label} className="mb-2">
               <button
@@ -573,8 +608,8 @@ export default function ManagementSidebar({
                           to={item.to}
                           end={item.end}
                           onClick={onNavigate}
-                          className={({ isActive }) =>
-                            `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm ${isActive ? "bg-red-600/15 font-semibold text-red-700" : "text-gray-500 hover:bg-gray-200 hover:text-gray-700"}`
+                          className={() =>
+                            `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm ${itemIsActive(item) ? "bg-red-600/15 font-semibold text-red-700" : "text-gray-500 hover:bg-gray-200 hover:text-gray-700"}`
                           }
                         >
                           <ChildIcon size={15} />

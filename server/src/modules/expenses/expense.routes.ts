@@ -7,6 +7,10 @@ import Expense from "./expense.model";
 const router = Router();
 
 async function validateFundingAccount(data: any, amount: number) {
+  // Accounting is optional during the operational rollout. Expenses remain
+  // valid business records without a treasury account and can be classified
+  // in accounting later. When an account is supplied, validate it fully.
+  if (!data.treasuryAccount) return;
   if (!mongoose.Types.ObjectId.isValid(data.treasuryAccount)) throw new Error("Select the cash, bank or Mobile Money account used for this expense.");
   const account: any = await TreasuryAccount.findById(data.treasuryAccount).lean();
   if (!account || account.status !== "active") throw new Error("Select an active payment account.");
@@ -39,7 +43,7 @@ router.post("/batch", async (req, res, next) => {
     if (invalid) throw new Error("Each expense line needs a category, reason, and amount greater than zero.");
     await validateFundingAccount(data, lines.reduce((sum: number, line: any) => sum + Number(line.amount), 0));
     const nextNumber = await nextExpenseNumber();
-    const expenses = await Expense.create(lines.map((line: any, index: number) => ({ date: data.date, payee: data.payee || "", method: data.method, treasuryAccount: data.treasuryAccount, reference: data.reference || "", chequeNumber: data.chequeNumber || "", bankName: data.bankName || "", notes: data.notes || "", category: line.category, description: String(line.description).trim(), amount: Number(line.amount), expenseNumber: `${nextNumber.prefix}${String(nextNumber.sequence + index).padStart(5, "0")}` })));
+    const expenses = await Expense.create(lines.map((line: any, index: number) => ({ date: data.date, payee: data.payee || "", method: data.method, ...(data.treasuryAccount ? { treasuryAccount: data.treasuryAccount } : {}), reference: data.reference || "", chequeNumber: data.chequeNumber || "", bankName: data.bankName || "", notes: data.notes || "", category: line.category, description: String(line.description).trim(), amount: Number(line.amount), expenseNumber: `${nextNumber.prefix}${String(nextNumber.sequence + index).padStart(5, "0")}` })));
     res.status(201).json({ data: expenses });
   } catch (error) { next(error); }
 });
@@ -52,7 +56,8 @@ router.post("/", async (req, res, next) => {
     if (data.method === "bank_cheque" && (!String(data.chequeNumber || "").trim() || !String(data.bankName || "").trim())) throw new Error("Cheque number and bank name are required for a bank cheque.");
     await validateFundingAccount(data, amount);
     const nextNumber = await nextExpenseNumber();
-    const expense = await Expense.create({ ...data, expenseNumber: `${nextNumber.prefix}${String(nextNumber.sequence).padStart(5, "0")}`, amount });
+    const { treasuryAccount, ...expenseData } = data;
+    const expense = await Expense.create({ ...expenseData, ...(treasuryAccount ? { treasuryAccount } : {}), expenseNumber: `${nextNumber.prefix}${String(nextNumber.sequence).padStart(5, "0")}`, amount });
     res.status(201).json({ data: expense });
   } catch (error) { next(error); }
 });

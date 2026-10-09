@@ -9,10 +9,13 @@ import Quotation from "../quotation/quotation.model";
 import { Invoice } from "../billing/billing.model";
 import { ComplianceEquipment, ComplianceRecord } from "../compliance/compliance.model";
 import FinishedGoodsStoreBalance from "../finishedGoods/storeBalance.model";
+import { accountingSummary, buildLedger, filterLedger, treasuryWorkspace } from "../accounting/accounting.service";
+import type { AuthRequest } from "../../middleware/auth.middleware";
+import User from "../../models/users";
 
 const router = Router();
 
-router.get("/summary", async (_req, res, next) => {
+router.get("/summary", async (req: AuthRequest, res, next) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const startOfToday = new Date();
@@ -43,7 +46,16 @@ router.get("/summary", async (_req, res, next) => {
     ]);
     const sales = salesTotals[0] || { total: 0, delivered: 0 };
     const invoiceBalance = invoiceBalanceTotals[0]?.total || 0;
-    res.json({ data: { products, lowStock: lowRawMaterials, lowRawMaterials, lowFinishedGoods, purchaseOrders, activeBatches, completedBatches, openSales, recentSales, pendingQuotations, openProductionOrders, outstandingInvoices: outstandingInvoiceCount, outstandingBalance: invoiceBalance, overdueInvoices, salesValue: sales.total || 0, deliveredValue: sales.delivered || 0, lowMaterials, outstandingInvoiceList: outstandingInvoices, recentQuotations, attentionOrders, activeEquipment, openCompliance, overdueCompliance } });
+    let finance = {};
+    const profile: any = req.user?.role === "staff" ? await User.findById(req.user.id).select("department permissions").lean() : null;
+    const canSeeFinance = req.user?.role !== "staff" || profile?.permissions?.includes("finance") || ["finance", "management"].includes(String(profile?.department));
+    if (canSeeFinance) {
+      const monthStart = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1).toISOString().slice(0, 10);
+      const [ledger, treasury] = await Promise.all([buildLedger(), treasuryWorkspace()]);
+      const financial = accountingSummary(filterLedger(ledger, monthStart, today), filterLedger(ledger, undefined, today));
+      finance = { treasuryBalance: treasury.accounts.reduce((sum: number, account: any) => sum + Number(account.balance || 0), 0), activeTreasuryAccounts: treasury.accounts.filter((account: any) => account.status === "active").length, periodRevenue: financial.revenue, periodExpenses: financial.expenses, netProfit: financial.netProfit, supplierPayables: financial.payables, customerReceivables: financial.receivables };
+    }
+    res.json({ data: { products, lowStock: lowRawMaterials, lowRawMaterials, lowFinishedGoods, purchaseOrders, activeBatches, completedBatches, openSales, recentSales, pendingQuotations, openProductionOrders, outstandingInvoices: outstandingInvoiceCount, outstandingBalance: invoiceBalance, overdueInvoices, salesValue: sales.total || 0, deliveredValue: sales.delivered || 0, lowMaterials, outstandingInvoiceList: outstandingInvoices, recentQuotations, attentionOrders, activeEquipment, openCompliance, overdueCompliance, ...finance } });
   } catch (error) { next(error); }
 });
 

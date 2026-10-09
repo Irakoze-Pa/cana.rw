@@ -468,12 +468,11 @@ export default function ExpensesPage() {
               <label className="text-sm font-bold">
                 Payment account
                 <select
-                  required
                   value={form.treasuryAccount}
                   onChange={(e) => setForm({ ...form, treasuryAccount: e.target.value })}
                   className="mt-1 w-full rounded-xl border p-2.5"
                 >
-                  <option value="">Select account</option>
+                  <option value="">{treasuryAccounts.length ? "Optional until accounting starts" : "Accounting not configured"}</option>
                   {treasuryAccounts
                     .filter((item) => item.type === (form.method === "cash" ? "cash" : form.method === "mobile_money" ? "mobile_money" : "bank"))
                     .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}

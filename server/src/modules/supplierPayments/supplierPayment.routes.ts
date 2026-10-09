@@ -102,13 +102,17 @@ router.post("/", async (req, res, next) => {
       if (!po || String(po.supplier) !== String(supplier)) throw new Error("The selected purchase order does not belong to this supplier.");
       if (!["received", "partially_received"].includes(po.status)) throw new Error("Receive the raw materials before recording supplier settlement.");
       const committed = await SupplierPayment.aggregate([{ $match: { purchaseOrder: new mongoose.Types.ObjectId(purchaseOrder), $or: [{ chequeStatus: { $in: ["issued", "due", "deposited", "cleared"] } }, { chequeStatus: { $exists: false } }] } }, { $group: { _id: null, total: { $sum: "$amount" } } }]);
-      if (paidAmount > Number(po.total || 0) - Number(committed[0]?.total || 0) + 0.0001) throw new Error("Amount exceeds the purchase-order balance not already paid or covered by a pending cheque.");
+      const remaining = amountOf(Math.max(0, Number(po.total || 0) - Number(committed[0]?.total || 0)));
+      if (remaining <= 0) throw new Error("This purchase order is already fully settled or covered by pending cheques.");
+      if (paidAmount > remaining + 0.0001) throw new Error("Amount exceeds the purchase-order balance not already paid or covered by a pending cheque.");
     } else {
       const opening = await SupplierOpeningPayable.findById(openingPayable);
       if (!opening || String(opening.supplier) !== String(supplier)) throw new Error("The selected opening payable does not belong to this supplier.");
       if (opening.status === "void") throw new Error("A void opening payable cannot receive payment.");
       const pending = await SupplierPayment.aggregate([{ $match: { openingPayable: opening._id, chequeStatus: { $in: activeChequeStatuses } } }, { $group: { _id: null, total: { $sum: "$amount" } } }]);
-      if (paidAmount > Number(opening.balance || 0) - Number(pending[0]?.total || 0) + 0.0001) throw new Error("Amount exceeds the opening balance not already covered by pending cheques.");
+      const remaining = amountOf(Math.max(0, Number(opening.balance || 0) - Number(pending[0]?.total || 0)));
+      if (remaining <= 0) throw new Error("This opening payable is already fully settled or covered by pending cheques.");
+      if (paidAmount > remaining + 0.0001) throw new Error("Amount exceeds the opening balance not already covered by pending cheques.");
     }
     const now = new Date();
     const chequeStatus = isCheque ? (new Date(chequeDate).getTime() <= now.getTime() ? "due" : "issued") : "cleared";

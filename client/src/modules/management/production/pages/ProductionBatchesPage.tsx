@@ -1,16 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   CalendarDays,
+  CheckCircle2,
   ClipboardList,
-  Edit3,
   Eye,
   Factory,
   Loader2,
+  PackageCheck,
+  Pause,
+  Play,
   Plus,
   Printer,
   RefreshCw,
+  RotateCcw,
   Search,
   Trash2,
+  XCircle,
 } from "lucide-react";
 
 import ProductionBatchModal from "../components/ProductionBatchModal";
@@ -21,33 +27,17 @@ import {
   deleteProductionBatch,
   getProductionBatchById,
   getProductionBatches,
-  getProductionBatchStats,
   updateProductionBatch,
 } from "../services/productionBatch.service";
 
 import type {
   CreateProductionBatchData,
   ProductionBatch,
-  ProductionBatchStats,
   ProductionBatchStatus,
-  UpdateProductionBatchData,
 } from "../types/productionBatch.types";
 import { printCanaDocument } from "../../utils/printCanaDocument";
 import { useConfirmation } from "@/context/confirmationContext";
-
-// =====================================================
-// DEFAULT STATS
-// =====================================================
-
-const defaultStats: ProductionBatchStats = {
-  total: 0,
-  planned: 0,
-  ready: 0,
-  inProgress: 0,
-  paused: 0,
-  completed: 0,
-  cancelled: 0,
-};
+import { getMaterialConsumptions } from "../../rawMaterialConsumption/services/materialConsumption.service";
 
 // =====================================================
 // STATUS STYLE
@@ -108,14 +98,6 @@ function formatNumber(value?: number): string {
 
 function formatMoney(value?: number): string {
   return `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 })} RWF`;
-}
-
-// =====================================================
-// CAN EDIT
-// =====================================================
-
-function canEditBatch(batch: ProductionBatch): boolean {
-  return batch.status !== "Completed" && batch.status !== "Cancelled";
 }
 
 // =====================================================
@@ -192,13 +174,12 @@ function printBatchRecord(batch: ProductionBatch) {
 
 const ProductionBatchesPage = () => {
   const { confirm } = useConfirmation();
+  const navigate = useNavigate();
   // =================================================
   // DATA
   // =================================================
 
   const [batches, setBatches] = useState<ProductionBatch[]>([]);
-
-  const [stats, setStats] = useState<ProductionBatchStats>(defaultStats);
 
   // =================================================
   // LOADING
@@ -224,8 +205,6 @@ const ProductionBatchesPage = () => {
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
   const [selectedBatch, setSelectedBatch] = useState<ProductionBatch | null>(
@@ -244,14 +223,9 @@ const ProductionBatchesPage = () => {
         setLoading(true);
       }
 
-      const [batchList, batchStats] = await Promise.all([
-        getProductionBatches(),
-        getProductionBatchStats(),
-      ]);
+      const batchList = await getProductionBatches();
 
       setBatches(Array.isArray(batchList) ? batchList : []);
-
-      setStats(batchStats ?? defaultStats);
     } catch (error) {
       console.error("Load Production Batches Error:", error);
 
@@ -353,58 +327,56 @@ const ProductionBatchesPage = () => {
     }
   };
 
-  // =================================================
-  // EDIT
-  // =================================================
+  const openMaterialConsumption = async (batch: ProductionBatch) => {
+    const consumptions = await getMaterialConsumptions({
+      productionBatch: batch._id,
+    });
+    const consumption = consumptions.find(
+      (record) => record.status !== "Cancelled",
+    );
 
-  const handleEdit = async (data: UpdateProductionBatchData) => {
-    if (!selectedBatch) {
-      throw new Error("No production batch selected.");
+    if (!consumption) {
+      throw new Error(
+        batch.status === "Planned" || batch.status === "Ready"
+          ? "Start this batch first. Its raw-material consumption record will be created automatically."
+          : "No raw-material consumption record exists for this batch.",
+      );
     }
 
-    if (data.status === "Completed" && selectedBatch.status !== "Completed") {
-      const approved = await confirm({
-        title: "Complete production batch",
-        description: `Complete ${selectedBatch.batchNo} with ${formatNumber(data.actualQuantity ?? selectedBatch.actualQuantity)} ${selectedBatch.unit} output? Required raw materials will be issued automatically from available lots, consumption will be locked, and finished goods will be posted to the Production Store.`,
-        confirmLabel: "Complete & post stock",
-        tone: "warning",
-      });
-      if (!approved) return;
-    }
+    navigate(
+      `/management/production/consumption/${consumption._id}`,
+    );
+  };
 
+  const changeBatchStatus = async (
+    batch: ProductionBatch,
+    nextStatus: ProductionBatchStatus,
+  ) => {
     try {
-      const updatedBatch = await updateProductionBatch(selectedBatch._id, data);
-
-      if (
-        updatedBatch.status === "In Progress" ||
-        updatedBatch.status === "Completed"
-      ) {
-        window.dispatchEvent(new Event("cana:stock-updated"));
+      if (nextStatus === "In Progress" && batch.status === "Ready") {
+        const approved = await confirm({
+          title: "Start production batch",
+          description: `Start ${batch.batchNo}? A batch-specific material recipe will be created from formula ${batch.formulaCode} v${batch.formulaVersion}.`,
+          confirmLabel: "Start production",
+          tone: "primary",
+        });
+        if (!approved) return;
       }
-
-      setIsEditModalOpen(false);
-
-      setSelectedBatch(null);
-
+      if (nextStatus === "Cancelled") {
+        const approved = await confirm({
+          title: "Cancel production batch",
+          description: `Cancel ${batch.batchNo}? The record will remain in production history.`,
+          confirmLabel: "Cancel batch",
+          tone: "danger",
+        });
+        if (!approved) return;
+      }
+      await updateProductionBatch(batch._id, { status: nextStatus });
       await loadData(true);
-
-      if (updatedBatch.status === "Completed") {
-        window.setTimeout(async () => {
-          try {
-            const completedBatch = await getProductionBatchById(
-              updatedBatch._id,
-            );
-            setSelectedBatch(completedBatch);
-            setIsDetailsModalOpen(true);
-          } catch {
-            // The register remains refreshed even if the detail refresh fails.
-          }
-        }, 0);
-      }
     } catch (error) {
-      console.error("Update Production Batch Error:", error);
-
-      throw error;
+      alert(
+        error instanceof Error ? error.message : "Failed to update the batch.",
+      );
     }
   };
 
@@ -426,34 +398,6 @@ const ProductionBatchesPage = () => {
         error instanceof Error
           ? error.message
           : "Failed to load production batch.",
-      );
-    }
-  };
-
-  // =================================================
-  // OPEN EDIT
-  // =================================================
-
-  const handleOpenEdit = async (batch: ProductionBatch) => {
-    if (!canEditBatch(batch)) {
-      alert(`A ${batch.status} production batch cannot be edited.`);
-
-      return;
-    }
-
-    try {
-      const freshBatch = await getProductionBatchById(batch._id);
-
-      setSelectedBatch(freshBatch);
-
-      setIsEditModalOpen(true);
-    } catch (error) {
-      console.error("Get Production Batch For Edit Error:", error);
-
-      alert(
-        error instanceof Error
-          ? error.message
-          : "Failed to load production batch for editing.",
       );
     }
   };
@@ -567,68 +511,6 @@ const ProductionBatchesPage = () => {
           detail="Posted to Production Store"
         />
       </section>
-
-      {/* =================================================
-          STATS
-      ================================================= */}
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-        <div className="cana-panel p-5">
-          <p className="text-sm text-gray-500">Total</p>
-
-          <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-950">
-            {stats.total}
-          </p>
-        </div>
-
-        <div className="cana-panel p-5">
-          <p className="text-sm text-gray-500">Planned</p>
-
-          <p className="mt-2 text-2xl font-bold text-slate-600">
-            {stats.planned}
-          </p>
-        </div>
-
-        <div className="cana-panel p-5">
-          <p className="text-sm text-gray-500">Ready</p>
-
-          <p className="mt-2 text-2xl font-bold text-green-600">
-            {stats.ready}
-          </p>
-        </div>
-
-        <div className="cana-panel p-5">
-          <p className="text-sm text-gray-500">In Progress</p>
-
-          <p className="mt-2 text-2xl font-bold text-orange-600">
-            {stats.inProgress}
-          </p>
-        </div>
-
-        <div className="cana-panel p-5">
-          <p className="text-sm text-gray-500">Paused</p>
-
-          <p className="mt-2 text-2xl font-bold text-yellow-600">
-            {stats.paused}
-          </p>
-        </div>
-
-        <div className="cana-panel p-5">
-          <p className="text-sm text-gray-500">Completed</p>
-
-          <p className="mt-2 text-2xl font-bold text-emerald-600">
-            {stats.completed}
-          </p>
-        </div>
-
-        <div className="cana-panel p-5">
-          <p className="text-sm text-gray-500">Cancelled</p>
-
-          <p className="mt-2 text-2xl font-bold text-red-600">
-            {stats.cancelled}
-          </p>
-        </div>
-      </div>
 
       {/* =================================================
           TABLE CARD
@@ -864,31 +746,106 @@ const ProductionBatchesPage = () => {
                             <Printer size={16} />
                           </button>
 
-                          {/* EDIT */}
+                          {(batch.status === "In Progress" ||
+                            batch.status === "Paused") && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await openMaterialConsumption(batch);
+                                } catch (error) {
+                                  alert(
+                                    error instanceof Error
+                                      ? error.message
+                                      : "Failed to open material consumption.",
+                                  );
+                                }
+                              }}
+                              className="rounded-xl border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900"
+                              title="Review raw-material consumption"
+                            >
+                              <PackageCheck size={16} />
+                            </button>
+                          )}
 
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(batch)}
-                            disabled={!canEditBatch(batch)}
-                            className="rounded-xl border border-gray-200 p-2 text-slate-600 transition hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
-                            title={canEditBatch(batch) ? "Edit" : "Cannot edit"}
-                          >
-                            <Edit3 size={16} />
-                          </button>
+                          {batch.status === "Planned" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void changeBatchStatus(batch, "Ready")
+                              }
+                              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+                              title="Confirm batch is ready"
+                            >
+                              <CheckCircle2 size={15} /> Ready
+                            </button>
+                          )}
+
+                          {batch.status === "Ready" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void changeBatchStatus(batch, "In Progress")
+                              }
+                              className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700"
+                              title="Start production"
+                            >
+                              <Play size={15} /> Start
+                            </button>
+                          )}
+
+                          {batch.status === "In Progress" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void changeBatchStatus(batch, "Paused")
+                              }
+                              className="rounded-xl border border-gray-200 p-2 text-gray-600 hover:bg-gray-100"
+                              title="Pause production"
+                            >
+                              <Pause size={16} />
+                            </button>
+                          )}
+
+                          {batch.status === "Paused" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void changeBatchStatus(batch, "In Progress")
+                              }
+                              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+                              title="Resume production"
+                            >
+                              <RotateCcw size={15} /> Resume
+                            </button>
+                          )}
+
+                          {(batch.status === "Ready" ||
+                            batch.status === "Paused") && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void changeBatchStatus(batch, "Cancelled")
+                              }
+                              className="rounded-xl border border-gray-200 p-2 text-red-500 hover:bg-red-50"
+                              title="Cancel batch"
+                            >
+                              <XCircle size={16} />
+                            </button>
+                          )}
 
                           {/* DELETE */}
 
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(batch)}
-                            disabled={!canDeleteBatch(batch)}
-                            className="rounded-xl border border-gray-200 p-2 text-red-500 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
-                            title={
-                              canDeleteBatch(batch) ? "Delete" : "Cannot delete"
-                            }
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {canDeleteBatch(batch) && (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(batch)}
+                              className="rounded-xl border border-gray-200 p-2 text-red-500 transition hover:bg-red-50 hover:text-red-600"
+                              title="Delete planned batch"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -910,22 +867,6 @@ const ProductionBatchesPage = () => {
         onCreate={handleCreate}
         onUpdate={async () => {}}
         editingBatch={null}
-      />
-
-      {/* =================================================
-          EDIT MODAL
-      ================================================= */}
-
-      <ProductionBatchModal
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false);
-
-          setSelectedBatch(null);
-        }}
-        onCreate={async () => {}}
-        onUpdate={handleEdit}
-        editingBatch={selectedBatch}
       />
 
       {/* =================================================

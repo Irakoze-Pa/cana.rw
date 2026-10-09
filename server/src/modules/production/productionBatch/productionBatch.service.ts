@@ -8,11 +8,9 @@ import Product from "../../product/product.model";
 import FinishedGoodsStoreBalance from "../../finishedGoods/storeBalance.model";
 import InventoryTransaction from "../../inventory/inventoryTransaction.model";
 import RawMaterialConsumption from "../materialConsumption/materialConsumption.model";
-import RawMaterialLot from "../../raw-materials/rawMaterialLot.model";
 import {
   completeMaterialConsumption,
   createMaterialConsumption,
-  issueMaterialConsumption,
   updateMaterialConsumption,
 } from "../materialConsumption/materialConsumption.service";
 
@@ -145,7 +143,7 @@ const allowedStatusTransitions: Record<
 
   "In Progress": ["In Progress", "Paused", "Completed"],
 
-  Paused: ["Paused", "In Progress", "Completed", "Cancelled"],
+  Paused: ["Paused", "In Progress", "Cancelled"],
 
   Completed: ["Completed"],
 
@@ -589,6 +587,7 @@ export async function updateProductionBatch(
   }
 
   const wasCompleted = batch.status === "Completed";
+  const previousEndDate = batch.endDate;
 
   const currentStatus = batch.status as ProductionBatchStatus;
 
@@ -614,11 +613,7 @@ export async function updateProductionBatch(
   const isCompletingBatch = nextStatus === "Completed";
 
   let consumptionToFinalize: any = null;
-  let automaticIssueItems: Array<{
-    rawMaterial: string;
-    issuedQuantity: number;
-    lotNumber?: string;
-  }> | null = null;
+  let finishedProductToPost: any = null;
 
   if (isCompletingBatch) {
     consumptionToFinalize = await RawMaterialConsumption.findOne({
@@ -634,36 +629,30 @@ export async function updateProductionBatch(
     }
 
     if (consumptionToFinalize.status === "Draft") {
-      if (currentStatus !== "In Progress") {
-        throw new ProductionBatchServiceError(
-          "Resume this batch before completion so its raw materials can be issued automatically.",
-          409,
-        );
-      }
-      const automaticItems = [] as Array<{
-        rawMaterial: string;
-        issuedQuantity: number;
-        lotNumber?: string;
-      }>;
-      for (const item of consumptionToFinalize.items || []) {
-        const quantity = Number(item.standardQuantity || 0);
-        const lot = await RawMaterialLot.findOne({
-          rawMaterial: item.rawMaterial,
-          status: "available",
-          availableQuantity: { $gte: quantity },
-          $or: [
-            { expiresAt: { $exists: false } },
-            { expiresAt: null },
-            { expiresAt: { $gt: new Date() } },
-          ],
-        }).sort({ expiresAt: 1, receivedAt: 1 });
-        automaticItems.push({
-          rawMaterial: String(item.rawMaterial),
-          issuedQuantity: quantity,
-          ...(lot?.lotNumber ? { lotNumber: lot.lotNumber } : {}),
-        });
-      }
-      automaticIssueItems = automaticItems;
+      throw new ProductionBatchServiceError(
+        "Raw materials are still in Draft. Review the batch recipe and issue the materials before completing production.",
+        409,
+      );
+    }
+
+    const issuedQuantity = (consumptionToFinalize.items || []).reduce(
+      (total: number, item: any) =>
+        total + Number(item.issuedQuantity || 0),
+      0,
+    );
+    if (!Number.isFinite(issuedQuantity) || issuedQuantity <= 0) {
+      throw new ProductionBatchServiceError(
+        "No raw materials have been issued for this batch.",
+        409,
+      );
+    }
+
+    finishedProductToPost = await Product.findById(batch.product);
+    if (!finishedProductToPost) {
+      throw new ProductionBatchServiceError(
+        "The finished product linked to this batch no longer exists.",
+        404,
+      );
     }
   }
 
@@ -962,16 +951,6 @@ export async function updateProductionBatch(
   // SAVE
   // ---------------------------------------------------
 
-  if (automaticIssueItems && consumptionToFinalize) {
-    await issueMaterialConsumption(String(consumptionToFinalize._id), {
-      items: automaticIssueItems,
-      notes: `Issued automatically during confirmed completion of batch ${batch.batchNo}.`,
-    });
-    consumptionToFinalize = await RawMaterialConsumption.findById(
-      consumptionToFinalize._id,
-    );
-  }
-
   await batch.save();
 
   await productionOrder.save();
@@ -1002,20 +981,35 @@ export async function updateProductionBatch(
       ? consumptionToFinalize.items
       : [];
 
-    await updateMaterialConsumption(String(consumptionToFinalize._id), {
-      items: consumptionItems.map((item: any) => ({
-        actualQuantity: Math.max(
-          0,
-          Number(item.issuedQuantity || 0) -
-            Number(item.wasteQuantity || 0) -
-            Number(item.returnQuantity || 0),
-        ),
-      })),
-    });
+    // A Consumed record means a previous completion attempt already locked
+    // materials but failed later while posting finished stock. Keep the path
+    // idempotent so the operator can retry without changing inventory twice.
+    if (consumptionToFinalize.status !== "Consumed") {
+      try {
+        await updateMaterialConsumption(String(consumptionToFinalize._id), {
+          items: consumptionItems.map((item: any) => ({
+            actualQuantity: Math.max(
+              0,
+              Number(item.issuedQuantity || 0) -
+                Number(item.wasteQuantity || 0) -
+                Number(item.returnQuantity || 0),
+            ),
+          })),
+        });
 
-    await completeMaterialConsumption(String(consumptionToFinalize._id), {
-      notes: `Closed automatically when production batch ${batch.batchNo} was completed.`,
-    });
+        await completeMaterialConsumption(String(consumptionToFinalize._id), {
+          notes: `Closed automatically when production batch ${batch.batchNo} was completed.`,
+        });
+      } catch (error) {
+        batch.status = currentStatus;
+        batch.endDate = previousEndDate;
+        await batch.save();
+        throw new ProductionBatchServiceError(
+          `Material consumption could not be closed for ${batch.batchNo}: ${error instanceof Error ? error.message : "review the material issue."}`,
+          409,
+        );
+      }
+    }
   }
 
   if (
@@ -1023,19 +1017,58 @@ export async function updateProductionBatch(
     !wasCompleted &&
     !batch.finishedGoodsPostedAt
   ) {
-    const product = await Product.findById(batch.product);
-    if (!product) {
-      throw new ProductionBatchServiceError("Finished product not found.", 404);
+    const product = finishedProductToPost || (await Product.findById(batch.product));
+    if (!product) throw new ProductionBatchServiceError("Finished product not found.", 404);
+    const postingSession = await mongoose.startSession();
+    try {
+      await postingSession.withTransaction(async () => {
+        const postingMarker = new Date();
+        const markedBatch = await ProductionBatch.findOneAndUpdate(
+          {
+            _id: batch._id,
+            $or: [
+              { finishedGoodsPostedAt: { $exists: false } },
+              { finishedGoodsPostedAt: null },
+            ],
+          },
+          { $set: { finishedGoodsPostedAt: postingMarker } },
+          { new: true, session: postingSession },
+        );
+        if (!markedBatch) return;
+
+        const productUpdate = await Product.updateOne(
+          { _id: product._id },
+          { $inc: { stock: Number(batch.actualQuantity) } },
+          { session: postingSession },
+        );
+        if (productUpdate.matchedCount !== 1) {
+          throw new Error("Finished product could not be updated.");
+        }
+
+        await FinishedGoodsStoreBalance.findOneAndUpdate(
+          { product: product._id, store: "production" },
+          { $inc: { quantity: Number(batch.actualQuantity) } },
+          {
+            upsert: true,
+            new: true,
+            setDefaultsOnInsert: true,
+            session: postingSession,
+          },
+        );
+        batch.finishedGoodsPostedAt = postingMarker;
+      });
+    } catch (error) {
+      batch.status = currentStatus;
+      batch.endDate = previousEndDate;
+      batch.finishedGoodsPostedAt = undefined;
+      await batch.save();
+      throw new ProductionBatchServiceError(
+        `Finished stock could not be posted for ${batch.batchNo}: ${error instanceof Error ? error.message : "retry the completion."}`,
+        409,
+      );
+    } finally {
+      await postingSession.endSession();
     }
-    product.stock = Number((product.stock + batch.actualQuantity).toFixed(4));
-    await product.save();
-    await FinishedGoodsStoreBalance.findOneAndUpdate(
-      { product: product._id, store: "production" },
-      { $inc: { quantity: Number(batch.actualQuantity) } },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
-    );
-    batch.finishedGoodsPostedAt = new Date();
-    await batch.save();
   }
 
   if (batch.status === "Completed" && !wasCompleted) {

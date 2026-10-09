@@ -10,11 +10,15 @@ import {
   FileText,
   MapPinned,
   Megaphone,
+  Landmark,
   Package,
   RefreshCw,
   ShieldCheck,
   ShoppingCart,
   Truck,
+  TrendingDown,
+  TrendingUp,
+  WalletCards,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -46,6 +50,13 @@ type Summary = {
   activeEquipment: number;
   openCompliance: number;
   overdueCompliance: number;
+  treasuryBalance: number;
+  activeTreasuryAccounts: number;
+  periodRevenue: number;
+  periodExpenses: number;
+  netProfit: number;
+  supplierPayables: number;
+  customerReceivables: number;
   recentSales: SalesOrder[];
   lowMaterials: Material[];
   outstandingInvoiceList: Invoice[];
@@ -59,6 +70,8 @@ const empty: Summary = {
   openProductionOrders: 0, outstandingInvoices: 0, outstandingBalance: 0, overdueInvoices: 0, salesValue: 0,
   deliveredValue: 0, activeEquipment: 0, openCompliance: 0,
   overdueCompliance: 0, recentSales: [], lowMaterials: [],
+  treasuryBalance: 0, activeTreasuryAccounts: 0, periodRevenue: 0,
+  periodExpenses: 0, netProfit: 0, supplierPayables: 0, customerReceivables: 0,
   outstandingInvoiceList: [], recentQuotations: [], attentionOrders: [],
 };
 
@@ -90,6 +103,7 @@ export default function AdminDashboard() {
   useEffect(() => { void load(); }, []);
 
   const isMarketing = user?.role === "staff" && user.department === "marketing";
+  const canViewFinance = user?.role === "admin" || user?.role === "superadmin" || (user?.role === "staff" && ["finance", "management"].includes(String(user.department)));
   if (isMarketing) {
     return <MarketingOverview data={data} loading={loading} error={error} onRefresh={load} />;
   }
@@ -127,9 +141,8 @@ export default function AdminDashboard() {
             <button type="button" onClick={() => void load()} aria-label="Refresh dashboard" className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 sm:px-4 sm:text-sm"><RefreshCw size={16} className={loading ? "animate-spin" : ""} /><span className="hidden sm:inline">Refresh</span></button>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden border border-slate-200 bg-slate-200">
-          <HeadlineMetric label="Sales pipeline" value={money(data.salesValue)} compactValue={compactMoney(data.salesValue)} />
-          <HeadlineMetric label="Delivered value" value={money(data.deliveredValue)} compactValue={compactMoney(data.deliveredValue)} />
+        <div className={`mt-4 grid gap-px overflow-hidden border border-slate-200 bg-slate-200 ${canViewFinance ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-3"}`}>
+          {canViewFinance ? <><HeadlineMetric label="Treasury available" value={money(data.treasuryBalance)} compactValue={compactMoney(data.treasuryBalance)} /><HeadlineMetric label="Revenue this month" value={money(data.periodRevenue)} compactValue={compactMoney(data.periodRevenue)} /><HeadlineMetric label="Net result this month" value={money(data.netProfit)} compactValue={compactMoney(data.netProfit)} tone={data.netProfit < 0 ? "negative" : "positive"} /></> : <><HeadlineMetric label="Sales pipeline" value={money(data.salesValue)} compactValue={compactMoney(data.salesValue)} /><HeadlineMetric label="Delivered value" value={money(data.deliveredValue)} compactValue={compactMoney(data.deliveredValue)} /></>}
           <HeadlineMetric label="Items requiring attention" value={String(attentionTotal)} />
         </div>
       </header>
@@ -153,6 +166,8 @@ export default function AdminDashboard() {
         <SalesRealizationChart pipeline={data.salesValue} delivered={data.deliveredValue} outstanding={data.outstandingBalance} loading={loading} />
         <WorkloadChart items={workload} loading={loading} />
       </section>
+
+      {canViewFinance && <FinanceSnapshot data={data} loading={loading} />}
 
       <section className="grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
         <Panel title="Priority fulfilment" description="Sales orders still moving through delivery." action="View sales" to="/management/sales" icon={<ClipboardList size={17} />}>
@@ -248,6 +263,32 @@ function OrderLines({ items = [] }: { items?: SalesOrderItem[] }) {
   return <div className="mt-2 flex flex-wrap gap-1.5">{items.slice(0, 3).map((item, index) => <span key={`${item.productName}-${index}`} className="max-w-full truncate rounded-md bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-700 sm:text-[11px]"><span className="sm:hidden">{item.productName} · {item.quantity} {item.unit === "packs" ? "pack" : item.unit}</span><span className="hidden sm:inline">{item.productName} · {item.quantity} {item.unit === "packs" ? (item.quantity === 1 ? "pack" : "packs") : item.unit}{item.packLabel ? ` (${item.packLabel})` : ""} · {money(item.unitPrice)} each · {money(item.total)}</span></span>)}{items.length > 3 && <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500 sm:text-[11px]">+{items.length - 3} more</span>}</div>;
 }
 
+function FinanceSnapshot({ data, loading }: { data: Summary; loading: boolean }) {
+  const items = [
+    { label: "Cash, bank & Mobile Money", value: data.treasuryBalance, note: `${data.activeTreasuryAccounts} active account${data.activeTreasuryAccounts === 1 ? "" : "s"}`, icon: Landmark, to: "/management/accounting" },
+    { label: "Customer receivables", value: data.customerReceivables, note: `${data.overdueInvoices} overdue invoice${data.overdueInvoices === 1 ? "" : "s"}`, icon: TrendingUp, to: "/management/billing" },
+    { label: "Supplier payables", value: data.supplierPayables, note: "Outstanding supplier obligations", icon: WalletCards, to: "/management/supplier-payments" },
+    { label: "Operating expenses", value: data.periodExpenses, note: "Recorded during the current month", icon: TrendingDown, to: "/management/expenses" },
+  ];
+  return (
+    <section className="overflow-hidden border border-slate-200 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+        <div><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-slate-500">Financial position</p><h2 className="mt-0.5 text-base font-extrabold text-slate-950">Cash and obligations</h2></div>
+        <Link to="/management/accounting" className="inline-flex items-center gap-1 text-xs font-bold text-red-700">Finance & accounting <ArrowRight size={13} /></Link>
+      </div>
+      <div className="grid gap-px bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
+        {items.map(({ label, value, note, icon: Icon, to }) => (
+          <Link key={label} to={to} className="group min-w-0 bg-white p-3.5 transition hover:bg-slate-50 sm:p-4">
+            <div className="flex items-center justify-between gap-3"><p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">{label}</p><Icon size={16} className="shrink-0 text-slate-400 group-hover:text-red-700" /></div>
+            <p className="mt-2 truncate text-lg font-extrabold text-slate-950 sm:text-xl">{loading ? "—" : money(value)}</p>
+            <p className="mt-1 truncate text-xs text-slate-500">{note}</p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SalesRealizationChart({ pipeline, delivered, outstanding, loading }: { pipeline: number; delivered: number; outstanding: number; loading: boolean }) {
   const safePipeline = Math.max(0, Number(pipeline || 0));
   const safeDelivered = Math.max(0, Number(delivered || 0));
@@ -280,8 +321,9 @@ function WorkloadChart({ items, loading }: { items: Array<{ label: string; value
   );
 }
 
-function HeadlineMetric({ label, value, compactValue }: { label: string; value: string; compactValue?: string }) {
-  return <div className="min-w-0 bg-white px-2.5 py-3 sm:px-4"><p className="truncate text-[8px] font-extrabold uppercase tracking-[.1em] text-slate-500 sm:text-[10px] sm:tracking-[.13em]">{label}</p><p className="mt-1 truncate text-sm font-extrabold text-slate-950 sm:text-xl"><span className="sm:hidden">{compactValue || value}</span><span className="hidden sm:inline">{value}</span></p></div>;
+function HeadlineMetric({ label, value, compactValue, tone = "default" }: { label: string; value: string; compactValue?: string; tone?: "default" | "positive" | "negative" }) {
+  const valueTone = tone === "negative" ? "text-red-700" : tone === "positive" ? "text-emerald-700" : "text-slate-950";
+  return <div className="min-w-0 bg-white px-3 py-3 sm:px-4"><p className="truncate text-[8px] font-extrabold uppercase tracking-[.1em] text-slate-500 sm:text-[10px] sm:tracking-[.13em]">{label}</p><p className={`mt-1 truncate text-sm font-extrabold sm:text-xl ${valueTone}`}><span className="sm:hidden">{compactValue || value}</span><span className="hidden sm:inline">{value}</span></p></div>;
 }
 
 function Panel({ title, description, action, to, icon, children }: { title: string; description: string; action: string; to: string; icon: React.ReactNode; children: React.ReactNode }) {

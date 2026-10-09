@@ -1,6 +1,6 @@
 import {
   X,
-  Pencil,
+  Copy,
   Power,
   FlaskConical,
   Package,
@@ -20,7 +20,7 @@ interface FormulaDetailsProps {
 
   onClose: () => void;
 
-  onEdit: (
+  onNewVersion: (
     formula: Formula
   ) => void;
 
@@ -33,7 +33,7 @@ export default function FormulaDetails({
   isOpen,
   formula,
   onClose,
-  onEdit,
+  onNewVersion,
   onDeactivate,
 }: FormulaDetailsProps) {
   if (!isOpen || !formula) {
@@ -524,13 +524,13 @@ export default function FormulaDetails({
             <button
               type="button"
               onClick={() =>
-                onEdit(formula)
+                onNewVersion(formula)
               }
               className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
             >
-              <Pencil size={16} />
+              <Copy size={16} />
 
-              Edit
+              New version
             </button>
 
             {formula.status ===

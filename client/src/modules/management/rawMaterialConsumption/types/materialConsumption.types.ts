@@ -32,6 +32,9 @@ export interface ProductionBatchReference {
   productName?: string;
   productCode?: string;
   status?: string;
+  plannedQuantity?: number;
+  actualQuantity?: number;
+  unit?: string;
 }
 
 export interface MaterialConsumption {
