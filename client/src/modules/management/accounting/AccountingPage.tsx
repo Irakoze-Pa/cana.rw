@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDollarSign,
+  CircleHelp,
   ClipboardList,
   Landmark,
   Plus,
@@ -399,11 +400,11 @@ export default function AccountingPage() {
   };
 
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
-    { key: "overview", label: "Financial overview", icon: CircleDollarSign },
-    { key: "treasury", label: "Cash & bank", icon: Landmark },
-    { key: "ledger", label: "General ledger", icon: BookOpen },
+    { key: "overview", label: "Overview", icon: CircleDollarSign },
+    { key: "treasury", label: "Money accounts", icon: Landmark },
+    { key: "ledger", label: "Ledger", icon: BookOpen },
     { key: "trial", label: "Trial balance", icon: Scale },
-    { key: "journals", label: "Manual journals", icon: WalletCards },
+    { key: "journals", label: "Adjustments", icon: WalletCards },
   ];
 
   return (
@@ -417,7 +418,7 @@ export default function AccountingPage() {
             Finance & accounting
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Ledger, financial position and controlled adjustments.
+            Daily transactions post automatically; accounting reviews and controls the result.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -524,6 +525,8 @@ export default function AccountingPage() {
           loading={loading}
           groupedAccounts={groupedAccounts}
           treasuryAccounts={treasury.accounts}
+          canSetup={canPostJournal}
+          onAddAccount={() => setAccountOpen(true)}
         />
       )}
       {tab === "treasury" && (
@@ -593,11 +596,15 @@ function Overview({
   loading,
   groupedAccounts,
   treasuryAccounts,
+  canSetup,
+  onAddAccount,
 }: {
   summary: Summary;
   loading: boolean;
   groupedAccounts: [string, Account[]][];
   treasuryAccounts: TreasuryAccount[];
+  canSetup: boolean;
+  onAddAccount: () => void;
 }) {
   const metrics = [
     { label: "Revenue", value: summary.revenue, icon: ArrowUpRight },
@@ -634,6 +641,30 @@ function Overview({
           );
         })}
       </section>
+      {!loading && treasuryAccounts.length === 0 && (
+        <section className="flex flex-col gap-4 border border-slate-950 bg-slate-950 p-4 text-white sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/10">
+              <Landmark size={18} />
+            </span>
+            <div>
+              <h2 className="text-sm font-extrabold">Complete finance setup</h2>
+              <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-300">
+                Add the real cash, bank and Mobile Money accounts with their opening balances. Until then, operational records remain valid but treasury balances cannot be reconciled.
+              </p>
+            </div>
+          </div>
+          {canSetup && (
+            <button
+              type="button"
+              onClick={onAddAccount}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-800"
+            >
+              <Plus size={16} /> Add first account
+            </button>
+          )}
+        </section>
+      )}
       <section className="grid gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
         <FinanceLink
           to="/management/billing"
@@ -660,6 +691,7 @@ function Overview({
           detail={`${treasuryAccounts.filter((item) => item.status === "active").length} active financial accounts`}
         />
       </section>
+      <AccountingFlow />
       <section className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
         <div className="border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-4 py-3">
@@ -719,6 +751,34 @@ function Overview({
         </div>
       </section>
     </>
+  );
+}
+
+function AccountingFlow() {
+  const steps = [
+    ["1", "Record operations", "Sales, receipts, purchases, supplier payments, payroll and expenses."],
+    ["2", "Track money", "Each cleared payment is linked to cash, bank or Mobile Money."],
+    ["3", "Post automatically", "The system creates balanced debit and credit entries in the ledger."],
+    ["4", "Review", "Finance checks balances, trial balance, profit or loss and exceptions."],
+  ];
+  return (
+    <section className="border border-slate-200 bg-white">
+      <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+        <CircleHelp size={16} className="text-red-700" />
+        <h2 className="text-sm font-extrabold text-slate-950">How finance works in CANA</h2>
+      </div>
+      <div className="grid gap-px bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
+        {steps.map(([number, heading, detail]) => (
+          <article key={number} className="bg-white p-4">
+            <div className="flex items-center gap-2">
+              <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-950 text-[10px] font-extrabold text-white">{number}</span>
+              <h3 className="text-xs font-extrabold text-slate-950">{heading}</h3>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-500">{detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -1545,6 +1605,9 @@ function TreasuryAccountModal({
               {error}
             </p>
           )}
+          <div className="border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600 sm:col-span-2">
+            Enter the balance that physically existed on the opening date. Future customer receipts, supplier payments, expenses and transfers will update this account automatically.
+          </div>
           <Field label="Account name">
             <input
               required
@@ -1589,7 +1652,7 @@ function TreasuryAccountModal({
               </Field>
             </>
           )}
-          <Field label="Opening balance">
+          <Field label="Balance on opening date (RWF)">
             <input
               type="number"
               min="0"

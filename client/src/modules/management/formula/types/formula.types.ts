@@ -53,6 +53,9 @@ export interface Formula {
 
   estimatedMaterialCost: number;
   estimatedTotalCost: number;
+  costingBasis?: "inventory_weighted_average";
+  costingComplete?: boolean;
+  unpricedMaterials?: string[];
 
   status: FormulaStatus;
 

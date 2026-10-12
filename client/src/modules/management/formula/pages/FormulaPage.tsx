@@ -759,7 +759,7 @@ export default function FormulasPage() {
                   </th>
 
                   <th className="whitespace-nowrap px-5 py-4 text-right text-[11px] font-bold uppercase tracking-wide text-gray-500">
-                    Batch Cost
+                    Current est. cost
                   </th>
 
                   <th className="whitespace-nowrap px-5 py-4 text-center text-[11px] font-bold uppercase tracking-wide text-gray-500">
@@ -891,6 +891,11 @@ export default function FormulasPage() {
                               formula.estimatedTotalCost
                             )}
                           </span>
+                          {formula.costingComplete === false && (
+                            <span className="mt-1 block text-[10px] font-bold uppercase text-amber-700">
+                              Price missing
+                            </span>
+                          )}
 
                         </td>
 

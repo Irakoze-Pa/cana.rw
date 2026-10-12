@@ -217,9 +217,9 @@ const calculateTotalCost = (
   );
 };
 
-// RawMaterial keeps the purchasing/master-data snapshot used by formulas and
-// purchase orders. Inventory is the transaction ledger. Keep the snapshot in
-// sync after every ledger mutation so teams never see conflicting stock.
+// Inventory owns both stock quantity and the current weighted-average
+// valuation. RawMaterial retains a compatibility snapshot for older screens,
+// but it must never become an independently editable price source.
 const syncRawMaterialStock = async (
   rawMaterialId: Types.ObjectId,
   inventory: IInventory
@@ -228,6 +228,7 @@ const syncRawMaterialStock = async (
     quantity: inventory.quantity,
     reservedQuantity: inventory.reservedQuantity,
     availableQuantity: inventory.availableQuantity,
+    costPerUnit: inventory.averageCostPerUnit,
   });
 };
 

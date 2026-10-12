@@ -180,6 +180,16 @@ export default function FormulaDetails({
                 </h3>
               </div>
 
+              <p className="mt-1 text-xs text-gray-500">
+                Materials use the current inventory weighted-average cost, or the latest active supplier offer when no valued stock is available.
+              </p>
+
+              {formula.costingComplete === false && (
+                <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  Cost is incomplete. Add an active supplier offer for: {(formula.unpricedMaterials || []).join(", ")}.
+                </p>
+              )}
+
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <CostCard
                   label="Material Cost"

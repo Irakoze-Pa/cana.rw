@@ -106,10 +106,6 @@ function RawMaterialTable({
               </th>
 
               <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Reference Price
-              </th>
-
-              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Supplier
               </th>
 
@@ -148,7 +144,7 @@ function RawMaterialTable({
               const startsCategory = index === 0 || stockGroup(sortedMaterials[index - 1].category) !== stockGroup(material.category);
               return (
                 <Fragment key={material._id}>
-                  {startsCategory && <tr className="bg-slate-50"><td colSpan={8} className="px-5 py-2.5 text-xs font-extrabold uppercase tracking-[.12em] text-slate-600">{stockGroup(material.category)}</td></tr>}
+                  {startsCategory && <tr className="bg-slate-50"><td colSpan={7} className="px-5 py-2.5 text-xs font-extrabold uppercase tracking-[.12em] text-slate-600">{stockGroup(material.category)}</td></tr>}
                 <tr
                   className="
                     transition
@@ -215,21 +211,6 @@ function RawMaterialTable({
                           : `Min: ${formatNumber(minimumStock)} ${material.unit}`}
                       </p>
                     </div>
-                  </td>
-
-                  {/* ================================================= */}
-                  {/* COST */}
-                  {/* ================================================= */}
-
-                  <td className="px-5 py-4">
-                    <span className="whitespace-nowrap text-sm font-medium text-gray-900">
-                      {formatNumber(
-                        material.costPerUnit ??
-                          0
-                      )}{" "}
-                      <span className="text-xs font-normal text-gray-400">RWF / {material.unit}</span>
-                    </span>
-                    {material.packSizes?.length ? <p className="mt-0.5 text-xs text-gray-400">{formatNumber((material.costPerUnit || 0) * material.packSizes[0])} RWF / {material.packSizes[0]} {material.unit} pack</p> : null}
                   </td>
 
                   {/* ================================================= */}

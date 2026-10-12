@@ -276,27 +276,53 @@ export const getRawMaterials =
     // The inventory ledger is the single source of truth for quantities.
     // Setup owns the material configuration; this keeps its stock display in
     // lockstep with the Raw-material store without copying balances in UI.
-    const inventoryRecords = await Inventory.find({
-      rawMaterial: { $in: materials.map((material) => material._id) },
-    })
-      .select("rawMaterial quantity reservedQuantity availableQuantity")
-      .lean();
+    const materialIds = materials.map((material) => material._id);
+    const [inventoryRecords, activeOffers] = await Promise.all([
+      Inventory.find({ rawMaterial: { $in: materialIds } })
+        .select("rawMaterial quantity reservedQuantity availableQuantity averageCostPerUnit")
+        .lean(),
+      SupplierMaterial.find({ rawMaterial: { $in: materialIds }, status: "Active" })
+        .select("rawMaterial unitPrice updatedAt")
+        .sort({ updatedAt: -1 })
+        .lean(),
+    ]);
     const inventoryByMaterialId = new Map(
       inventoryRecords.map((inventory) => [
         inventory.rawMaterial.toString(),
         inventory,
       ])
     );
+    const latestOfferByMaterialId = new Map<string, number>();
+    activeOffers.forEach((offer) => {
+      const id = offer.rawMaterial.toString();
+      if (!latestOfferByMaterialId.has(id))
+        latestOfferByMaterialId.set(id, Number(offer.unitPrice || 0));
+    });
 
     return materials.map((material) => {
       const inventory = inventoryByMaterialId.get(material._id.toString());
       if (!inventory) return material;
+      const inventoryCost = Number(inventory.averageCostPerUnit || 0);
+      const valuationCost =
+        Number(inventory.quantity || 0) > 0 && inventoryCost > 0
+          ? inventoryCost
+          : Number(latestOfferByMaterialId.get(material._id.toString()) || 0);
 
       return {
         ...material.toObject(),
         quantity: Number(inventory.quantity || 0),
         reservedQuantity: Number(inventory.reservedQuantity || 0),
         availableQuantity: Number(inventory.availableQuantity || 0),
+        // Preserve the API field while making it a read-only projection of
+        // Inventory's single authoritative weighted-average valuation.
+        costPerUnit: valuationCost,
+        valuationCostPerUnit: valuationCost,
+        valuationCostSource:
+          Number(inventory.quantity || 0) > 0 && inventoryCost > 0
+            ? "inventory_weighted_average"
+            : valuationCost > 0
+              ? "latest_supplier_offer"
+              : "unpriced",
       };
     });
   };
@@ -309,12 +335,34 @@ export const getRawMaterials =
 export const getRawMaterialById =
   async (id: string) => {
     await Promise.all([reconcileAvailableQuantities(), standardizeWhitingPackaging()]);
-    return await RawMaterial.findById(
-      id
-    ).populate(
-      "supplier",
-      "name code"
-    );
+    const [material, inventory, latestOffer] = await Promise.all([
+      RawMaterial.findById(id).populate("supplier", "name code"),
+      Inventory.findOne({ rawMaterial: id }).select("quantity reservedQuantity availableQuantity averageCostPerUnit").lean(),
+      SupplierMaterial.findOne({ rawMaterial: id, status: "Active" })
+        .select("unitPrice")
+        .sort({ updatedAt: -1 })
+        .lean(),
+    ]);
+    if (!material || !inventory) return material;
+    const inventoryCost = Number(inventory.averageCostPerUnit || 0);
+    const valuationCost =
+      Number(inventory.quantity || 0) > 0 && inventoryCost > 0
+        ? inventoryCost
+        : Number(latestOffer?.unitPrice || 0);
+    return {
+      ...material.toObject(),
+      quantity: Number(inventory.quantity || 0),
+      reservedQuantity: Number(inventory.reservedQuantity || 0),
+      availableQuantity: Number(inventory.availableQuantity || 0),
+      costPerUnit: valuationCost,
+      valuationCostPerUnit: valuationCost,
+      valuationCostSource:
+        Number(inventory.quantity || 0) > 0 && inventoryCost > 0
+          ? "inventory_weighted_average"
+          : valuationCost > 0
+            ? "latest_supplier_offer"
+            : "unpriced",
+    };
   };
 
 /**
@@ -443,6 +491,10 @@ export const updateRawMaterial =
 
       availableQuantity,
     };
+
+    // Cost is calculated by inventory receipts and adjustments. Ignore stale
+    // clients attempting to update it through Materials Setup.
+    delete updateData.costPerUnit;
 
     /**
      * Normalize common string fields.

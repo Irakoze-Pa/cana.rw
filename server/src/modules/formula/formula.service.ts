@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import Formula from "./formula.model";
 import Product from "../product/product.model";
 import RawMaterial from "../raw-materials/rawMaterial.model";
+import Inventory from "../inventory/inventory.model";
+import SupplierMaterial from "../raw-materials/supplierMaterial.model";
 
 // =====================================================
 // TYPES
@@ -177,6 +179,37 @@ async function prepareFormulaItems(
       },
     });
 
+  const [inventoryCosts, activeOffers] = await Promise.all([
+    Inventory.find({ rawMaterial: { $in: rawMaterialIds } })
+      .select("rawMaterial quantity averageCostPerUnit")
+      .lean(),
+    SupplierMaterial.find({ rawMaterial: { $in: rawMaterialIds }, status: "Active" })
+      .select("rawMaterial unitPrice updatedAt")
+      .sort({ updatedAt: -1 })
+      .lean(),
+  ]);
+  const latestOfferByMaterial = new Map<string, number>();
+  activeOffers.forEach((offer) => {
+    const id = String(offer.rawMaterial);
+    if (!latestOfferByMaterial.has(id))
+      latestOfferByMaterial.set(id, Number(offer.unitPrice || 0));
+  });
+  const valuationByMaterial = new Map(
+    inventoryCosts.map((item) => {
+      const id = String(item.rawMaterial);
+      const average = Number(item.averageCostPerUnit || 0);
+      return [
+        id,
+        Number(item.quantity || 0) > 0 && average > 0
+          ? average
+          : Number(latestOfferByMaterial.get(id) || 0),
+      ];
+    }),
+  );
+  latestOfferByMaterial.forEach((price, id) => {
+    if (!valuationByMaterial.has(id)) valuationByMaterial.set(id, price);
+  });
+
   if (
     rawMaterials.length !==
     uniqueIds.size
@@ -238,9 +271,7 @@ async function prepareFormulaItems(
 
       const materialCost =
         quantityWithWaste *
-        Number(
-          rawMaterial.costPerUnit || 0
-        );
+        Number(valuationByMaterial.get(String(rawMaterial._id)) || 0);
 
       estimatedMaterialCost +=
         materialCost;
@@ -804,8 +835,96 @@ export async function createNewFormulaVersion(
 // GET ALL
 // =====================================================
 
+async function applyCurrentInventoryValuation(formulas: any[]) {
+  const plain = formulas.map((formula) =>
+    typeof formula?.toObject === "function" ? formula.toObject() : formula,
+  );
+  const materialIds = [
+    ...new Set(
+      plain.flatMap((formula) =>
+        (formula.items || []).map((item: any) =>
+          String(item.rawMaterial?._id || item.rawMaterial),
+        ),
+      ),
+    ),
+  ].filter((id) => mongoose.Types.ObjectId.isValid(id));
+  const [inventories, activeOffers] = await Promise.all([
+    Inventory.find({ rawMaterial: { $in: materialIds } })
+      .select("rawMaterial quantity averageCostPerUnit")
+      .lean(),
+    SupplierMaterial.find({ rawMaterial: { $in: materialIds }, status: "Active" })
+      .select("rawMaterial unitPrice updatedAt")
+      .sort({ updatedAt: -1 })
+      .lean(),
+  ]);
+  const latestOfferByMaterial = new Map<string, number>();
+  activeOffers.forEach((offer) => {
+    const id = String(offer.rawMaterial);
+    if (!latestOfferByMaterial.has(id))
+      latestOfferByMaterial.set(id, Number(offer.unitPrice || 0));
+  });
+  const costByMaterial = new Map(
+    inventories.map((item) => {
+      const id = String(item.rawMaterial);
+      const average = Number(item.averageCostPerUnit || 0);
+      return [
+        id,
+        Number(item.quantity || 0) > 0 && average > 0
+          ? average
+          : Number(latestOfferByMaterial.get(id) || 0),
+      ];
+    }),
+  );
+  latestOfferByMaterial.forEach((price, id) => {
+    if (!costByMaterial.has(id)) costByMaterial.set(id, price);
+  });
+
+  return plain.map((formula) => {
+    const items = (formula.items || []).map((item: any) => {
+      const id = String(item.rawMaterial?._id || item.rawMaterial);
+      const currentCost = Number(costByMaterial.get(id) || 0);
+      return {
+        ...item,
+        rawMaterial:
+          item.rawMaterial && typeof item.rawMaterial === "object"
+            ? { ...item.rawMaterial, costPerUnit: currentCost }
+            : item.rawMaterial,
+      };
+    });
+    const estimatedMaterialCost = items.reduce((sum: number, item: any) => {
+      const id = String(item.rawMaterial?._id || item.rawMaterial);
+      const quantityWithWaste =
+        Number(item.quantity || 0) *
+        (1 + Number(item.wastePercentage || 0) / 100);
+      return sum + quantityWithWaste * Number(costByMaterial.get(id) || 0);
+    }, 0);
+    const unpricedMaterials = items
+      .filter((item: any) => {
+        const id = String(item.rawMaterial?._id || item.rawMaterial);
+        return Number(costByMaterial.get(id) || 0) <= 0;
+      })
+      .map((item: any) => item.rawMaterial?.name || "Raw material");
+    return {
+      ...formula,
+      items,
+      estimatedMaterialCost: Number(estimatedMaterialCost.toFixed(2)),
+      estimatedTotalCost: Number(
+        (
+          estimatedMaterialCost +
+          Number(formula.laborCost || 0) +
+          Number(formula.energyCost || 0) +
+          Number(formula.otherCost || 0)
+        ).toFixed(2),
+      ),
+      costingBasis: "inventory_weighted_average",
+      costingComplete: unpricedMaterials.length === 0,
+      unpricedMaterials,
+    };
+  });
+}
+
 export async function getFormulas() {
-  return Formula.find()
+  const formulas = await Formula.find()
     .populate(
       "product",
       "name code category unit"
@@ -817,6 +936,7 @@ export async function getFormulas() {
     .sort({
       createdAt: -1,
     });
+  return applyCurrentInventoryValuation(formulas);
 }
 
 // =====================================================
@@ -848,7 +968,7 @@ export async function getFormulaById(
     );
   }
 
-  return formula;
+  return (await applyCurrentInventoryValuation([formula]))[0];
 }
 
 // =====================================================
@@ -874,7 +994,7 @@ export async function getFormulasByProduct(
     );
   }
 
-  return Formula.find({
+  const formulas = await Formula.find({
     product: productId,
   })
     .populate(
@@ -889,6 +1009,7 @@ export async function getFormulasByProduct(
       version: -1,
       createdAt: -1,
     });
+  return applyCurrentInventoryValuation(formulas);
 }
 
 // =====================================================
@@ -937,7 +1058,7 @@ export async function getActiveFormulaByProduct(
     );
   }
 
-  return formula;
+  return (await applyCurrentInventoryValuation([formula]))[0];
 }
 
 // =====================================================

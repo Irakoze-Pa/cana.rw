@@ -178,8 +178,8 @@ function RawMaterialModal({
       return "Minimum stock must be a valid number greater than or equal to 0.";
     }
 
-    if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
-      return "Reference price must be a valid number greater than or equal to 0.";
+    if (!isEditMode && quantity > 0 && (!Number.isFinite(costPerUnit) || costPerUnit < 0)) {
+      return "Opening stock unit cost must be a valid number greater than or equal to 0.";
     }
 
     if (packSizes.some((size) => !Number.isFinite(size) || size <= 0)) return "Use comma-separated package sizes greater than zero.";
@@ -239,9 +239,9 @@ function RawMaterialModal({
 
         minimumStock,
 
-        // This is the current planning/reference price. Receipt lots retain
-        // the actual price paid so historic production costing is not changed.
-        costPerUnit,
+        // Only opening stock needs an initial valuation. After creation the
+        // inventory weighted-average cost is updated by actual receipts.
+        ...(!isEditMode ? { costPerUnit: quantity > 0 ? costPerUnit : 0 } : {}),
 
         status:
           formData.status,
@@ -725,12 +725,12 @@ function RawMaterialModal({
               {/* REFERENCE PRICE */}
               {/* ================================================= */}
 
-              <div>
+              {!isEditMode && Number(formData.quantity || 0) > 0 && <div>
                 <label
                   htmlFor="costPerUnit"
                   className="mb-2 block text-sm font-semibold text-gray-700"
                 >
-                  Reference Price (RWF / {formData.unit || "unit"})
+                  Opening stock cost (RWF / {formData.unit || "unit"})
                 </label>
 
                 <input
@@ -747,12 +747,11 @@ function RawMaterialModal({
                   className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:bg-gray-50"
                 />
 
-                {isEditMode && (
-                  <p className="mt-1.5 text-xs text-gray-500">
-                    Updates the current planning price only. Existing receipt lots and production costs stay unchanged.
-                  </p>
-                )}
+                <p className="mt-1.5 text-xs text-gray-500">
+                  Used only to value the opening quantity. Future cost is calculated from received lots.
+                </p>
               </div>
+              }
 
               {/* ================================================= */}
               {/* STATUS */}
