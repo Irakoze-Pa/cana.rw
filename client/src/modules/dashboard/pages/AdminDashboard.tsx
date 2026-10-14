@@ -47,6 +47,8 @@ type Summary = {
   overdueInvoices: number;
   salesValue: number;
   deliveredValue: number;
+  monthSalesOrders: number;
+  monthDeliveredOrders: number;
   activeEquipment: number;
   openCompliance: number;
   overdueCompliance: number;
@@ -62,13 +64,14 @@ type Summary = {
   outstandingInvoiceList: Invoice[];
   recentQuotations: Quote[];
   attentionOrders: SalesOrder[];
+  reportingPeriod?: { from: string; to: string };
 };
 
 const empty: Summary = {
   products: 0, lowStock: 0, lowRawMaterials: 0, lowFinishedGoods: 0, purchaseOrders: 0, activeBatches: 0,
   completedBatches: 0, openSales: 0, pendingQuotations: 0,
   openProductionOrders: 0, outstandingInvoices: 0, outstandingBalance: 0, overdueInvoices: 0, salesValue: 0,
-  deliveredValue: 0, activeEquipment: 0, openCompliance: 0,
+  deliveredValue: 0, monthSalesOrders: 0, monthDeliveredOrders: 0, activeEquipment: 0, openCompliance: 0,
   overdueCompliance: 0, recentSales: [], lowMaterials: [],
   treasuryBalance: 0, activeTreasuryAccounts: 0, periodRevenue: 0,
   periodExpenses: 0, netProfit: 0, supplierPayables: 0, customerReceivables: 0,
@@ -126,15 +129,16 @@ export default function AdminDashboard() {
     { label: "Procurement", value: data.purchaseOrders, to: "/management/purchase-orders" },
     { label: "Collections", value: data.outstandingInvoices, to: "/management/billing" },
   ];
+  const monthLabel = new Date().toLocaleDateString("en-RW", { month: "long", year: "numeric" });
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-4 pb-6">
       <header className="border-b-2 border-slate-950 bg-white pb-4">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
           <div>
-            <p className="cana-section-kicker text-red-700">Management overview</p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Operations command center</h1>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">Sales, production, stock, procurement and collections.</p>
+            <p className="cana-section-kicker text-red-700">Management overview · {monthLabel}</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Business control centre</h1>
+            <p className="mt-1 max-w-2xl text-sm text-slate-500">Live operational position, financial exposure and work requiring action.</p>
           </div>
           <div className="grid grid-cols-[1fr_auto] gap-2 sm:flex sm:flex-wrap">
             <Link to="/management/sales" className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-700 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-red-800 sm:px-4 sm:text-sm"><ShoppingCart size={16} />Sales workspace</Link>
@@ -142,7 +146,7 @@ export default function AdminDashboard() {
           </div>
         </div>
         <div className={`mt-4 grid gap-px overflow-hidden border border-slate-200 bg-slate-200 ${canViewFinance ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-3"}`}>
-          {canViewFinance ? <><HeadlineMetric label="Treasury available" value={money(data.treasuryBalance)} compactValue={compactMoney(data.treasuryBalance)} /><HeadlineMetric label="Revenue this month" value={money(data.periodRevenue)} compactValue={compactMoney(data.periodRevenue)} /><HeadlineMetric label="Net result this month" value={money(data.netProfit)} compactValue={compactMoney(data.netProfit)} tone={data.netProfit < 0 ? "negative" : "positive"} /></> : <><HeadlineMetric label="Sales pipeline" value={money(data.salesValue)} compactValue={compactMoney(data.salesValue)} /><HeadlineMetric label="Delivered value" value={money(data.deliveredValue)} compactValue={compactMoney(data.deliveredValue)} /></>}
+          {canViewFinance ? <><HeadlineMetric label="Treasury available" value={money(data.treasuryBalance)} compactValue={compactMoney(data.treasuryBalance)} /><HeadlineMetric label="Revenue this month" value={money(data.periodRevenue)} compactValue={compactMoney(data.periodRevenue)} /><HeadlineMetric label="Net result this month" value={money(data.netProfit)} compactValue={compactMoney(data.netProfit)} tone={data.netProfit < 0 ? "negative" : "positive"} /></> : <><HeadlineMetric label="Sales booked this month" value={money(data.salesValue)} compactValue={compactMoney(data.salesValue)} /><HeadlineMetric label="Delivered this month" value={money(data.deliveredValue)} compactValue={compactMoney(data.deliveredValue)} /></>}
           <HeadlineMetric label="Items requiring attention" value={String(attentionTotal)} />
         </div>
       </header>
@@ -163,7 +167,7 @@ export default function AdminDashboard() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.05fr_.95fr]">
-        <SalesRealizationChart pipeline={data.salesValue} delivered={data.deliveredValue} outstanding={data.outstandingBalance} loading={loading} />
+        <SalesRealizationChart pipeline={data.salesValue} delivered={data.deliveredValue} outstanding={data.outstandingBalance} orders={data.monthSalesOrders} deliveredOrders={data.monthDeliveredOrders} loading={loading} />
         <WorkloadChart items={workload} loading={loading} />
       </section>
 
@@ -289,19 +293,19 @@ function FinanceSnapshot({ data, loading }: { data: Summary; loading: boolean })
   );
 }
 
-function SalesRealizationChart({ pipeline, delivered, outstanding, loading }: { pipeline: number; delivered: number; outstanding: number; loading: boolean }) {
+function SalesRealizationChart({ pipeline, delivered, outstanding, orders, deliveredOrders, loading }: { pipeline: number; delivered: number; outstanding: number; orders: number; deliveredOrders: number; loading: boolean }) {
   const safePipeline = Math.max(0, Number(pipeline || 0));
   const safeDelivered = Math.max(0, Number(delivered || 0));
   const deliveryRate = safePipeline > 0 ? Math.min(100, (safeDelivered / safePipeline) * 100) : 0;
   return (
     <section className="border border-slate-200 bg-white p-4" aria-label="Sales realization chart">
       <div className="flex items-start justify-between gap-3">
-        <div><p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Commercial performance</p><h2 className="mt-1 text-base font-extrabold text-slate-950">Sales realization</h2></div>
+        <div><p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">This month</p><h2 className="mt-1 text-base font-extrabold text-slate-950">Sales delivery progress</h2></div>
         <BarChart3 size={18} className="text-slate-500" />
       </div>
       <div className="mt-5 flex items-end justify-between gap-4"><div><p className="text-xs font-semibold text-slate-500">Delivered value</p><p className="mt-1 text-2xl font-extrabold text-slate-950"><span className="sm:hidden">{loading ? "—" : compactMoney(safeDelivered)}</span><span className="hidden sm:inline">{loading ? "—" : money(safeDelivered)}</span></p></div><p className="text-right text-sm font-extrabold text-red-700">{loading ? "—" : `${deliveryRate.toFixed(1)}%`}<span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wide text-slate-500">realized</span></p></div>
       <div className="mt-4 h-3 overflow-hidden bg-slate-200" role="img" aria-label={`${deliveryRate.toFixed(1)} percent of sales pipeline delivered`}><div className="h-full bg-red-700 transition-all" style={{ width: `${deliveryRate}%` }} /></div>
-      <div className="mt-4 grid grid-cols-2 gap-px bg-slate-200"><div className="bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Total pipeline</p><p className="mt-1 text-sm font-extrabold text-slate-950">{loading ? "—" : money(safePipeline)}</p></div><div className="bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Receivables due</p><p className="mt-1 text-sm font-extrabold text-slate-950">{loading ? "—" : money(outstanding)}</p></div></div>
+      <div className="mt-4 grid grid-cols-3 gap-px bg-slate-200"><div className="bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Orders delivered</p><p className="mt-1 text-sm font-extrabold text-slate-950">{loading ? "—" : `${deliveredOrders}/${orders}`}</p></div><div className="bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Sales booked</p><p className="mt-1 truncate text-sm font-extrabold text-slate-950">{loading ? "—" : compactMoney(safePipeline)}</p></div><div className="bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Receivables</p><p className="mt-1 truncate text-sm font-extrabold text-slate-950">{loading ? "—" : compactMoney(outstanding)}</p></div></div>
     </section>
   );
 }

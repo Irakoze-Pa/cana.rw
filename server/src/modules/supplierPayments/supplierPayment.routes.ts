@@ -89,11 +89,18 @@ router.post("/", async (req, res, next) => {
     const paidAmount = amountOf(amount);
     if (!Number.isFinite(paidAmount) || paidAmount <= 0) throw new Error("Payment amount must be greater than zero.");
     if (!paymentMethods.includes(method)) throw new Error("Select a valid payment method.");
-    if (!mongoose.Types.ObjectId.isValid(treasuryAccount)) throw new Error("Select the cash, bank or Mobile Money account used for this payment.");
-    const fundingAccount: any = await TreasuryAccount.findById(treasuryAccount).lean();
-    if (!fundingAccount || fundingAccount.status !== "active") throw new Error("Select an active payment account.");
-    const expectedType = method === "cash" ? "cash" : method === "mobile_money" ? "mobile_money" : "bank";
-    if (method !== "other" && fundingAccount.type !== expectedType) throw new Error("The selected account does not match the payment method.");
+    // Supplier settlements are operational source records and must remain usable
+    // before Accounting configures treasury accounts. If an account is supplied,
+    // validate it and reconcile its balance; otherwise Accounting can classify the
+    // payment later without losing the supplier/payment history.
+    let fundingAccount: any = null;
+    if (treasuryAccount) {
+      if (!mongoose.Types.ObjectId.isValid(treasuryAccount)) throw new Error("Select a valid cash, bank or Mobile Money account.");
+      fundingAccount = await TreasuryAccount.findById(treasuryAccount).lean();
+      if (!fundingAccount || fundingAccount.status !== "active") throw new Error("Select an active payment account.");
+      const expectedType = method === "cash" ? "cash" : method === "mobile_money" ? "mobile_money" : "bank";
+      if (method !== "other" && fundingAccount.type !== expectedType) throw new Error("The selected account does not match the payment method.");
+    }
     const isCheque = method === "bank_cheque";
     if (isCheque && (!String(chequeNumber || "").trim() || !String(bankName || "").trim() || !chequeDate)) throw new Error("Cheque number, bank and maturity date are required.");
     if (isCheque && !Number.isFinite(new Date(chequeDate).getTime())) throw new Error("Enter a valid cheque maturity date.");
@@ -116,13 +123,13 @@ router.post("/", async (req, res, next) => {
     }
     const now = new Date();
     const chequeStatus = isCheque ? (new Date(chequeDate).getTime() <= now.getTime() ? "due" : "issued") : "cleared";
-    if (!isCheque) {
+    if (!isCheque && fundingAccount) {
       const workspace = await treasuryWorkspace();
       const available = Number((workspace.accounts as any[]).find((item) => String(item._id) === String(treasuryAccount))?.balance || 0);
       if (paidAmount > available + 0.0001) throw new Error(`Insufficient funds in ${fundingAccount.name}. Available: ${available.toLocaleString("en-RW")} RWF.`);
-      if (hasOpening) await applyOpeningPayment(openingPayable, paidAmount);
     }
-    const payment = await SupplierPayment.create({ paymentNumber: await nextNumber(isCheque ? "CHQ" : "SPY", SupplierPayment, "paymentNumber"), supplier, ...(hasPO ? { purchaseOrder } : { openingPayable }), treasuryAccount, amount: paidAmount, method, chequeNumber, bankName, chequeDate: isCheque ? new Date(chequeDate) : undefined, chequeStatus, issuedAt: isCheque ? now : undefined, clearedAt: isCheque ? undefined : new Date(paidAt || now), reference, paidAt: paidAt || now, notes, statusHistory: [{ status: chequeStatus, at: now, note: isCheque ? "Cheque issued to supplier" : "Payment recorded and cleared" }] });
+    if (!isCheque && hasOpening) await applyOpeningPayment(openingPayable, paidAmount);
+    const payment = await SupplierPayment.create({ paymentNumber: await nextNumber(isCheque ? "CHQ" : "SPY", SupplierPayment, "paymentNumber"), supplier, ...(hasPO ? { purchaseOrder } : { openingPayable }), ...(treasuryAccount ? { treasuryAccount } : {}), amount: paidAmount, method, chequeNumber, bankName, chequeDate: isCheque ? new Date(chequeDate) : undefined, chequeStatus, issuedAt: isCheque ? now : undefined, clearedAt: isCheque ? undefined : new Date(paidAt || now), reference, paidAt: paidAt || now, notes, statusHistory: [{ status: chequeStatus, at: now, note: isCheque ? "Cheque issued to supplier" : treasuryAccount ? "Payment recorded and cleared" : "Payment recorded before treasury configuration" }] });
     res.status(201).json({ data: await populatedPayment(payment._id) });
   } catch (error) { next(error); }
 });

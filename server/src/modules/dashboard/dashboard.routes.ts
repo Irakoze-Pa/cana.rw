@@ -20,6 +20,9 @@ router.get("/summary", async (req: AuthRequest, res, next) => {
     const today = new Date().toISOString().slice(0, 10);
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
+    const monthStartDate = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
+    const nextMonthDate = new Date(startOfToday.getFullYear(), startOfToday.getMonth() + 1, 1);
+    const currentMonthFilter = { createdAt: { $gte: monthStartDate, $lt: nextMonthDate } };
     const outstandingInvoiceFilter = { balance: { $gt: 0 }, status: { $ne: "void" } };
     const [products, lowRawMaterials, lowFinishedGoods, purchaseOrders, activeBatches, completedBatches, openSales, recentSales, pendingQuotations, openProductionOrders, lowMaterials, outstandingInvoiceCount, outstandingInvoices, invoiceBalanceTotals, overdueInvoices, salesTotals, recentQuotations, attentionOrders, activeEquipment, openCompliance, overdueCompliance] = await Promise.all([
       Product.countDocuments({ status: "Active" }),
@@ -37,12 +40,12 @@ router.get("/summary", async (req: AuthRequest, res, next) => {
       Invoice.find(outstandingInvoiceFilter).sort({ dueDate: 1, createdAt: -1 }).limit(6).populate("customer", "fullName businessName").select("invoiceNumber balance dueDate status customer").lean(),
       Invoice.aggregate([{ $match: outstandingInvoiceFilter }, { $group: { _id: null, total: { $sum: "$balance" } } }]),
       Invoice.countDocuments({ ...outstandingInvoiceFilter, dueDate: { $lt: startOfToday } }),
-      SalesOrder.aggregate([{ $match: { status: { $ne: "cancelled" } } }, { $group: { _id: null, total: { $sum: "$total" }, delivered: { $sum: { $cond: [{ $eq: ["$status", "delivered"] }, "$total", 0] } } } }]),
+      SalesOrder.aggregate([{ $match: { ...currentMonthFilter, status: { $ne: "cancelled" } } }, { $group: { _id: null, total: { $sum: "$total" }, delivered: { $sum: { $cond: [{ $eq: ["$status", "delivered"] }, "$total", 0] } }, orders: { $sum: 1 }, deliveredOrders: { $sum: { $cond: [{ $eq: ["$status", "delivered"] }, 1, 0] } } } }]),
       Quotation.find({ status: "Pending" }).sort({ createdAt: -1 }).limit(5).populate("customer", "fullName").select("createdAt customer items").lean(),
       SalesOrder.find({ status: { $in: ["draft", "submitted", "confirmed", "in_production", "ready_for_delivery"] } }).sort({ requestedDeliveryDate: 1, createdAt: 1 }).limit(6).populate("customer", "fullName phone businessName").select("orderNumber status total createdAt requestedDeliveryDate deliveryAddress customer items").lean(),
       ComplianceEquipment.countDocuments({ status: "active" }),
-      ComplianceRecord.countDocuments({ status: { $in: ["open", "completed"] } }),
-      ComplianceRecord.countDocuments({ scheduledDate: { $lt: today }, status: { $in: ["open", "completed"] } }),
+      ComplianceRecord.countDocuments({ status: "open" }),
+      ComplianceRecord.countDocuments({ scheduledDate: { $lt: today }, status: "open" }),
     ]);
     const sales = salesTotals[0] || { total: 0, delivered: 0 };
     const invoiceBalance = invoiceBalanceTotals[0]?.total || 0;
@@ -50,12 +53,12 @@ router.get("/summary", async (req: AuthRequest, res, next) => {
     const profile: any = req.user?.role === "staff" ? await User.findById(req.user.id).select("department permissions").lean() : null;
     const canSeeFinance = req.user?.role !== "staff" || profile?.permissions?.includes("finance") || ["finance", "management"].includes(String(profile?.department));
     if (canSeeFinance) {
-      const monthStart = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1).toISOString().slice(0, 10);
+      const monthStart = monthStartDate.toISOString().slice(0, 10);
       const [ledger, treasury] = await Promise.all([buildLedger(), treasuryWorkspace()]);
       const financial = accountingSummary(filterLedger(ledger, monthStart, today), filterLedger(ledger, undefined, today));
       finance = { treasuryBalance: treasury.accounts.reduce((sum: number, account: any) => sum + Number(account.balance || 0), 0), activeTreasuryAccounts: treasury.accounts.filter((account: any) => account.status === "active").length, periodRevenue: financial.revenue, periodExpenses: financial.expenses, netProfit: financial.netProfit, supplierPayables: financial.payables, customerReceivables: financial.receivables };
     }
-    res.json({ data: { products, lowStock: lowRawMaterials, lowRawMaterials, lowFinishedGoods, purchaseOrders, activeBatches, completedBatches, openSales, recentSales, pendingQuotations, openProductionOrders, outstandingInvoices: outstandingInvoiceCount, outstandingBalance: invoiceBalance, overdueInvoices, salesValue: sales.total || 0, deliveredValue: sales.delivered || 0, lowMaterials, outstandingInvoiceList: outstandingInvoices, recentQuotations, attentionOrders, activeEquipment, openCompliance, overdueCompliance, ...finance } });
+    res.json({ data: { products, lowStock: lowRawMaterials, lowRawMaterials, lowFinishedGoods, purchaseOrders, activeBatches, completedBatches, openSales, recentSales, pendingQuotations, openProductionOrders, outstandingInvoices: outstandingInvoiceCount, outstandingBalance: invoiceBalance, overdueInvoices, salesValue: sales.total || 0, deliveredValue: sales.delivered || 0, monthSalesOrders: sales.orders || 0, monthDeliveredOrders: sales.deliveredOrders || 0, lowMaterials, outstandingInvoiceList: outstandingInvoices, recentQuotations, attentionOrders, activeEquipment, openCompliance, overdueCompliance, reportingPeriod: { from: monthStartDate.toISOString(), to: nextMonthDate.toISOString() }, ...finance } });
   } catch (error) { next(error); }
 });
 

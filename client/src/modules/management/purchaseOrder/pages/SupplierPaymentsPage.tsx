@@ -894,14 +894,16 @@ export default function SupplierPaymentsPage() {
                   <option value="other">Other</option>
                 </select>
               </Field>
-              <Field label="Payment account">
-                <select required value={form.treasuryAccount} onChange={(e) => setForm({ ...form, treasuryAccount: e.target.value })}>
-                  <option value="">Select account</option>
-                  {treasuryAccounts
-                    .filter((item) => item.type === (form.method === "cash" ? "cash" : form.method === "mobile_money" ? "mobile_money" : "bank"))
-                    .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}
-                </select>
-              </Field>
+              {treasuryAccounts.length > 0 && (
+                <Field label="Payment account (optional)">
+                  <select value={form.treasuryAccount} onChange={(e) => setForm({ ...form, treasuryAccount: e.target.value })}>
+                    <option value="">Record without treasury posting</option>
+                    {treasuryAccounts
+                      .filter((item) => item.type === (form.method === "cash" ? "cash" : form.method === "mobile_money" ? "mobile_money" : "bank"))
+                      .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}
+                  </select>
+                </Field>
+              )}
               {form.method === "bank_cheque" && (
                 <>
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900 sm:col-span-2">
