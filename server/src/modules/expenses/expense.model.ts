@@ -12,6 +12,12 @@ const expenseSchema = new Schema({
   reference: { type: String, trim: true, default: "" },
   chequeNumber: { type: String, trim: true, default: "" },
   bankName: { type: String, trim: true, default: "" },
+  chequeDate: Date,
+  chequeStatus: { type: String, enum: ["issued", "due", "deposited", "cleared", "bounced", "cancelled"], default: "cleared", index: true },
+  issuedAt: Date,
+  depositedAt: Date,
+  clearedAt: Date,
+  statusHistory: [{ status: { type: String, required: true }, at: { type: Date, default: Date.now }, note: { type: String, trim: true, default: "" } }],
   notes: { type: String, trim: true, default: "" },
 }, { timestamps: true });
 

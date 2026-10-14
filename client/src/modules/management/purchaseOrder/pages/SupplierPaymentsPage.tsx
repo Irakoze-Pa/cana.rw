@@ -48,6 +48,14 @@ type Payment = {
   openingPayable?: { _id?: string; openingNumber?: string; description?: string };
 };
 type TreasuryAccount = { _id: string; name: string; type: "cash" | "bank" | "mobile_money"; balance: number; status: string };
+const requiredTreasuryType = (method: string): TreasuryAccount["type"] =>
+  method === "cash"
+    ? "cash"
+    : method === "mobile_money"
+      ? "mobile_money"
+      : "bank";
+const treasuryTypeLabel = (type: TreasuryAccount["type"]) =>
+  type === "mobile_money" ? "Mobile Money" : type === "cash" ? "Cash" : "Bank";
 type Account = {
   supplier: Supplier;
   purchaseOrderTotal: number;
@@ -59,6 +67,8 @@ type Account = {
 };
 const money = (value: number) =>
   Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 });
+const parseMoneyInput = (value: string) =>
+  Number(value.replace(/[^0-9.-]/g, ""));
 const statusStyle = (status: string) =>
   ["paid", "cleared"].includes(status)
     ? "bg-emerald-50 text-emerald-700"
@@ -172,6 +182,16 @@ export default function SupplierPaymentsPage() {
   const unpaidOpenings = openings.filter(
     (item) => item.status !== "void" && openingBalance(item) > 0.0001,
   );
+  const selectableOrders = form.supplier
+    ? unpaidOrders.filter(
+        (item) =>
+          typeof item.supplier !== "string" &&
+          item.supplier._id === form.supplier,
+      )
+    : unpaidOrders;
+  const selectableOpenings = form.supplier
+    ? unpaidOpenings.filter((item) => item.supplier?._id === form.supplier)
+    : unpaidOpenings;
   const selectedOrder = orders.find((item) => item._id === form.purchaseOrder);
   const selectedOpening = openings.find(
     (item) => item._id === form.openingPayable,
@@ -202,13 +222,20 @@ export default function SupplierPaymentsPage() {
     if (saving) return;
     if (!form.supplier || (!form.purchaseOrder && !form.openingPayable))
       return setError("Select a purchase order or an opening payable.");
+    const settlementAmount = parseMoneyInput(form.amount);
+    if (
+      !Number.isFinite(settlementAmount) ||
+      settlementAmount <= 0 ||
+      settlementAmount > balance + 0.0001
+    )
+      return setError(`Enter an amount between 1 and ${money(balance)} RWF.`);
     const isCheque = form.method === "bank_cheque";
     if (
       !(await confirm({
         title: isCheque ? "Issue supplier cheque" : "Record supplier payment",
         description: isCheque
-          ? `Register cheque ${form.chequeNumber || ""} for ${money(Number(form.amount || 0))} RWF? The payable will remain outstanding until the cheque clears.`
-          : `Record a cleared supplier payment of ${money(Number(form.amount || 0))} RWF?`,
+          ? `Register cheque ${form.chequeNumber || ""} for ${money(settlementAmount)} RWF? The payable will remain outstanding until the cheque clears.`
+          : `Record a cleared supplier payment of ${money(settlementAmount)} RWF?`,
         confirmLabel: isCheque ? "Issue cheque" : "Record payment",
         tone: "warning",
       }))
@@ -219,7 +246,7 @@ export default function SupplierPaymentsPage() {
     try {
       await api.post("/supplier-payments", {
         ...form,
-        amount: Number(form.amount),
+        amount: settlementAmount,
       });
       setPaymentOpen(false);
       setForm(emptyPayment());
@@ -277,10 +304,15 @@ export default function SupplierPaymentsPage() {
   const submitOpening = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
+    const openingAmount = parseMoneyInput(openingForm.amount);
+    if (!Number.isFinite(openingAmount) || openingAmount <= 0) {
+      setError("Enter a valid opening debt, for example 2000000.");
+      return;
+    }
     if (
       !(await confirm({
         title: "Record opening supplier debt",
-        description: `Add an opening payable of ${money(Number(openingForm.amount || 0))} RWF to this supplier account?`,
+        description: `Add an opening payable of ${money(openingAmount)} RWF to this supplier account?`,
         confirmLabel: "Record opening payable",
         tone: "warning",
       }))
@@ -291,7 +323,7 @@ export default function SupplierPaymentsPage() {
     try {
       await api.post("/supplier-payments/opening-payables", {
         ...openingForm,
-        amount: Number(openingForm.amount),
+        amount: openingAmount,
       });
       setOpeningOpen(false);
       setOpeningForm({
@@ -315,8 +347,8 @@ export default function SupplierPaymentsPage() {
     }
   };
   return (
-    <div className="mx-auto max-w-7xl space-y-4">
-      <header className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center">
+    <div className="mx-auto max-w-[1500px] space-y-4 pb-8">
+      <header className="flex flex-col justify-between gap-3 border-b-2 border-slate-950 pb-4 sm:flex-row sm:items-end">
         <div>
           <p className="cana-section-kicker">Procurement finance</p>
           <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
@@ -405,17 +437,9 @@ export default function SupplierPaymentsPage() {
           <option value="cancelled">Cancelled</option>
         </select>
       </section>
-      <section className="grid overflow-hidden border border-slate-200 bg-white sm:grid-cols-4">
-        {[
-          ["Issued", "Cheque given; maturity date has not arrived."],
-          ["Due", "Maturity date reached; bank has not cleared it."],
-          ["Deposited", "Cheque submitted to the bank for processing."],
-          ["Cleared", "Bank confirmed payment; supplier debt is reduced."],
-        ].map(([label, detail], index) => (
-          <div key={label} className={`px-3 py-2 ${index ? "border-t border-slate-100 sm:border-l sm:border-t-0" : ""}`}>
-            <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-900">{label}</p>
-            <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{detail}</p>
-          </div>
+      <section className="flex flex-wrap gap-2 border border-slate-200 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-wide text-slate-600">
+        {[["Issued", "bg-slate-400"], ["Due", "bg-amber-500"], ["Deposited", "bg-slate-800"], ["Cleared", "bg-emerald-700"]].map(([label, color]) => (
+          <span key={label} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1"><i className={`h-2 w-2 rounded-full ${color}`} />{label}</span>
         ))}
       </section>
       <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,.85fr)]">
@@ -433,14 +457,14 @@ export default function SupplierPaymentsPage() {
               {filteredPayments.length} of {payments.length}
             </span>
           </div>
-          <div className="max-h-[420px] overflow-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+          <div className="max-h-[420px] overflow-y-auto overflow-x-hidden">
+            <table className="w-full table-fixed text-left text-xs sm:text-sm">
               <thead className="sticky top-0 z-10 bg-slate-950 text-[11px] uppercase tracking-wide text-white">
                 <tr>
-                  <th className="px-3 py-2.5">Reference</th>
-                  <th className="px-3 py-2.5">Supplier / target</th>
-                  <th className="px-3 py-2.5">Settlement</th>
-                  <th className="px-3 py-2.5 text-right">Amount / action</th>
+                  <th className="w-[27%] px-2 py-2.5 sm:px-3">Reference</th>
+                  <th className="w-[27%] px-2 py-2.5 sm:px-3">Supplier</th>
+                  <th className="w-[22%] px-2 py-2.5 sm:px-3">Method</th>
+                  <th className="w-[24%] px-2 py-2.5 text-right sm:px-3">Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -461,28 +485,28 @@ export default function SupplierPaymentsPage() {
                           : "transition hover:bg-slate-50"
                       }
                     >
-                      <td className="px-3 py-2.5">
-                        <p className="font-bold text-slate-950">
+                      <td className="px-2 py-2.5 align-top sm:px-3">
+                        <p className="truncate font-bold text-slate-950">
                           {item.paymentNumber}
                         </p>
-                        <p className="mt-0.5 text-xs text-slate-500">
+                        <p className="mt-0.5 truncate text-[10px] text-slate-500 sm:text-xs">
                           {item.chequeDate
                             ? `Matures ${new Date(item.chequeDate).toLocaleDateString("en-RW")}`
                             : new Date(item.paidAt).toLocaleDateString("en-RW")}
                         </p>
                       </td>
-                      <td className="px-3 py-2.5">
-                        <p className="font-semibold text-slate-800">
+                      <td className="px-2 py-2.5 align-top sm:px-3">
+                        <p className="truncate font-semibold text-slate-800">
                           {item.supplier?.name || "Supplier"}
                         </p>
-                        <p className="mt-0.5 text-xs text-slate-500">
+                        <p className="mt-0.5 truncate text-[10px] text-slate-500 sm:text-xs">
                           {item.purchaseOrder?.poNumber ||
                             item.openingPayable?.openingNumber ||
                             "Opening payable"}
                         </p>
                       </td>
-                      <td className="px-3 py-2.5">
-                        <p className="capitalize text-slate-600">
+                      <td className="px-2 py-2.5 align-top sm:px-3">
+                        <p className="truncate capitalize text-[10px] text-slate-600 sm:text-xs">
                           {item.method.replaceAll("_", " ")}
                           {item.chequeNumber ? ` · ${item.chequeNumber}` : ""}
                         </p>
@@ -492,9 +516,9 @@ export default function SupplierPaymentsPage() {
                           {chequeStatus}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <p className="font-bold text-slate-950">
-                          {money(item.amount)} RWF
+                      <td className="px-2 py-2.5 text-right align-top sm:px-3">
+                        <p className="whitespace-nowrap font-bold text-slate-950">
+                          {money(item.amount)} <span className="hidden text-[9px] text-slate-500 sm:inline">RWF</span>
                         </p>
                         {actionable && (
                           <div className="mt-2 flex justify-end gap-1">
@@ -557,44 +581,44 @@ export default function SupplierPaymentsPage() {
               {openings.length} records
             </span>
           </div>
-          <div className="max-h-[420px] overflow-auto">
-            <table className="w-full min-w-[560px] text-left text-sm">
+          <div className="max-h-[420px] overflow-y-auto overflow-x-hidden">
+            <table className="w-full table-fixed text-left text-xs sm:text-sm">
               <thead className="sticky top-0 z-10 bg-slate-950 text-[11px] uppercase tracking-wide text-white">
                 <tr>
-                  <th className="px-4 py-3">Reference</th>
-                  <th className="px-4 py-3">Supplier</th>
-                  <th className="px-4 py-3 text-right">Balance</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="w-[24%] px-2 py-3 sm:px-3">Reference</th>
+                  <th className="w-[30%] px-2 py-3 sm:px-3">Supplier</th>
+                  <th className="w-[27%] px-2 py-3 text-right sm:px-3">Balance</th>
+                  <th className="w-[19%] px-2 py-3 sm:px-3">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {openings.map((item) => (
                   <tr key={item._id} className="transition hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <p className="font-bold text-slate-950">
+                    <td className="px-2 py-3 align-top sm:px-3">
+                      <p className="truncate font-bold text-slate-950">
                         {item.openingNumber}
                       </p>
                       <p className="mt-0.5 text-xs text-slate-500">
                         {new Date(item.openingDate).toLocaleDateString("en-RW")}
                       </p>
                     </td>
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-slate-800">
+                    <td className="px-2 py-3 align-top sm:px-3">
+                      <p className="truncate font-semibold text-slate-800">
                         {item.supplier?.name || "Supplier"}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <p className="mt-0.5 truncate text-[10px] text-slate-500 sm:text-xs">
                         {item.description}
                       </p>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <p className="font-bold text-slate-950">
-                        {money(item.balance)} RWF
+                    <td className="px-2 py-3 text-right align-top sm:px-3">
+                      <p className="whitespace-nowrap font-bold text-slate-950">
+                        {money(item.balance)} <span className="hidden text-[9px] text-slate-500 sm:inline">RWF</span>
                       </p>
                       <p className="mt-0.5 text-xs text-emerald-700">
                         Paid {money(item.amountPaid)}
                       </p>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-3 align-top sm:px-3">
                       <span
                         className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(item.status)}`}
                       >
@@ -617,73 +641,6 @@ export default function SupplierPaymentsPage() {
             </table>
           </div>
         </section>
-      </section>
-      <section className="cana-panel overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Supplier accounts
-            </p>
-            <h2 className="mt-1 font-extrabold text-slate-950">
-              Payables and expected settlement
-            </h2>
-          </div>
-          <span className="text-sm text-slate-500">
-            {accounts.length} suppliers
-          </span>
-        </div>
-        <div className="max-h-[320px] overflow-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-slate-950 text-[11px] uppercase tracking-wide text-white">
-              <tr>
-                <th className="px-4 py-3">Supplier</th>
-                <th className="px-4 py-3 text-right">Cleared</th>
-                <th className="px-4 py-3 text-right">Pending cheques</th>
-                <th className="px-4 py-3 text-right">Actual balance</th>
-                <th className="px-4 py-3 text-right">After clearance</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {accounts.map((item) => (
-                <tr
-                  key={item.supplier._id}
-                  className="transition hover:bg-slate-50"
-                >
-                  <td className="px-4 py-3">
-                    <p className="font-bold text-slate-950">
-                      {item.supplier.name}
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {item.supplier.code || item.supplier.phone || "—"}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-emerald-700">
-                    {money(item.amountPaid)} RWF
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-amber-700">
-                    {money(item.pendingCheques || 0)} RWF
-                  </td>
-                  <td className="px-4 py-3 text-right font-extrabold text-slate-950">
-                    {money(item.balance)} RWF
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold text-slate-700">
-                    {money(item.expectedBalance ?? item.balance)} RWF
-                  </td>
-                </tr>
-              ))}
-              {!loading && !accounts.length && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-4 py-10 text-center text-slate-500"
-                  >
-                    No supplier accounts available.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
       </section>
       {openingOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4">
@@ -728,12 +685,13 @@ export default function SupplierPaymentsPage() {
               <Field label="Opening debt (RWF)">
                 <input
                   required
-                  min="0.01"
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={openingForm.amount}
                   onChange={(e) =>
                     setOpeningForm({ ...openingForm, amount: e.target.value })
                   }
+                  placeholder="Example: 2000000"
                 />
               </Field>
               <Field label="Opening date">
@@ -841,9 +799,9 @@ export default function SupplierPaymentsPage() {
                   }}
                 >
                   <option value="">
-                    {unpaidOrders.length ? "Select unpaid purchase order" : "No unpaid purchase orders"}
+                    {selectableOrders.length ? "Select unpaid purchase order" : "No unpaid purchase orders"}
                   </option>
-                  {unpaidOrders.map((item) => (
+                  {selectableOrders.map((item) => (
                     <option key={item._id} value={item._id}>
                       {item.poNumber} ·{" "}
                       {typeof item.supplier === "string"
@@ -870,9 +828,9 @@ export default function SupplierPaymentsPage() {
                   }}
                 >
                   <option value="">
-                    {unpaidOpenings.length ? "Select unpaid opening payable" : "No unpaid opening payables"}
+                    {selectableOpenings.length ? "Select unpaid opening payable" : "No unpaid opening payables"}
                   </option>
-                  {unpaidOpenings.map((item) => (
+                  {selectableOpenings.map((item) => (
                       <option key={item._id} value={item._id}>
                         {item.openingNumber} · {item.supplier?.name} ·{" "}
                         {money(openingBalance(item))} RWF due
@@ -886,14 +844,25 @@ export default function SupplierPaymentsPage() {
                 </div>
               )}
               <Field label="Amount (RWF)">
-                <input
-                  required
-                  min="1"
-                  max={balance || undefined}
-                  type="number"
-                  value={form.amount}
-                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                />
+                <div className="flex gap-2">
+                  <input
+                    required
+                    type="text"
+                    inputMode="decimal"
+                    value={form.amount}
+                    onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                    placeholder="Amount to settle"
+                  />
+                  {balance > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, amount: String(balance) })}
+                      className="shrink-0 rounded-lg border border-slate-300 px-2.5 text-xs font-bold text-slate-700"
+                    >
+                      Full balance
+                    </button>
+                  )}
+                </div>
               </Field>
               <Field label="Settlement method">
                 <select
@@ -911,9 +880,14 @@ export default function SupplierPaymentsPage() {
                 <Field label="Payment account (optional)">
                   <select value={form.treasuryAccount} onChange={(e) => setForm({ ...form, treasuryAccount: e.target.value })}>
                     <option value="">Record without treasury posting</option>
-                    {treasuryAccounts
-                      .filter((item) => item.type === (form.method === "cash" ? "cash" : form.method === "mobile_money" ? "mobile_money" : "bank"))
-                      .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}
+                    {treasuryAccounts.map((item) => {
+                      const compatible = item.type === requiredTreasuryType(form.method);
+                      return (
+                        <option key={item._id} value={item._id} disabled={!compatible}>
+                          {item.name} · {treasuryTypeLabel(item.type)} · {money(item.balance)} RWF{compatible ? "" : " — change payment method"}
+                        </option>
+                      );
+                    })}
                   </select>
                 </Field>
               )}

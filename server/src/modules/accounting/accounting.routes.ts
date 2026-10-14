@@ -5,10 +5,12 @@ import {
   type AuthRequest,
 } from "../../middleware/auth.middleware";
 import AccountingJournal, {
+  AccountingConfiguration,
   TreasuryAccount,
   TreasuryTransaction,
 } from "./accounting.model";
 import {
+  accountingConfiguration,
   accountingSummary,
   accounts,
   buildLedger,
@@ -51,7 +53,11 @@ router.get("/workspace", async (req, res, next) => {
     const all = await buildLedger();
     const period = filterLedger(all, from, to);
     const asAt = filterLedger(all, undefined, to);
-    const journals = await AccountingJournal.find()
+    const configuration = await accountingConfiguration();
+    const journalFilter = configuration?.startDate
+      ? { date: { $gte: configuration.startDate } }
+      : {};
+    const journals = await AccountingJournal.find(journalFilter)
       .populate("createdBy postedBy", "fullName")
       .sort({ date: -1, createdAt: -1 })
       .lean();
@@ -62,6 +68,7 @@ router.get("/workspace", async (req, res, next) => {
         ledger: period,
         trialBalance: trialBalance(asAt),
         journals,
+        configuration,
         treasury: await treasuryWorkspace(),
       },
     });
@@ -69,6 +76,48 @@ router.get("/workspace", async (req, res, next) => {
     next(error);
   }
 });
+
+router.post(
+  "/start-fresh",
+  authorizeRoles("admin"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      if (String(req.body?.confirmation || "") !== "START")
+        return res.status(400).json({ message: "Accounting reset confirmation is required." });
+      const startDate = new Date(req.body?.startDate || new Date());
+      if (!Number.isFinite(startDate.getTime()))
+        return res.status(400).json({ message: "Enter a valid accounting start date." });
+
+      const currentTreasury = await treasuryWorkspace();
+      await Promise.all(
+        currentTreasury.accounts.map((item: any) =>
+          TreasuryAccount.findByIdAndUpdate(item._id, {
+            openingBalance: Math.max(0, Number(item.balance || 0)),
+            openingDate: startDate,
+          }),
+        ),
+      );
+      const configuration = await AccountingConfiguration.findOneAndUpdate(
+        { key: "primary" },
+        {
+          $set: {
+            startDate,
+            startedBy: req.user?.id,
+            notes: String(req.body?.notes || "Accounting started from a verified opening position.").trim(),
+          },
+          $setOnInsert: { key: "primary" },
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true },
+      ).populate("startedBy", "fullName");
+      res.json({
+        data: configuration,
+        message: "Accounting opening date established. Earlier operational records remain preserved.",
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 router.get("/ledger", async (req, res, next) => {
   try {
     res.json({
@@ -216,6 +265,17 @@ router.patch(
         accountRecord.institution = String(req.body.institution).trim();
       if (req.body?.accountNumber !== undefined)
         accountRecord.accountNumber = String(req.body.accountNumber).trim();
+      if (req.body?.openingBalance !== undefined) {
+        const openingBalance = Number(req.body.openingBalance);
+        if (!Number.isFinite(openingBalance) || openingBalance < 0)
+          throw new Error("Opening balance cannot be negative.");
+        accountRecord.openingBalance = openingBalance;
+      }
+      if (req.body?.openingDate !== undefined) {
+        const openingDate = new Date(req.body.openingDate);
+        if (!Number.isFinite(openingDate.getTime())) throw new Error("Enter a valid opening date.");
+        accountRecord.openingDate = openingDate;
+      }
       if (["active", "inactive"].includes(req.body?.status))
         accountRecord.status = req.body.status;
       if (req.body?.notes !== undefined)

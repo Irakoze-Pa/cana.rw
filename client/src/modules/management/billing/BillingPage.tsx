@@ -59,6 +59,14 @@ type Payment = {
   openingBalance?: { openingNumber?: string; description?: string };
 };
 type TreasuryAccount = { _id: string; name: string; type: "cash" | "bank" | "mobile_money"; balance: number; status: string };
+const requiredTreasuryType = (method: string): TreasuryAccount["type"] =>
+  method === "cash"
+    ? "cash"
+    : method === "mobile_money"
+      ? "mobile_money"
+      : "bank";
+const treasuryTypeLabel = (type: TreasuryAccount["type"]) =>
+  type === "mobile_money" ? "Mobile Money" : type === "cash" ? "Cash" : "Bank";
 type Customer = {
   _id: string;
   fullName: string;
@@ -87,6 +95,8 @@ type CustomerAccount = {
 };
 const money = (amount: number) =>
   Number(amount || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 });
+const parseMoneyInput = (value: string) =>
+  Number(value.replace(/[^0-9.-]/g, ""));
 const statusStyle = (status: string) =>
   status === "paid"
     ? "bg-emerald-50 text-emerald-700"
@@ -304,10 +314,15 @@ export default function BillingPage() {
   const createOpeningBalance = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
+    const openingAmount = parseMoneyInput(openingForm.amount);
+    if (!Number.isFinite(openingAmount) || openingAmount <= 0) {
+      setError("Enter a valid opening debt, for example 2000000.");
+      return;
+    }
     if (
       !(await confirm({
         title: "Record opening customer debt",
-        description: `Add an opening balance of ${money(Number(openingForm.amount || 0))} RWF to this customer account?`,
+        description: `Add an opening balance of ${money(openingAmount)} RWF to this customer account?`,
         confirmLabel: "Record opening debt",
         tone: "warning",
       }))
@@ -318,7 +333,7 @@ export default function BillingPage() {
     try {
       await api.post("/billing/opening-balances", {
         ...openingForm,
-        amount: Number(openingForm.amount),
+        amount: openingAmount,
       });
       setOpeningOpen(false);
       setOpeningForm({
@@ -852,9 +867,8 @@ export default function BillingPage() {
                 Opening debt (RWF)
                 <input
                   required
-                  min="0.01"
-                  step="0.01"
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={openingForm.amount}
                   onChange={(event) =>
                     setOpeningForm({
@@ -862,6 +876,7 @@ export default function BillingPage() {
                       amount: event.target.value,
                     })
                   }
+                  placeholder="Example: 2000000"
                   className="mt-1.5 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm"
                 />
               </label>
@@ -1496,9 +1511,14 @@ export default function BillingPage() {
                       ? "Receiving account (optional)"
                       : "Accounting not configured"}
                   </option>
-                  {treasuryAccounts
-                    .filter((item) => item.type === (paymentForm.method === "cash" ? "cash" : paymentForm.method === "mobile_money" ? "mobile_money" : "bank"))
-                    .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}
+                  {treasuryAccounts.map((item) => {
+                    const compatible = item.type === requiredTreasuryType(paymentForm.method);
+                    return (
+                      <option key={item._id} value={item._id} disabled={!compatible}>
+                        {item.name} · {treasuryTypeLabel(item.type)} · {money(item.balance)} RWF{compatible ? "" : " — change payment method"}
+                      </option>
+                    );
+                  })}
                 </select>}
                 {paymentForm.method === "bank_cheque" && <><input required value={paymentForm.chequeNumber} onChange={(event) => setPaymentForm({ ...paymentForm, chequeNumber: event.target.value })} placeholder="Cheque number" className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" /><input required value={paymentForm.bankName} onChange={(event) => setPaymentForm({ ...paymentForm, bankName: event.target.value })} placeholder="Bank name" className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" /><label className="text-xs font-bold text-slate-600">Maturity date<input required type="date" value={paymentForm.chequeDate} onChange={(event) => setPaymentForm({ ...paymentForm, chequeDate: event.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" /></label><p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">The invoice remains outstanding until Finance confirms that the cheque cleared.</p></>}
                 <input
@@ -1625,14 +1645,14 @@ export default function BillingPage() {
                     Reverse
                   </button>
                 ) : null}
-                <button
+                {payment.status === "received" && <button
                   onClick={() => printReceipt(payment)}
                   aria-label={`Print receipt ${payment.receiptNumber}`}
                   title="Print receipt"
                   className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700"
                 >
                   <Printer size={13} />
-                </button>
+                </button>}
               </div>
             ))}
             {filteredPayments.length === 0 && (

@@ -11,6 +11,7 @@ import {
   listPayments,
   recordPayment,
   reversePayment,
+  updateCustomerCheque,
 } from "./billing.service";
 const message = (error: unknown) =>
   error instanceof Error ? error.message : "Unexpected billing error.";
@@ -97,4 +98,8 @@ export async function reverse(req: AuthRequest, res: Response) {
   } catch (error) {
     res.status(400).json({ error: { message: message(error) } });
   }
+}
+export async function chequeStatus(req: AuthRequest, res: Response) {
+  try { res.json({ data: await updateCustomerCheque(String(req.params.paymentId), String(req.body.status || "")) }); }
+  catch (error) { res.status(400).json({ error: { message: message(error) } }); }
 }

@@ -20,6 +20,14 @@ type Expense = {
   chequeStatus?: "issued" | "due" | "deposited" | "cleared" | "bounced" | "cancelled";
 };
 type TreasuryAccount = { _id: string; name: string; type: "cash" | "bank" | "mobile_money"; balance: number; status: string };
+const requiredTreasuryType = (method: string): TreasuryAccount["type"] =>
+  method === "cash"
+    ? "cash"
+    : method === "mobile_money"
+      ? "mobile_money"
+      : "bank";
+const treasuryTypeLabel = (type: TreasuryAccount["type"]) =>
+  type === "mobile_money" ? "Mobile Money" : type === "cash" ? "Cash" : "Bank";
 const categories = [
   "transport",
   "utilities",
@@ -493,9 +501,14 @@ export default function ExpensesPage() {
                   className="mt-1 w-full rounded-xl border p-2.5"
                 >
                   <option value="">Record without treasury posting</option>
-                  {treasuryAccounts
-                    .filter((item) => item.type === (form.method === "cash" ? "cash" : form.method === "mobile_money" ? "mobile_money" : "bank"))
-                    .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}
+                  {treasuryAccounts.map((item) => {
+                    const compatible = item.type === requiredTreasuryType(form.method);
+                    return (
+                      <option key={item._id} value={item._id} disabled={!compatible}>
+                        {item.name} · {treasuryTypeLabel(item.type)} · {money(item.balance)} RWF{compatible ? "" : " — change payment method"}
+                      </option>
+                    );
+                  })}
                 </select>
               </label>}
               <label className="text-sm font-bold">

@@ -13,6 +13,7 @@ import SupplierPayment, {
 import PayrollRun from "../payroll/payrollRun.model";
 import ProductionBatch from "../production/productionBatch/productionBatch.model";
 import AccountingJournal, {
+  AccountingConfiguration,
   TreasuryAccount,
   TreasuryTransaction,
 } from "./accounting.model";
@@ -83,7 +84,7 @@ export const accounts: Account[] = [
   },
   {
     code: "3000",
-    name: "Opening balance equity",
+    name: "Opening funds",
     type: "equity",
     group: "Equity",
   },
@@ -228,13 +229,13 @@ export async function treasuryWorkspace() {
       .populate("createdBy", "fullName")
       .sort({ date: -1, createdAt: -1 })
       .lean(),
-    Payment.find({ status: { $ne: "void" }, treasuryAccount: { $exists: true } })
+    Payment.find({ status: "received", treasuryAccount: { $exists: true } })
       .select("treasuryAccount amount receivedAt receiptNumber method")
       .lean(),
     SupplierPayment.find({ treasuryAccount: { $exists: true }, $or: [{ chequeStatus: "cleared" }, { chequeStatus: { $exists: false } }] })
       .select("treasuryAccount amount paidAt paymentNumber method")
       .lean(),
-    Expense.find({ treasuryAccount: { $exists: true } })
+    Expense.find({ treasuryAccount: { $exists: true }, $or: [{ method: { $ne: "bank_cheque" } }, { chequeStatus: "cleared" }, { chequeStatus: { $exists: false } }] })
       .select("treasuryAccount amount date expenseNumber method")
       .lean(),
     PayrollRun.find({ status: "paid", treasuryAccount: { $exists: true } })
@@ -247,8 +248,11 @@ export async function treasuryWorkspace() {
   ]);
   const balances = treasuryAccounts.map((accountItem: any) => {
     const accountId = String(accountItem._id);
+    const openingDate = new Date(accountItem.openingDate || accountItem.createdAt || 0).getTime();
+    const onOrAfterOpening = (value: unknown) =>
+      new Date(value as string | number | Date).getTime() >= openingDate;
     const movement = (transactions as any[])
-      .filter((item) => item.status !== "void")
+      .filter((item) => item.status !== "void" && onOrAfterOpening(item.date))
       .reduce((sum, item) => {
         if (String(item.account?._id || item.account) === accountId)
           sum +=
@@ -264,19 +268,19 @@ export async function treasuryWorkspace() {
         return sum;
       }, 0);
     const receipts = (customerReceipts as any[])
-      .filter((item) => String(item.treasuryAccount) === accountId)
+      .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.receivedAt))
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const settlements = (supplierSettlements as any[])
-      .filter((item) => String(item.treasuryAccount) === accountId)
+      .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.paidAt))
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const expensesPaid = (operatingExpenses as any[])
-      .filter((item) => String(item.treasuryAccount) === accountId)
+      .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.date))
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const payrollPaid = (paidPayrolls as any[])
-      .filter((item) => String(item.treasuryAccount) === accountId)
+      .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.paidAt))
       .reduce((sum, item) => sum + (item.lines || []).reduce((lineSum: number, lineItem: any) => lineSum + Number(lineItem.netPay || 0), 0), 0);
     const advancesPaid = (paidAdvances as any[])
-      .filter((item) => String(item.treasuryAccount) === accountId)
+      .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.paymentDate))
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
     return {
       ...accountItem,
@@ -369,7 +373,7 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
     Invoice.find({ status: { $nin: ["draft", "void"] } })
       .populate("customer", "fullName businessName")
       .lean(),
-    Payment.find({ status: { $ne: "void" } })
+    Payment.find({ status: "received" })
       .populate("customer", "fullName businessName")
       .lean(),
     CustomerOpeningBalance.find({ status: { $ne: "void" } })
@@ -425,7 +429,7 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
             0,
             treasuryAccountItem.name,
           ),
-          line("3000", 0, opening, "Opening balance equity"),
+          line("3000", 0, opening, "Funds available when accounting started"),
         ],
       ),
     );
@@ -651,7 +655,7 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
         "Expense",
         expense.expenseNumber,
         text(expense.description, "Operating expense"),
-        [line(code, value, 0), line(paymentAccount(expense.method), 0, value)],
+        [line(code, value, 0), line(expense.method === "bank_cheque" && !["cleared", undefined].includes(expense.chequeStatus) ? "2000" : paymentAccount(expense.method), 0, value)],
       ),
     );
   }
@@ -748,7 +752,22 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
       ),
     );
   }
-  return entries.sort((left, right) => right.date.localeCompare(left.date));
+  const configuration = await AccountingConfiguration.findOne({ key: "primary" })
+    .select("startDate")
+    .lean();
+  const startDate = configuration?.startDate
+    ? new Date(configuration.startDate).toISOString().slice(0, 10)
+    : "";
+  return entries
+    .filter((item) => !startDate || item.date.slice(0, 10) >= startDate)
+    .sort((left, right) => right.date.localeCompare(left.date));
+}
+
+export async function accountingConfiguration() {
+  const configuration = await AccountingConfiguration.findOne({ key: "primary" })
+    .populate("startedBy", "fullName")
+    .lean();
+  return configuration || null;
 }
 
 export const filterLedger = (

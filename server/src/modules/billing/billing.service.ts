@@ -212,6 +212,9 @@ export async function recordPayment(
     reference?: string;
     notes?: string;
     receivedAt?: string;
+    chequeNumber?: string;
+    bankName?: string;
+    chequeDate?: string;
   },
   receivedBy?: string,
 ) {
@@ -231,7 +234,7 @@ export async function recordPayment(
   if (!Number.isFinite(Number(input.amount)) || Number(input.amount) <= 0)
     throw new Error("Payment amount must be greater than zero.");
   if (
-    !["cash", "bank_transfer", "mobile_money", "card", "other"].includes(
+    !["cash", "bank_transfer", "bank_cheque", "mobile_money", "card", "other"].includes(
       input.method,
     )
   )
@@ -251,6 +254,9 @@ export async function recordPayment(
     !Number.isFinite(new Date(input.receivedAt).getTime())
   )
     throw new Error("Enter a valid payment date.");
+  const isCheque = input.method === "bank_cheque";
+  if (isCheque && (!String(input.chequeNumber || "").trim() || !String(input.bankName || "").trim() || !input.chequeDate)) throw new Error("Cheque number, bank name and maturity date are required.");
+  if (isCheque && !Number.isFinite(new Date(input.chequeDate!).getTime())) throw new Error("Enter a valid cheque maturity date.");
   return mongoose.connection.transaction(async (session) => {
     const amount = Number(Number(input.amount).toFixed(2));
     if (amount <= 0) throw new Error("Payment must be at least 0.01 RWF.");
@@ -273,10 +279,13 @@ export async function recordPayment(
           ? "A void invoice cannot receive payment."
           : "A void opening balance cannot receive payment.",
       );
-    if (amount > receivable.balance + 0.0001)
+    const pending = isCheque ? await Payment.aggregate([{ $match: { ...(invoice ? { invoice: invoice._id } : { openingBalance: openingBalance!._id }), method: "bank_cheque", chequeStatus: { $in: ["received", "due", "deposited"] } } }, { $group: { _id: null, total: { $sum: "$amount" } } }]).session(session) : [];
+    const availableBalance = Number(receivable.balance || 0) - Number(pending[0]?.total || 0);
+    if (amount > availableBalance + 0.0001)
       throw new Error(
-        "Payment cannot be greater than the outstanding balance.",
+        "Payment cannot be greater than the outstanding balance not already covered by pending cheques.",
       );
+    const now = new Date(); const chequeStatus = isCheque ? (new Date(input.chequeDate!).getTime() <= now.getTime() ? "due" : "received") : "cleared";
     const [payment] = await Payment.create(
       [
         {
@@ -289,6 +298,13 @@ export async function recordPayment(
           method: input.method,
           ...(input.treasuryAccount ? { treasuryAccount: input.treasuryAccount } : {}),
           reference: input.reference || "",
+          chequeNumber: input.chequeNumber || "",
+          bankName: input.bankName || "",
+          chequeDate: isCheque ? new Date(input.chequeDate!) : undefined,
+          chequeStatus,
+          clearedAt: isCheque ? undefined : now,
+          status: isCheque ? "pending" : "received",
+          statusHistory: [{ status: chequeStatus, at: now, note: isCheque ? "Customer cheque received" : "Payment received" }],
           notes: input.notes || "",
           receivedAt: input.receivedAt
             ? new Date(input.receivedAt)
@@ -300,12 +316,12 @@ export async function recordPayment(
       ],
       { session },
     );
-    if (invoice) {
+    if (!isCheque && invoice) {
       invoice.amountPaid = Number((invoice.amountPaid + amount).toFixed(2));
       invoice.balance = Number((invoice.total - invoice.amountPaid).toFixed(2));
       invoice.status = invoice.balance <= 0 ? "paid" : "partially_paid";
       await invoice.save({ session });
-    } else {
+    } else if (!isCheque) {
       openingBalance!.amountPaid = Number(
         (openingBalance!.amountPaid + amount).toFixed(2),
       );
@@ -332,6 +348,8 @@ export async function recordPayment(
   });
 }
 export async function listPayments() {
+  const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999);
+  await Payment.updateMany({ method: "bank_cheque", chequeStatus: "received", chequeDate: { $lte: endOfToday } }, { $set: { chequeStatus: "due" }, $push: { statusHistory: { status: "due", at: new Date(), note: "Maturity date reached" } } });
   return Payment.find()
     .sort({ receivedAt: -1 })
     .populate("invoice", "invoiceNumber total balance status")
@@ -341,6 +359,32 @@ export async function listPayments() {
     )
     .populate("customer", "fullName phone")
     .lean();
+}
+
+export async function updateCustomerCheque(paymentId: string, nextStatus: string) {
+  if (!mongoose.Types.ObjectId.isValid(paymentId)) throw new Error("Invalid customer cheque.");
+  if (!["deposited", "cleared", "bounced", "cancelled"].includes(nextStatus)) throw new Error("Select a valid cheque action.");
+  return mongoose.connection.transaction(async (session) => {
+    const payment: any = await Payment.findById(paymentId).session(session);
+    if (!payment || payment.method !== "bank_cheque") throw new Error("Customer cheque not found.");
+    if (!["received", "due", "deposited"].includes(payment.chequeStatus)) throw new Error(`A ${payment.chequeStatus} cheque cannot be changed.`);
+    if (nextStatus === "deposited" && !["received", "due"].includes(payment.chequeStatus)) throw new Error("Only a received or due cheque can be deposited.");
+    const now = new Date();
+    if (nextStatus === "cleared") {
+      const receivable: any = payment.invoice ? await Invoice.findById(payment.invoice).session(session) : await CustomerOpeningBalance.findById(payment.openingBalance).session(session);
+      if (!receivable || receivable.status === "void") throw new Error("The linked receivable is unavailable.");
+      if (Number(payment.amount) > Number(receivable.balance) + 0.0001) throw new Error("The outstanding balance is now lower than this cheque amount.");
+      receivable.amountPaid = Number((Number(receivable.amountPaid || 0) + Number(payment.amount)).toFixed(2));
+      const total = payment.invoice ? Number(receivable.total) : Number(receivable.amount);
+      receivable.balance = Number((total - receivable.amountPaid).toFixed(2));
+      receivable.status = receivable.balance <= 0 ? "paid" : "partially_paid";
+      await receivable.save({ session }); payment.status = "received"; payment.clearedAt = now;
+    }
+    if (["bounced", "cancelled"].includes(nextStatus)) payment.status = "void";
+    if (nextStatus === "deposited") payment.depositedAt = now;
+    payment.chequeStatus = nextStatus; payment.statusHistory.push({ status: nextStatus, at: now, note: `Customer cheque marked ${nextStatus}` });
+    await payment.save({ session }); return payment;
+  });
 }
 
 /** Reverse a receipt without erasing it, then restore its outstanding balance. */
@@ -360,6 +404,7 @@ export async function reversePayment(
     if (!payment) throw new Error("Payment receipt not found.");
     if (payment.status === "void")
       throw new Error("This payment receipt has already been reversed.");
+    if (payment.status === "pending") throw new Error("Cancel or bounce the pending cheque instead of reversing it.");
 
     const invoice = payment.invoice
       ? await Invoice.findById(payment.invoice).session(session)
@@ -442,7 +487,7 @@ export async function listCustomerAccounts() {
     CustomerOpeningBalance.find({ status: { $ne: "void" } })
       .select("customer amount balance")
       .lean(),
-    Payment.find({ status: { $ne: "void" } })
+    Payment.find({ status: "received" })
       .select("customer amount")
       .lean(),
   ]);

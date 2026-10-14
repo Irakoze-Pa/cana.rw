@@ -113,3 +113,17 @@ export const TreasuryAccount =
 export const TreasuryTransaction =
   mongoose.models.TreasuryTransaction ||
   mongoose.model("TreasuryTransaction", treasuryTransactionSchema);
+
+const accountingConfigurationSchema = new Schema(
+  {
+    key: { type: String, required: true, unique: true, default: "primary" },
+    startDate: { type: Date, required: true, default: Date.now },
+    startedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    notes: { type: String, trim: true, default: "" },
+  },
+  { timestamps: true },
+);
+
+export const AccountingConfiguration =
+  mongoose.models.AccountingConfiguration ||
+  mongoose.model("AccountingConfiguration", accountingConfigurationSchema);

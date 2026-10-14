@@ -104,6 +104,11 @@ type Workspace = {
   ledger: LedgerEntry[];
   trialBalance: TrialRow[];
   journals: Journal[];
+  configuration?: {
+    startDate: string;
+    startedBy?: { fullName?: string };
+    notes?: string;
+  } | null;
   treasury?: TreasuryWorkspace;
 };
 type Tab = "overview" | "treasury" | "ledger" | "trial" | "journals";
@@ -127,6 +132,8 @@ const emptySummary: Summary = {
   entryCount: 0,
 };
 const today = () => new Date().toISOString().slice(0, 10);
+const parseMoneyInput = (value: string) =>
+  Number(value.replace(/[^0-9.-]/g, ""));
 const monthStart = () => {
   const value = new Date();
   return new Date(value.getFullYear(), value.getMonth(), 1)
@@ -171,6 +178,7 @@ export default function AccountingPage() {
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [trial, setTrial] = useState<TrialRow[]>([]);
   const [journals, setJournals] = useState<Journal[]>([]);
+  const [configuration, setConfiguration] = useState<Workspace["configuration"]>(null);
   const [treasury, setTreasury] = useState<TreasuryWorkspace>({
     accounts: [],
     transactions: [],
@@ -201,6 +209,7 @@ export default function AccountingPage() {
       setLedger(workspace.ledger || []);
       setTrial(workspace.trialBalance || []);
       setJournals(workspace.journals || []);
+      setConfiguration(workspace.configuration || null);
       setTreasury(workspace.treasury || { accounts: [], transactions: [] });
     } catch (cause) {
       setError(
@@ -399,6 +408,33 @@ export default function AccountingPage() {
     }
   };
 
+  const startFreshAccounting = async () => {
+    const accepted = await confirm({
+      title: configuration ? "Restart accounting from today" : "Start accounting today",
+      description:
+        "The ledger, trial balance and financial statements will begin from today. Older operational records will remain safely stored but will no longer appear in accounting. Current money-account balances will become today's opening balances.",
+      confirmLabel: configuration ? "Restart from today" : "Start from today",
+      tone: "warning",
+    });
+    if (!accepted) return;
+    setLoading(true);
+    setError("");
+    try {
+      await api.post("/accounting/start-fresh", {
+        startDate: today(),
+        confirmation: "START",
+        notes: "Accounting opening position established from verified balances.",
+      });
+      setFrom(today());
+      setTo(today());
+      toast("Accounting now starts from today. Earlier operational records were preserved.", "success");
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to establish the accounting start date.");
+      setLoading(false);
+    }
+  };
+
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: "overview", label: "Overview", icon: CircleDollarSign },
     { key: "treasury", label: "Money accounts", icon: Landmark },
@@ -422,6 +458,16 @@ export default function AccountingPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canPostJournal && (
+            <button
+              type="button"
+              onClick={() => void startFreshAccounting()}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-800 hover:border-slate-950"
+            >
+              <RefreshCw size={16} />
+              {configuration ? "Restart accounting" : "Start accounting"}
+            </button>
+          )}
           {tab === "treasury" && canJournal && (
             <button
               type="button"
@@ -475,6 +521,22 @@ export default function AccountingPage() {
         <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
           {error}
         </div>
+      )}
+
+      {configuration?.startDate && (
+        <section className="flex flex-col gap-1 border-l-4 border-slate-950 bg-slate-100 px-4 py-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            <span className="font-extrabold text-slate-950">Accounting opening date:</span>{" "}
+            {new Date(configuration.startDate).toLocaleDateString("en-RW", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })}
+          </p>
+          <p className="text-xs font-semibold text-slate-500">
+            Only transactions from this date are included in the ledger and trial balance.
+          </p>
+        </section>
       )}
 
       <section className="flex flex-col gap-3 border border-slate-200 bg-white p-3 lg:flex-row lg:items-center lg:justify-between">
@@ -971,13 +1033,25 @@ function TrialBalance({
   credit: number;
 }) {
   const balanced = Math.abs(debit - credit) < 0.01;
+  const simpleBalance = (item: TrialRow) =>
+    item.debitBalance || item.creditBalance;
+  const balanceMeaning = (item: TrialRow) =>
+    item.type === "asset"
+      ? "What the business owns"
+      : item.type === "liability"
+        ? "What the business owes"
+        : item.type === "equity"
+          ? "Business funding"
+          : item.type === "revenue"
+            ? "Income"
+            : "Cost";
   return (
     <section className="overflow-hidden border border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div>
           <h2 className="font-extrabold">Trial balance</h2>
           <p className="text-xs text-slate-500">
-            Closing balances through the selected end date.
+            One clear closing value for each account through the selected date.
           </p>
         </div>
         <span
@@ -988,14 +1062,13 @@ function TrialBalance({
         </span>
       </div>
       <div className="max-h-[62vh] overflow-auto">
-        <table className="min-w-[720px] w-full text-left text-xs">
+        <table className="min-w-[620px] w-full text-left text-xs">
           <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500">
             <tr>
               <th className="px-4 py-3">Code</th>
               <th className="px-4 py-3">Account</th>
-              <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3 text-right">Debit balance</th>
-              <th className="px-4 py-3 text-right">Credit balance</th>
+              <th className="px-4 py-3">Meaning</th>
+              <th className="px-4 py-3 text-right">Balance</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -1003,20 +1076,17 @@ function TrialBalance({
               <tr key={item.code}>
                 <td className="px-4 py-2.5 font-extrabold">{item.code}</td>
                 <td className="px-4 py-2.5 font-semibold">{item.name}</td>
-                <td className="px-4 py-2.5 capitalize text-slate-500">
-                  {item.type}
+                <td className="px-4 py-2.5 text-slate-500">
+                  {balanceMeaning(item)}
                 </td>
-                <td className="px-4 py-2.5 text-right">
-                  {item.debitBalance ? money(item.debitBalance) : "—"}
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  {item.creditBalance ? money(item.creditBalance) : "—"}
+                <td className="px-4 py-2.5 text-right font-extrabold text-slate-950">
+                  {money(simpleBalance(item))}
                 </td>
               </tr>
             ))}
             {!loading && !rows.length && (
               <tr>
-                <td colSpan={5} className="p-12 text-center text-slate-500">
+                <td colSpan={4} className="p-12 text-center text-slate-500">
                   No account balances are available.
                 </td>
               </tr>
@@ -1024,11 +1094,14 @@ function TrialBalance({
           </tbody>
           <tfoot className="sticky bottom-0 bg-slate-950 font-extrabold text-white">
             <tr>
-              <td colSpan={3} className="px-4 py-3">
-                Total
+              <td colSpan={4} className="px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>Accounting check</span>
+                  <span className="text-xs font-semibold text-slate-300">
+                    Debit {money(debit)} · Credit {money(credit)}
+                  </span>
+                </div>
               </td>
-              <td className="px-4 py-3 text-right">{money(debit)}</td>
-              <td className="px-4 py-3 text-right">{money(credit)}</td>
             </tr>
           </tfoot>
         </table>
@@ -1561,12 +1634,17 @@ function TreasuryAccountModal({
   });
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    const openingBalance = parseMoneyInput(form.openingBalance || "0");
+    if (!Number.isFinite(openingBalance) || openingBalance < 0) {
+      setError("Enter a valid opening balance, for example 3478105.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       await api.post("/accounting/treasury-accounts", {
         ...form,
-        openingBalance: Number(form.openingBalance || 0),
+        openingBalance,
       });
       toast("Financial account added.", "success");
       await onSaved();
@@ -1654,12 +1732,13 @@ function TreasuryAccountModal({
           )}
           <Field label="Balance on opening date (RWF)">
             <input
-              type="number"
-              min="0"
+              type="text"
+              inputMode="decimal"
               value={form.openingBalance}
               onChange={(event) =>
                 setForm({ ...form, openingBalance: event.target.value })
               }
+              placeholder="Example: 3478105"
             />
           </Field>
           <Field label="Opening date">

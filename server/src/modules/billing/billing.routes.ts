@@ -13,6 +13,7 @@ router.post("/opening-balances", controller.createOpening);
 router.get("/customer-accounts", controller.customerAccounts);
 router.get("/payments", controller.payments);
 router.post("/payments", controller.receive);
+router.patch("/payments/:paymentId/cheque-status", controller.chequeStatus);
 router.post(
   "/payments/:paymentId/reverse",
   authorizeRoles("superadmin"),
