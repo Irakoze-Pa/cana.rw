@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Printer, RefreshCw, WalletCards } from "lucide-react";
+import { Banknote, CheckCircle2, Plus, Printer, RefreshCw, WalletCards, XCircle } from "lucide-react";
 import api from "@/services/api";
 import { printCanaDocument } from "@/modules/management/utils/printCanaDocument";
+import { useConfirmation } from "@/context/confirmationContext";
+import { useToast } from "@/context/toastContext";
 type Expense = {
   _id: string;
   expenseNumber: string;
@@ -14,6 +16,8 @@ type Expense = {
   reference?: string;
   chequeNumber?: string;
   bankName?: string;
+  chequeDate?: string;
+  chequeStatus?: "issued" | "due" | "deposited" | "cleared" | "bounced" | "cancelled";
 };
 type TreasuryAccount = { _id: string; name: string; type: "cash" | "bank" | "mobile_money"; balance: number; status: string };
 const categories = [
@@ -101,6 +105,7 @@ const emptyExpenseForm = () => ({
   reference: "",
   chequeNumber: "",
   bankName: "",
+  chequeDate: new Date().toISOString().slice(0, 10),
   notes: "",
 });
 const emptyExpenseLine = () => ({ category: "transport", description: "", amount: "" });
@@ -108,6 +113,8 @@ const money = (v: number) =>
   Number(v || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 });
 const label = (v: string) => v.replaceAll("_", " ");
 export default function ExpensesPage() {
+  const { confirm } = useConfirmation();
+  const { toast } = useToast();
   const [items, setItems] = useState<Expense[]>([]);
   const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
   const [open, setOpen] = useState(false);
@@ -157,6 +164,23 @@ export default function ExpensesPage() {
       setError(
         cause instanceof Error ? cause.message : "Could not record expense.",
       );
+    }
+  };
+  const updateCheque = async (item: Expense, status: "deposited" | "cleared" | "bounced" | "cancelled") => {
+    if (!item.chequeNumber) return;
+    const approved = await confirm({
+      title: `${status[0].toUpperCase()}${status.slice(1)} expense cheque`,
+      description: status === "cleared" ? `Confirm that cheque ${item.chequeNumber} cleared the bank? Treasury is affected only after this confirmation.` : `Mark cheque ${item.chequeNumber} as ${status}?`,
+      confirmLabel: `Mark ${status}`,
+      tone: status === "bounced" || status === "cancelled" ? "danger" : "warning",
+    });
+    if (!approved) return;
+    try {
+      await api.patch(`/expenses/cheques/${encodeURIComponent(item.chequeNumber)}/status`, { status });
+      await load();
+      toast(`Expense cheque marked ${status}.`, "success");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not update expense cheque.");
     }
   };
   const print = () =>
@@ -285,41 +309,37 @@ export default function ExpensesPage() {
           <p className="text-lg font-extrabold">{money(total)} RWF</p>
         </div>
       </section>
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="max-h-[520px] overflow-auto">
+          <table className="min-w-[900px] text-left text-xs">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
-                <th className="px-5 py-3">Date</th>
-                <th className="px-5 py-3">Reference</th>
-                <th className="px-5 py-3">Category</th>
-                <th className="px-5 py-3">Description</th>
-                <th className="px-5 py-3">Method</th>
-                <th className="px-5 py-3 text-right">Amount</th>
+                <th className="px-3 py-2.5">Date</th><th className="px-3 py-2.5">Reference</th><th className="px-3 py-2.5">Category</th><th className="px-3 py-2.5">Description</th><th className="px-3 py-2.5">Payment</th><th className="px-3 py-2.5 text-right">Amount / action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((item) => (
                 <tr key={item._id}>
-                  <td className="px-5 py-4">
+                  <td className="px-3 py-2.5">
                     {new Date(item.date).toLocaleDateString("en-RW")}
                   </td>
-                  <td className="px-5 py-4 font-bold">{item.expenseNumber}</td>
-                  <td className="px-5 py-4 capitalize">
+                  <td className="px-3 py-2.5 font-bold">{item.expenseNumber}</td>
+                  <td className="px-3 py-2.5 capitalize">
                     {label(item.category)}
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-3 py-2.5">
                     {item.description}
                     <small className="block text-slate-500">
                       {item.payee || "—"}
                     </small>
                   </td>
-                  <td className="px-5 py-4 capitalize">
-                    {label(item.method)}
-                    {item.chequeNumber ? ` · ${item.chequeNumber}` : ""}
+                  <td className="px-3 py-2.5 capitalize">
+                    <p>{label(item.method)}{item.chequeNumber ? ` · ${item.chequeNumber}` : ""}</p>
+                    {item.method === "bank_cheque" && <p className="mt-0.5 text-[10px] font-bold uppercase text-slate-500">{item.chequeStatus || "cleared"}{item.chequeDate ? ` · ${new Date(item.chequeDate).toLocaleDateString("en-RW")}` : ""}</p>}
                   </td>
-                  <td className="px-5 py-4 text-right font-bold">
-                    {money(item.amount)} RWF
+                  <td className="px-3 py-2.5 text-right font-bold">
+                    <p>{money(item.amount)} RWF</p>
+                    {item.method === "bank_cheque" && !["cleared", "bounced", "cancelled"].includes(item.chequeStatus || "cleared") && <div className="mt-1.5 flex justify-end gap-1">{item.chequeStatus !== "deposited" && <button title="Mark deposited" type="button" onClick={() => void updateCheque(item, "deposited")} className="rounded border border-slate-200 p-1.5 text-slate-600"><Banknote size={12} /></button>}<button title="Mark cleared" type="button" onClick={() => void updateCheque(item, "cleared")} className="rounded bg-emerald-700 p-1.5 text-white"><CheckCircle2 size={12} /></button><button title="Mark bounced" type="button" onClick={() => void updateCheque(item, "bounced")} className="rounded border border-red-200 p-1.5 text-red-700"><XCircle size={12} /></button></div>}
                   </td>
                 </tr>
               ))}
@@ -465,19 +485,19 @@ export default function ExpensesPage() {
                   <option value="other">Other</option>
                 </select>
               </label>
-              <label className="text-sm font-bold">
-                Payment account
+              {treasuryAccounts.length > 0 && <label className="text-sm font-bold">
+                Payment account (optional)
                 <select
                   value={form.treasuryAccount}
                   onChange={(e) => setForm({ ...form, treasuryAccount: e.target.value })}
                   className="mt-1 w-full rounded-xl border p-2.5"
                 >
-                  <option value="">{treasuryAccounts.length ? "Optional until accounting starts" : "Accounting not configured"}</option>
+                  <option value="">Record without treasury posting</option>
                   {treasuryAccounts
                     .filter((item) => item.type === (form.method === "cash" ? "cash" : form.method === "mobile_money" ? "mobile_money" : "bank"))
                     .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}
                 </select>
-              </label>
+              </label>}
               <label className="text-sm font-bold">
                 Reference
                 <input
@@ -512,6 +532,11 @@ export default function ExpensesPage() {
                       className="mt-1 w-full rounded-xl border p-2.5"
                     />
                   </label>
+                  <label className="text-sm font-bold sm:col-span-2">
+                    Cheque maturity date
+                    <input required type="date" value={form.chequeDate} onChange={(e) => setForm({ ...form, chequeDate: e.target.value })} className="mt-1 w-full rounded-xl border p-2.5" />
+                  </label>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900 sm:col-span-2">The expense is recorded immediately, but the bank balance is reduced only after the cheque is marked cleared.</div>
                 </>
               )}
             </div>

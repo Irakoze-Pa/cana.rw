@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
+  CheckCircle2,
   CreditCard,
   Eye,
   Plus,
@@ -47,7 +48,11 @@ type Payment = {
   receiptNumber: string;
   amount: number;
   method: string;
-  status?: "received" | "void";
+  status?: "pending" | "received" | "void";
+  chequeNumber?: string;
+  bankName?: string;
+  chequeDate?: string;
+  chequeStatus?: "received" | "due" | "deposited" | "cleared" | "bounced" | "cancelled";
   voidReason?: string;
   customer?: { fullName?: string };
   invoice?: { invoiceNumber?: string };
@@ -134,6 +139,9 @@ export default function BillingPage() {
     treasuryAccount: "",
     reference: "",
     notes: "",
+    chequeNumber: "",
+    bankName: "",
+    chequeDate: new Date().toISOString().slice(0, 10),
   });
   const [openingForm, setOpeningForm] = useState({
     customer: "",
@@ -219,8 +227,8 @@ export default function BillingPage() {
     if (
       !(await confirm({
         title: "Confirm payment allocation",
-        description: `Apply ${money(Number(paymentForm.amount || 0))} RWF to ${targetReference}? ${outcome} A receipt will be created.`,
-        confirmLabel: "Record payment",
+        description: paymentForm.method === "bank_cheque" ? `Register cheque ${paymentForm.chequeNumber || ""} for ${money(Number(paymentForm.amount || 0))} RWF against ${targetReference}? The balance changes only after clearance.` : `Apply ${money(Number(paymentForm.amount || 0))} RWF to ${targetReference}? ${outcome} A receipt will be created.`,
+        confirmLabel: paymentForm.method === "bank_cheque" ? "Register cheque" : "Record payment",
         tone: "warning",
       }))
     )
@@ -241,9 +249,12 @@ export default function BillingPage() {
         treasuryAccount: "",
         reference: "",
         notes: "",
+        chequeNumber: "",
+        bankName: "",
+        chequeDate: new Date().toISOString().slice(0, 10),
       });
       await load();
-      toast("Payment received and receipt recorded.", "success");
+      toast(paymentForm.method === "bank_cheque" ? "Customer cheque registered pending clearance." : "Payment received and receipt recorded.", "success");
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Unable to record payment.",
@@ -251,6 +262,11 @@ export default function BillingPage() {
     } finally {
       setSaving(false);
     }
+  };
+  const updateCustomerCheque = async (payment: Payment, status: "deposited" | "cleared" | "bounced" | "cancelled") => {
+    if (!(await confirm({ title: `${status[0].toUpperCase()}${status.slice(1)} customer cheque`, description: status === "cleared" ? `Confirm cheque ${payment.chequeNumber} cleared? The linked balance will reduce by ${money(payment.amount)} RWF.` : `Mark cheque ${payment.chequeNumber} as ${status}?`, confirmLabel: `Mark ${status}`, tone: status === "bounced" || status === "cancelled" ? "danger" : "warning" }))) return;
+    try { await api.patch(`/billing/payments/${payment._id}/cheque-status`, { status }); await load(); toast(`Customer cheque marked ${status}.`, "success"); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to update customer cheque."); }
   };
   const reverseRecordedPayment = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -405,9 +421,7 @@ export default function BillingPage() {
       }),
     [payments, receiptFrom, receiptTo],
   );
-  const activePayments = filteredPayments.filter(
-    (payment) => payment.status !== "void",
-  );
+  const activePayments = filteredPayments.filter((payment) => payment.status === "received");
   const printPaymentRegister = () =>
     printCanaDocument({
       title: "Payment receipt register",
@@ -959,7 +973,7 @@ export default function BillingPage() {
         </div>
       </div>
       <div className={`${workspaceView === "invoices" ? "grid" : "hidden"} items-start gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]`}>
-        <section className="max-h-[620px] space-y-2 overflow-y-auto pr-1 md:hidden">
+        <section className="max-h-[520px] space-y-1.5 overflow-y-auto pr-1 md:hidden">
           {loading ? (
             <p className="border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
               Loading invoices…
@@ -970,7 +984,7 @@ export default function BillingPage() {
                 key={invoice._id}
                 id={`invoice-${invoice._id}`}
                 onClick={() => setInvoiceDetails(invoice)}
-                className={`cursor-pointer border bg-white p-4 transition hover:border-slate-950 ${linkedInvoiceId === invoice._id ? "border-red-500 ring-2 ring-red-100" : "border-slate-200"}`}
+                className={`cursor-pointer border bg-white p-3 transition hover:border-slate-950 ${linkedInvoiceId === invoice._id ? "border-red-500 ring-2 ring-red-100" : "border-slate-200"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -1058,7 +1072,7 @@ export default function BillingPage() {
               Record payment
             </button>
           </div>
-          <div className="max-h-[620px] overflow-auto">
+          <div className="max-h-[520px] overflow-auto">
           <table className="min-w-full text-left text-xs">
             <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase text-white">
               <tr>
@@ -1143,7 +1157,6 @@ export default function BillingPage() {
                         className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-slate-600 transition hover:border-red-200 hover:text-red-700"
                       >
                         <Printer size={14} />
-                        Print
                       </button>
                     </td>
                   </tr>
@@ -1345,7 +1358,7 @@ export default function BillingPage() {
                   <X size={18} />
                 </button>
               </div>
-              <div className="grid gap-4 p-5 sm:grid-cols-2">
+              <div className="grid gap-3 p-4 sm:grid-cols-2">
                 <select
                   value={paymentForm.invoice}
                   onChange={(event) => {
@@ -1468,10 +1481,11 @@ export default function BillingPage() {
                 >
                   <option value="mobile_money">Mobile money</option>
                   <option value="bank_transfer">Bank transfer</option>
+                  <option value="bank_cheque">Bank cheque</option>
                   <option value="cash">Cash</option>
                   <option value="card">Card</option>
                 </select>
-                <select
+                {treasuryAccounts.length > 0 && <select
                   disabled={!treasuryAccounts.length}
                   value={paymentForm.treasuryAccount}
                   onChange={(event) => setPaymentForm({ ...paymentForm, treasuryAccount: event.target.value })}
@@ -1485,7 +1499,8 @@ export default function BillingPage() {
                   {treasuryAccounts
                     .filter((item) => item.type === (paymentForm.method === "cash" ? "cash" : paymentForm.method === "mobile_money" ? "mobile_money" : "bank"))
                     .map((item) => <option key={item._id} value={item._id}>{item.name} · {money(item.balance)} RWF</option>)}
-                </select>
+                </select>}
+                {paymentForm.method === "bank_cheque" && <><input required value={paymentForm.chequeNumber} onChange={(event) => setPaymentForm({ ...paymentForm, chequeNumber: event.target.value })} placeholder="Cheque number" className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" /><input required value={paymentForm.bankName} onChange={(event) => setPaymentForm({ ...paymentForm, bankName: event.target.value })} placeholder="Bank name" className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" /><label className="text-xs font-bold text-slate-600">Maturity date<input required type="date" value={paymentForm.chequeDate} onChange={(event) => setPaymentForm({ ...paymentForm, chequeDate: event.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" /></label><p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">The invoice remains outstanding until Finance confirms that the cheque cleared.</p></>}
                 <input
                   value={paymentForm.reference}
                   onChange={(event) =>
@@ -1565,7 +1580,7 @@ export default function BillingPage() {
               className="min-w-0 rounded-md border border-gray-200 px-2 py-1.5 text-xs"
             />
           </div>
-          <div className="mt-2 max-h-[390px] space-y-1.5 overflow-y-auto pr-1">
+          <div className="mt-2 max-h-[320px] space-y-1 overflow-y-auto pr-1">
             {filteredPayments.map((payment) => (
               <div
                 key={payment._id}
@@ -1587,11 +1602,11 @@ export default function BillingPage() {
                   {payment.method.replaceAll("_", " ")}
                 </span>
                 <span
-                  className={`whitespace-nowrap font-extrabold ${payment.status === "void" ? "text-slate-400 line-through" : "text-emerald-700"}`}
+                  className={`whitespace-nowrap font-extrabold ${payment.status === "void" ? "text-slate-400 line-through" : payment.status === "pending" ? "text-amber-700" : "text-emerald-700"}`}
                 >
                   {money(payment.amount)} RWF
                 </span>
-                {payment.status === "void" ? (
+                {payment.status === "pending" ? <div className="flex items-center gap-1"><span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase text-amber-800">{payment.chequeStatus}</span>{payment.chequeStatus !== "deposited" && <button type="button" title="Mark deposited" onClick={() => void updateCustomerCheque(payment, "deposited")} className="rounded border p-1.5"><CreditCard size={12}/></button>}<button type="button" title="Mark cleared" onClick={() => void updateCustomerCheque(payment, "cleared")} className="rounded bg-emerald-700 p-1.5 text-white"><CheckCircle2 size={12}/></button><button type="button" title="Mark bounced" onClick={() => void updateCustomerCheque(payment, "bounced")} className="rounded border border-red-200 p-1.5 text-red-700"><X size={12}/></button></div> : payment.status === "void" ? (
                   <span className="rounded-full bg-slate-200 px-2 py-1 text-[10px] font-bold uppercase text-slate-600">
                     Reversed
                   </span>

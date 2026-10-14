@@ -405,6 +405,19 @@ export default function SupplierPaymentsPage() {
           <option value="cancelled">Cancelled</option>
         </select>
       </section>
+      <section className="grid overflow-hidden border border-slate-200 bg-white sm:grid-cols-4">
+        {[
+          ["Issued", "Cheque given; maturity date has not arrived."],
+          ["Due", "Maturity date reached; bank has not cleared it."],
+          ["Deposited", "Cheque submitted to the bank for processing."],
+          ["Cleared", "Bank confirmed payment; supplier debt is reduced."],
+        ].map(([label, detail], index) => (
+          <div key={label} className={`px-3 py-2 ${index ? "border-t border-slate-100 sm:border-l sm:border-t-0" : ""}`}>
+            <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-900">{label}</p>
+            <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{detail}</p>
+          </div>
+        ))}
+      </section>
       <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,.85fr)]">
         <section className="cana-panel overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
@@ -420,14 +433,14 @@ export default function SupplierPaymentsPage() {
               {filteredPayments.length} of {payments.length}
             </span>
           </div>
-          <div className="max-h-[520px] overflow-auto">
+          <div className="max-h-[420px] overflow-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="sticky top-0 z-10 bg-slate-950 text-[11px] uppercase tracking-wide text-white">
                 <tr>
-                  <th className="px-4 py-3">Reference</th>
-                  <th className="px-4 py-3">Supplier / target</th>
-                  <th className="px-4 py-3">Settlement</th>
-                  <th className="px-4 py-3 text-right">Amount / action</th>
+                  <th className="px-3 py-2.5">Reference</th>
+                  <th className="px-3 py-2.5">Supplier / target</th>
+                  <th className="px-3 py-2.5">Settlement</th>
+                  <th className="px-3 py-2.5 text-right">Amount / action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -448,7 +461,7 @@ export default function SupplierPaymentsPage() {
                           : "transition hover:bg-slate-50"
                       }
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         <p className="font-bold text-slate-950">
                           {item.paymentNumber}
                         </p>
@@ -458,7 +471,7 @@ export default function SupplierPaymentsPage() {
                             : new Date(item.paidAt).toLocaleDateString("en-RW")}
                         </p>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         <p className="font-semibold text-slate-800">
                           {item.supplier?.name || "Supplier"}
                         </p>
@@ -468,7 +481,7 @@ export default function SupplierPaymentsPage() {
                             "Opening payable"}
                         </p>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         <p className="capitalize text-slate-600">
                           {item.method.replaceAll("_", " ")}
                           {item.chequeNumber ? ` · ${item.chequeNumber}` : ""}
@@ -479,7 +492,7 @@ export default function SupplierPaymentsPage() {
                           {chequeStatus}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-2.5 text-right">
                         <p className="font-bold text-slate-950">
                           {money(item.amount)} RWF
                         </p>
@@ -544,7 +557,7 @@ export default function SupplierPaymentsPage() {
               {openings.length} records
             </span>
           </div>
-          <div className="max-h-[520px] overflow-auto">
+          <div className="max-h-[420px] overflow-auto">
             <table className="w-full min-w-[560px] text-left text-sm">
               <thead className="sticky top-0 z-10 bg-slate-950 text-[11px] uppercase tracking-wide text-white">
                 <tr>
@@ -619,7 +632,7 @@ export default function SupplierPaymentsPage() {
             {accounts.length} suppliers
           </span>
         </div>
-        <div className="max-h-[380px] overflow-auto">
+        <div className="max-h-[320px] overflow-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="sticky top-0 z-10 bg-slate-950 text-[11px] uppercase tracking-wide text-white">
               <tr>
@@ -988,11 +1001,11 @@ export default function SupplierPaymentsPage() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-slate-200 bg-white px-4 py-3.5 shadow-sm">
+    <div className="border border-slate-200 bg-white px-3 py-3 shadow-sm">
       <p className="text-[11px] font-bold uppercase tracking-[.08em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1.5 text-xl font-extrabold tabular-nums text-slate-950">
+      <p className="mt-1 text-lg font-extrabold tabular-nums text-slate-950 sm:text-xl">
         {value} <span className="text-xs font-bold text-slate-500">RWF</span>
       </p>
     </div>

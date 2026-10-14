@@ -40,6 +40,7 @@ const titles: Record<string, string> = {
   "/management/sales/orders": "Sales orders",
   "/management/sales/fulfilment": "Fulfilment & delivery",
   "/management/billing": "Invoices & payments",
+  "/management/cheques": "Cheque register",
   "/management/accounting": "Finance & accounting",
   "/management/reports": "Operational reports",
   "/management/general-report": "General activity report",

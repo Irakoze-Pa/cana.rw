@@ -294,6 +294,14 @@ const groups: Group[] = [
         permissions: ["sales", "finance"],
       },
       {
+        label: "Cheque register",
+        to: "/management/cheques",
+        icon: ReceiptText,
+        category: "Finance operations",
+        departments: ["sales", "procurement", "finance", "management"],
+        permissions: ["sales", "procurement", "finance"],
+      },
+      {
         label: "Supplier payments",
         to: "/management/supplier-payments",
         icon: Banknote,
