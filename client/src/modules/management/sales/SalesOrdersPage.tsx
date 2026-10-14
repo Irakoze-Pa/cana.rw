@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Eye, Plus, Printer, ReceiptText, RefreshCw, ShoppingCart, X } from "lucide-react";
+import { CircleDollarSign, Eye, Plus, Printer, ReceiptText, RefreshCw, ShoppingCart, X } from "lucide-react";
 import CustomerForm from "../users/CustomerForm";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
@@ -116,7 +116,7 @@ const statusStyle = (status: string) =>
     : status === "delivered"
       ? "bg-emerald-50 text-emerald-700"
       : status === "ready_for_delivery"
-        ? "bg-blue-50 text-blue-700"
+        ? "bg-amber-50 text-amber-800"
         : "bg-slate-100 text-slate-700";
 function printSalesOrder(order: Order) {
   printCanaDocument({
@@ -191,52 +191,66 @@ function OrderActions({
   onTransition: (id: string, status: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex items-center justify-end gap-1">
       <button
         type="button"
         onClick={() => onView(order)}
-        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800"
+        aria-label={`View ${order.orderNumber}`}
+        title="View order"
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50"
       >
         <Eye size={13} />
-        Details
       </button>
       {invoice && (
         <Link
           to={`/management/billing?invoice=${invoice._id}`}
-          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-100"
+          aria-label={`Open invoice ${invoice.invoiceNumber}`}
+          title={`Open ${invoice.invoiceNumber}`}
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-700 transition hover:bg-red-100"
         >
           <ReceiptText size={13} />
-          {invoice.invoiceNumber}
         </Link>
       )}
       <button
         type="button"
         onClick={() => onPrint(order)}
-        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700"
+        aria-label={`Print ${order.orderNumber}`}
+        title="Print order"
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50"
       >
         <Printer size={13} />
-        Print
       </button>
       {["draft", "submitted"].includes(order.status) && (
         <button
           type="button"
           disabled={saving}
           onClick={() => onSetPrices(order)}
-          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+          aria-label={`Set prices for ${order.orderNumber}`}
+          title="Set agreed prices"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 disabled:opacity-50"
         >
-          Set prices
+          <CircleDollarSign size={13} />
         </button>
       )}
-      {next[order.status]?.map((status) => (
-        <button
-          key={status}
+      {next[order.status]?.length ? (
+        <select
+          aria-label={`Update status for ${order.orderNumber}`}
+          defaultValue=""
           disabled={saving}
-          onClick={() => onTransition(order._id, status)}
-          className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          onChange={(event) => {
+            if (event.target.value) onTransition(order._id, event.target.value);
+            event.target.value = "";
+          }}
+          className="h-7 min-w-0 max-w-[112px] rounded-md border border-slate-300 bg-slate-950 px-1.5 text-[10px] font-bold capitalize text-white outline-none disabled:opacity-50"
         >
-          {status.replaceAll("_", " ")}
-        </button>
-      ))}
+          <option value="">Update status</option>
+          {next[order.status].map((status) => (
+            <option key={status} value={status}>
+              {status.replaceAll("_", " ")}
+            </option>
+          ))}
+        </select>
+      ) : null}
     </div>
   );
 }
@@ -515,17 +529,18 @@ export default function SalesOrdersPage({
     }
   };
   return (
-    <div className="mx-auto max-w-7xl space-y-4 pb-6">
-      <header className="flex flex-col justify-between gap-3 border-b-2 border-slate-950 pb-4 sm:flex-row sm:items-center">
+    <div className="mx-auto max-w-[1440px] space-y-3 pb-5">
+      <header className="flex flex-col justify-between gap-3 border-b border-slate-300 pb-3 sm:flex-row sm:items-center">
         <div className="flex gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-950 text-white">
             <ShoppingCart size={21} />
           </div>
           <div>
-            <p className="cana-section-kicker">Sales workspace</p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Sales workspace</p>
+            <h1 className="mt-0.5 text-xl font-black tracking-tight text-slate-950">
               {pageTitle}
             </h1>
+            <p className="mt-0.5 text-xs text-slate-500">Orders, fulfilment, delivery and linked invoices</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -836,7 +851,7 @@ export default function SalesOrdersPage({
           </Link>
         </div>
       )}
-      <section className="flex flex-wrap items-end gap-3 border border-slate-200 bg-slate-50 p-3">
+      <section className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
         <label className="min-w-52 flex-1 text-xs font-bold text-slate-500">
           Search
           <input
@@ -966,16 +981,16 @@ export default function SalesOrdersPage({
           </p>
         )}
       </section>
-      <div className="hidden overflow-x-auto border border-slate-200 bg-white md:block">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-slate-950 text-xs uppercase tracking-wide text-white">
+      <div className="hidden max-h-[520px] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white md:block">
+        <table className="w-full table-fixed text-left text-xs">
+          <thead className="sticky top-0 z-10 bg-slate-950 text-[10px] uppercase tracking-wide text-white">
             <tr>
-              <th className="px-5 py-3">Order</th>
-              <th className="px-5 py-3">Customer</th>
-              <th className="px-5 py-3">Items</th>
-              <th className="px-5 py-3">Total</th>
-              <th className="px-5 py-3">Status</th>
-              <th className="px-5 py-3">Actions</th>
+              <th className="w-[15%] px-3 py-2.5">Order</th>
+              <th className="w-[19%] px-3 py-2.5">Customer</th>
+              <th className="w-[25%] px-3 py-2.5">Items</th>
+              <th className="w-[14%] px-3 py-2.5">Total (RWF)</th>
+              <th className="w-[12%] px-3 py-2.5">Status</th>
+              <th className="w-[15%] px-3 py-2.5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -992,22 +1007,22 @@ export default function SalesOrdersPage({
                   onClick={() => setDetailsOrder(order)}
                   className="cursor-pointer transition hover:bg-slate-50"
                 >
-                  <td className="px-5 py-3.5 font-bold text-slate-950">
+                  <td className="truncate px-3 py-2.5 font-bold text-slate-950" title={order.orderNumber}>
                     {order.orderNumber}
                   </td>
-                  <td className="px-5 py-3.5">
-                    <p className="font-semibold text-slate-900">
+                  <td className="px-3 py-2.5">
+                    <p className="truncate font-semibold text-slate-900">
                       {order.customer?.businessName ||
                         order.customer?.fullName ||
                         "Customer"}
                     </p>
                     {order.customer?.businessName && (
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-0.5 truncate text-[10px] text-slate-500">
                         Contact: {order.customer.fullName}
                       </p>
                     )}
                   </td>
-                  <td className="max-w-72 truncate px-5 py-3.5 text-slate-600">
+                  <td className="truncate px-3 py-2.5 text-slate-600" title={order.items.map((item) => `${item.productName} (${orderQuantity(item)})`).join(", ")}>
                     {order.items
                       .map(
                         (item) =>
@@ -1015,16 +1030,16 @@ export default function SalesOrdersPage({
                       )
                       .join(", ")}
                   </td>
-                  <td className="whitespace-nowrap px-5 py-3.5 font-bold text-slate-950">{money(order.total)} RWF</td>
-                  <td className="px-5 py-3.5">
+                  <td className="truncate px-3 py-2.5 font-bold text-slate-950" title={`${money(order.total)} RWF`}>{money(order.total)}</td>
+                  <td className="px-3 py-2.5">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(order.status)}`}
+                      className={`block truncate rounded-full px-1.5 py-1 text-center text-[9px] font-extrabold uppercase ${statusStyle(order.status)}`}
                     >
                       {order.status.replaceAll("_", " ")}
                     </span>
                   </td>
                   <td
-                    className="whitespace-nowrap px-5 py-3.5"
+                    className="px-2 py-2.5"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <OrderActions

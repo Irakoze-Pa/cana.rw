@@ -22,7 +22,7 @@ import { createNewFormulaVersion } from "../../formula/formula.service";
 // =====================================================
 
 interface CreateMaterialConsumptionInput {
-  productionOrder: string;
+  productionOrder?: string;
   productionBatch: string;
   notes?: string;
 }
@@ -652,34 +652,16 @@ const populateConsumption = (id: mongoose.Types.ObjectId) => {
 export const createMaterialConsumption = async (
   input: CreateMaterialConsumptionInput,
 ) => {
-  if (!input.productionOrder || !input.productionBatch) {
-    throw new Error("Production Order and Production Batch are required.");
+  if (!input.productionBatch) {
+    throw new Error("Production Batch is required.");
   }
-
-  const productionOrderId = toObjectId(input.productionOrder);
 
   const productionBatchId = toObjectId(input.productionBatch);
-
-  const order = await ProductionOrder.findById(productionOrderId);
-
-  if (!order) {
-    throw new Error("Production Order not found.");
-  }
 
   const batch = await ProductionBatch.findById(productionBatchId);
 
   if (!batch) {
     throw new Error("Production Batch not found.");
-  }
-
-  // =================================================
-  // OWNERSHIP
-  // =================================================
-
-  if (batch.productionOrder.toString() !== order._id.toString()) {
-    throw new Error(
-      "Production Batch does not belong to the selected Production Order.",
-    );
   }
 
   // =================================================
@@ -696,23 +678,11 @@ export const createMaterialConsumption = async (
   // QUANTITIES
   // =================================================
 
-  const orderQuantity = toNumber(order.quantity);
-
   const batchPlannedQuantity = toNumber(batch.plannedQuantity);
-
-  if (orderQuantity <= 0) {
-    throw new Error("Production Order quantity must be greater than zero.");
-  }
 
   if (batchPlannedQuantity <= 0) {
     throw new Error(
       "Production Batch planned quantity must be greater than zero.",
-    );
-  }
-
-  if (batchPlannedQuantity > orderQuantity) {
-    throw new Error(
-      "Production Batch planned quantity cannot exceed Production Order quantity.",
     );
   }
 
@@ -738,11 +708,57 @@ export const createMaterialConsumption = async (
   // BUILD ITEMS
   // =================================================
 
-  const items = await buildConsumptionItems(
-    order.items,
-    orderQuantity,
-    batchPlannedQuantity,
-  );
+  let items: MaterialConsumptionItemData[];
+  let legacyOrder: any = null;
+  if (batch.productionOrder) {
+    legacyOrder = await ProductionOrder.findById(batch.productionOrder);
+  }
+
+  if (legacyOrder) {
+    items = await buildConsumptionItems(
+      legacyOrder.items,
+      toNumber(legacyOrder.quantity),
+      batchPlannedQuantity,
+    );
+  } else {
+    const formula = await Formula.findById(batch.formula)
+      .populate("items.rawMaterial", "name code unit")
+      .lean();
+    if (!formula || !Array.isArray(formula.items) || !formula.items.length) {
+      throw new Error("The batch formula has no raw material requirements.");
+    }
+    const formulaBatchSize = toNumber(formula.batchSize);
+    if (formulaBatchSize <= 0) {
+      throw new Error("The batch formula needs a valid batch size.");
+    }
+    const scale = batchPlannedQuantity / formulaBatchSize;
+    items = formula.items.map((formulaItem: any, index: number) => {
+      const material = formulaItem.rawMaterial;
+      if (!material?._id) {
+        throw new Error(`Raw material is missing at formula item ${index + 1}.`);
+      }
+      const standardQuantity = roundNumber(
+        toNumber(formulaItem.quantity) *
+          (1 + toNumber(formulaItem.wastePercentage) / 100) *
+          scale,
+      );
+      return {
+        rawMaterial: material._id,
+        rawMaterialName: material.name,
+        rawMaterialCode: material.code,
+        unit: material.unit || formulaItem.unit,
+        standardQuantity,
+        issuedQuantity: 0,
+        actualQuantity: 0,
+        wasteQuantity: 0,
+        returnQuantity: 0,
+        varianceQuantity: roundNumber(-standardQuantity),
+        variancePercentage: standardQuantity > 0 ? -100 : 0,
+        lotNumber: "",
+        notes: formulaItem.notes || "",
+      };
+    });
+  }
 
   // =================================================
   // NUMBER
@@ -763,7 +779,7 @@ export const createMaterialConsumption = async (
   const consumption = new RawMaterialConsumption({
     consumptionNo,
 
-    productionOrder: order._id,
+    productionOrder: legacyOrder?._id,
 
     productionBatch: batch._id,
 
@@ -837,18 +853,14 @@ export const issueMaterialConsumption = async (
         );
       }
 
-      const order = await ProductionOrder.findById(
-        consumption.productionOrder,
-      ).session(session);
-
-      if (!order) {
-        throw new Error("Production Order not found.");
-      }
-
-      if (batch.productionOrder.toString() !== order._id.toString()) {
-        throw new Error(
-          "Production Batch does not belong to the Production Order.",
-        );
+      if (consumption.productionOrder) {
+        const order = await ProductionOrder.findById(
+          consumption.productionOrder,
+        ).session(session);
+        if (!order) throw new Error("Historical Production Order not found.");
+        if (batch.productionOrder?.toString() !== order._id.toString()) {
+          throw new Error("Production Batch reference does not match its historical order.");
+        }
       }
 
       const existingItems = getConsumptionItems(consumption.items);

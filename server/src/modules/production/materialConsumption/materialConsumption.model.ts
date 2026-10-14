@@ -78,7 +78,8 @@ export interface IMaterialConsumption
   extends Document {
   consumptionNo: string;
 
-  productionOrder: Types.ObjectId;
+  /** Legacy reference retained only for historical production records. */
+  productionOrder?: Types.ObjectId;
   productionBatch: Types.ObjectId;
 
   /* -----------------------------
@@ -354,7 +355,7 @@ const materialConsumptionSchema =
       productionOrder: {
         type: Schema.Types.ObjectId,
         ref: "ProductionOrder",
-        required: true,
+        required: false,
       },
 
       productionBatch: {

@@ -208,7 +208,6 @@ export default function DashboardTopbar() {
       const results = await Promise.allSettled([
         api.get("/quotations"),
         api.get("/sales-orders"),
-        api.get("/production-orders"),
         api.get("/production-batches"),
         api.get("/raw-materials"),
         api.get("/billing/invoices"),
@@ -217,7 +216,6 @@ export default function DashboardTopbar() {
       const [
         quotes,
         orders,
-        productionOrders,
         batches,
         materials,
         invoices,
@@ -237,11 +235,8 @@ export default function DashboardTopbar() {
             String(order.status).toLowerCase(),
           ),
       );
-      const openProduction = productionOrders.filter(
-        (order) => !["Completed", "Cancelled"].includes(String(order.status)),
-      );
       const activeBatches = batches.filter((batch) =>
-        ["Ready", "In Progress", "Paused"].includes(String(batch.status)),
+        ["Planned", "Ready", "In Progress", "Paused"].includes(String(batch.status)),
       );
       const lowStock = materials.filter(
         (material) =>
@@ -322,18 +317,6 @@ export default function DashboardTopbar() {
                 to: "/management/inventory/finished-goods",
                 tone: "red" as const,
                 kind: "stock" as const,
-              },
-            ]
-          : []),
-        ...(openProduction.length
-          ? [
-              {
-                id: `production-${openProduction.map((order) => `${order._id}:${order.status}`).join(",")}`,
-                title: "Production work is open",
-                description: `${countText(openProduction.length, "production order")} requires planning or execution.`,
-                to: "/management/production/orders",
-                tone: "blue" as const,
-                kind: "production" as const,
               },
             ]
           : []),

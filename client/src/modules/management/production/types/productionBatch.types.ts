@@ -52,7 +52,8 @@ export interface ProductionBatch {
 
   batchNo: string;
 
-  productionOrder: string | ProductionOrderSummary;
+  /** Present only on historical batches created by the former order workflow. */
+  productionOrder?: string | ProductionOrderSummary;
 
   product: string | ProductSummary;
 
@@ -68,10 +69,7 @@ export interface ProductionBatch {
   plannedQuantity: number;
   actualQuantity: number;
 
-  /**
-   * Remaining quantity on the production order
-   * at the time this batch was created/loaded.
-   */
+  /** Legacy remaining quantity retained for historical records. */
   remainingQuantity?: number;
 
   unit: string;
@@ -111,10 +109,7 @@ export interface ProductionBatch {
 }
 
 export interface CreateProductionBatchData {
-  /** Optional legacy/planned workflow reference. */
-  productionOrder?: string;
-
-  /** Direct workflow fields. Select product and formula to start a batch. */
+  /** Select product and formula to create a batch directly. */
   product?: string;
   formula?: string;
 
@@ -140,7 +135,7 @@ export interface CreateProductionBatchData {
   lotNumber?: string;
 
   /**
-   * Defaults to production order planned date.
+   * Optional production start date.
    */
   startDate?: string | Date;
 

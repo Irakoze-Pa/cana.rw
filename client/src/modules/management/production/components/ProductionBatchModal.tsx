@@ -499,13 +499,11 @@ export default function ProductionBatchModal({
       setDirectFormulaId("");
     }
 
-    void loadOrders();
     void loadDirectOptions();
   }, [
     isOpen,
     editingBatch,
     initialProductionOrder,
-    loadOrders,
     loadDirectOptions,
   ]);
 
@@ -531,14 +529,6 @@ export default function ProductionBatchModal({
   /* LOAD REMAINING                                                            */
   /* ------------------------------------------------------------------------ */
 
-  useEffect(() => {
-    if (!productionOrderId) {
-      return;
-    }
-
-    void loadRemainingQuantity(productionOrderId);
-  }, [productionOrderId, loadRemainingQuantity]);
-
   /* ------------------------------------------------------------------------ */
   /* VALIDATION                                                               */
   /* ------------------------------------------------------------------------ */
@@ -548,21 +538,6 @@ export default function ProductionBatchModal({
       if (!directProductId) return "Please select the product being produced.";
       if (!directFormulaId) return "Please select the formula for this batch.";
       if (!selectedDirectFormula) return "Selected formula could not be found.";
-    } else if (!productionOrderId) {
-      return "Production batch reference is missing.";
-    } else if (!selectedOrder) {
-      return "Selected production order could not be found.";
-    }
-
-    /* CREATE ORDER STATUS */
-    if (
-      isEdit &&
-      selectedOrder?.status !== "Draft" &&
-      selectedOrder?.status !== "Planned" &&
-      selectedOrder?.status !== "Released" &&
-      selectedOrder?.status !== "In Production"
-    ) {
-      return "The linked production order is no longer available for this batch.";
     }
 
     const planned = numberValue(plannedQuantity);
@@ -747,8 +722,6 @@ export default function ProductionBatchModal({
     return null;
   }
 
-  const isOrderLocked = Boolean(initialProductionOrder) || isEdit;
-
   const isProductionStarted =
     isEdit &&
     (currentStatus === "In Progress" ||
@@ -845,7 +818,7 @@ export default function ProductionBatchModal({
             )}
 
             {/* ============================================================ */}
-            {/* PRODUCTION ORDER                                              */}
+            {/* DIRECT BATCH SOURCE                                           */}
             {/* ============================================================ */}
 
             {!isEdit ? (
@@ -918,153 +891,18 @@ export default function ProductionBatchModal({
                   )}
               </div>
             ) : (
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-800">
-                  Production Order
-                  <span className="ml-1 text-red-600">*</span>
-                </label>
-
-                {isOrderLocked ? (
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
-                    {selectedOrder ? (
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-red-600 shadow-sm">
-                          <Package size={19} />
-                        </div>
-
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            {selectedOrder.productionOrderNo}
-                          </p>
-
-                          <p className="mt-0.5 text-xs text-gray-500">
-                            {getProductName(selectedOrder)}
-
-                            {getProductCode(selectedOrder) !== "—"
-                              ? ` · ${getProductCode(selectedOrder)}`
-                              : ""}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <Loader2 size={16} className="animate-spin" />
-                        Loading production order...
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <select
-                    value={productionOrderId}
-                    onChange={(event) =>
-                      setProductionOrderId(event.target.value)
-                    }
-                    disabled={loadingOrders || submitting}
-                    className="h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-800 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:bg-gray-50"
-                  >
-                    <option value="">
-                      {loadingOrders
-                        ? "Loading production orders..."
-                        : "Select production order"}
-                    </option>
-
-                    {orders
-                      .filter(
-                        (order) =>
-                          order.status === "Draft" ||
-                          order.status === "Planned" ||
-                          order.status === "Released" ||
-                          order.status === "In Production",
-                      )
-                      .map((order) => (
-                        <option key={order._id} value={order._id}>
-                          {order.productionOrderNo} — {getProductName(order)} ·{" "}
-                          {order.status}
-                        </option>
-                      ))}
-                  </select>
-                )}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Batch product</p>
+                <p className="mt-1 font-bold text-slate-950">{editingBatch?.productName || "Production batch"}</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {editingBatch?.formulaName || "Formula"} · V{editingBatch?.formulaVersion || 1}
+                </p>
               </div>
             )}
 
             {/* ============================================================ */}
             {/* ORDER SUMMARY                                                  */}
             {/* ============================================================ */}
-
-            {isEdit && selectedOrder && (
-              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <p className="text-xs font-medium text-gray-500">Product</p>
-
-                    <p className="mt-1 font-semibold text-gray-900">
-                      {getProductName(selectedOrder)}
-                    </p>
-
-                    <p className="mt-0.5 text-xs text-gray-500">
-                      {getProductCode(selectedOrder)}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-medium text-gray-500">
-                      Order Quantity
-                    </p>
-
-                    <p className="mt-1 font-semibold text-gray-900">
-                      {numberValue(selectedOrder.quantity).toLocaleString()}{" "}
-                      {selectedOrder.unit}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-medium text-gray-500">
-                      Remaining
-                    </p>
-
-                    {loadingBatches ? (
-                      <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
-                        <Loader2 size={14} className="animate-spin" />
-                        Calculating...
-                      </div>
-                    ) : (
-                      <p className="mt-1 font-semibold text-red-600">
-                        {remainingQuantity !== null
-                          ? `${remainingQuantity.toLocaleString()} ${selectedOrder.unit}`
-                          : "Calculating..."}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-medium text-gray-500">
-                      Planned Date
-                    </p>
-
-                    <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-gray-900">
-                      <CalendarDays size={15} />
-
-                      {formatDate(selectedOrder.plannedDate)}
-                    </div>
-                  </div>
-                </div>
-
-                {!isEdit && remainingQuantity !== null && (
-                  <div className="mt-4 border-t border-gray-200 pt-4 text-xs leading-5 text-gray-600">
-                    Other active batches have allocated{" "}
-                    <span className="font-semibold text-gray-900">
-                      {Math.max(
-                        0,
-                        numberValue(selectedOrder.quantity) - remainingQuantity,
-                      ).toLocaleString()}{" "}
-                      {selectedOrder.unit}
-                    </span>
-                    . This new batch can use up to the remaining quantity shown
-                    above.
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* ============================================================ */}
             {/* PLANNED QUANTITY                                               */}
@@ -1318,8 +1156,7 @@ export default function ProductionBatchModal({
               type="submit"
               disabled={
                 submitting ||
-                (isEdit &&
-                  (loadingOrders || loadingBatches || !productionOrderId)) ||
+                (isEdit && loadingBatches) ||
                 (!isEdit &&
                   (loadingDirectOptions ||
                     !directProductId ||

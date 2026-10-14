@@ -127,16 +127,6 @@ export const createMaterialConsumptionController = async (
     const { productionOrder, productionBatch, notes } = req.body;
 
     /**
-     * Production Order
-     */
-    if (typeof productionOrder !== "string" || !productionOrder.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Production Order is required.",
-      });
-    }
-
-    /**
      * Production Batch
      */
     if (typeof productionBatch !== "string" || !productionBatch.trim()) {
@@ -157,7 +147,10 @@ export const createMaterialConsumptionController = async (
     }
 
     const data = await createMaterialConsumption({
-      productionOrder,
+      productionOrder:
+        typeof productionOrder === "string" && productionOrder.trim()
+          ? productionOrder
+          : undefined,
       productionBatch,
       notes,
     });

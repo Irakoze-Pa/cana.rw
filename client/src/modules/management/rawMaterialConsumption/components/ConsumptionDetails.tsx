@@ -495,10 +495,7 @@ export default function ConsumptionTable({
                         </p>
 
                         <p className="mt-1 text-[11px] text-gray-400">
-                          {productionOrderLabel !==
-                          "—"
-                            ? `Order: ${productionOrderLabel}`
-                            : "Production order —"}
+                          Direct batch consumption
                         </p>
                       </button>
                     </td>

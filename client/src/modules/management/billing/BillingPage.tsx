@@ -591,8 +591,8 @@ export default function BillingPage() {
     setPaymentOpen(true);
   };
   return (
-    <div className="mx-auto max-w-7xl space-y-4 pb-6">
-      <header className="flex flex-col justify-between gap-3 border-b-2 border-slate-950 pb-4 sm:flex-row sm:items-center">
+    <div className="mx-auto max-w-[1440px] space-y-3 pb-5">
+      <header className="flex flex-col justify-between gap-3 border-b border-slate-300 pb-3 sm:flex-row sm:items-center">
         <div className="flex gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm">
             <ReceiptText size={21} />
@@ -601,11 +601,11 @@ export default function BillingPage() {
             <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
               Sales & finance
             </p>
-            <h1 className="mt-0.5 text-xl font-extrabold tracking-tight text-slate-950">
+            <h1 className="mt-0.5 text-xl font-black tracking-tight text-slate-950">
               Invoices & payments
             </h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              Invoices are created automatically when a sales order is delivered
+              Automatic sales invoices, receipts and customer balances
               {lastUpdated
                 ? ` · updated ${lastUpdated.toLocaleTimeString("en-RW", { hour: "2-digit", minute: "2-digit" })}`
                 : ""}
@@ -643,7 +643,7 @@ export default function BillingPage() {
           </button>
         </div>
       </header>
-      <section className="grid gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
             label: "Customer debt due",
@@ -670,7 +670,7 @@ export default function BillingPage() {
             currency: false,
           },
         ].map(({ label, value, helper, currency }) => (
-          <div key={label} className="bg-white px-3 py-3">
+          <div key={label} className="bg-white px-4 py-3">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
               {label}
             </p>
@@ -681,7 +681,7 @@ export default function BillingPage() {
           </div>
         ))}
       </section>
-      <nav className="flex overflow-x-auto border-b border-slate-300 bg-white" aria-label="Billing workspace views">
+      <nav className="flex overflow-x-auto rounded-t-xl border border-slate-200 bg-white" aria-label="Billing workspace views">
         {([
           ["accounts", "Customer accounts", receivableAccounts.length],
           ["invoices", "Invoices & receipts", invoices.length],
@@ -956,7 +956,7 @@ export default function BillingPage() {
           </form>
         </div>
       )}
-      <div className={`${workspaceView === "invoices" ? "flex" : "hidden"} flex-col gap-2 border border-slate-200 bg-slate-50 p-2.5 lg:flex-row lg:items-center`}>
+      <div className={`${workspaceView === "invoices" ? "flex" : "hidden"} flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2.5 lg:flex-row lg:items-center`}>
         <input
           aria-label="Search invoices"
           placeholder="Search invoice or customer"
@@ -987,8 +987,8 @@ export default function BillingPage() {
           ))}
         </div>
       </div>
-      <div className={`${workspaceView === "invoices" ? "grid" : "hidden"} items-start gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]`}>
-        <section className="max-h-[520px] space-y-1.5 overflow-y-auto pr-1 md:hidden">
+      <div className={`${workspaceView === "invoices" ? "grid" : "hidden"} items-start gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.9fr)]`}>
+        <section className="max-h-[430px] space-y-1.5 overflow-y-auto overscroll-contain pr-1 md:hidden">
           {loading ? (
             <p className="border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
               Loading invoices…
@@ -1076,7 +1076,7 @@ export default function BillingPage() {
             </p>
           )}
         </section>
-        <section className="hidden overflow-hidden border border-slate-200 bg-white md:block">
+        <section className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
           <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
             <h2 className="text-sm font-extrabold text-slate-950">Invoices</h2>
             <button
@@ -1087,23 +1087,22 @@ export default function BillingPage() {
               Record payment
             </button>
           </div>
-          <div className="max-h-[520px] overflow-auto">
-          <table className="min-w-full text-left text-xs">
+          <div className="max-h-[430px] overflow-y-auto overscroll-contain">
+          <table className="w-full table-fixed text-left text-[11px]">
             <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase text-white">
               <tr>
-                <th className="px-3 py-2.5">Invoice</th>
-                <th className="px-3 py-2.5">Client</th>
-                <th className="px-3 py-2.5">Total</th>
-                <th className="px-3 py-2.5">Paid</th>
-                <th className="px-3 py-2.5">Balance</th>
-                <th className="px-3 py-2.5">Status</th>
-                <th className="px-3 py-2.5 text-right">Actions</th>
+                <th className="w-[18%] px-2.5 py-2.5">Invoice</th>
+                <th className="w-[20%] px-2.5 py-2.5">Client</th>
+                <th className="w-[18%] px-2.5 py-2.5">Value (RWF)</th>
+                <th className="w-[17%] px-2.5 py-2.5">Balance</th>
+                <th className="w-[14%] px-2.5 py-2.5">Status</th>
+                <th className="w-[13%] px-2.5 py-2.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-gray-500">
+                  <td colSpan={6} className="p-8 text-center text-gray-500">
                     Loading billing data…
                   </td>
                 </tr>
@@ -1115,33 +1114,33 @@ export default function BillingPage() {
                     onClick={() => setInvoiceDetails(invoice)}
                     className={`cursor-pointer transition hover:bg-slate-50 ${linkedInvoiceId === invoice._id ? "bg-red-50" : ""}`}
                   >
-                    <td className="px-3 py-2.5 font-semibold">
-                      {invoice.invoiceNumber}
-                      <span className="block text-xs font-normal text-gray-400">
+                    <td className="truncate px-2.5 py-2 font-semibold" title={invoice.invoiceNumber}>
+                      <span className="block truncate">{invoice.invoiceNumber}</span>
+                      <span className="block truncate text-[10px] font-normal text-gray-400">
                         {invoice.salesOrder?.orderNumber}
                       </span>
                     </td>
-                    <td className="max-w-36 truncate px-3 py-2.5">
+                    <td className="truncate px-2.5 py-2" title={invoice.customer?.fullName}>
                       {invoice.customer?.fullName}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5">
-                      {money(invoice.total)} RWF
+                    <td className="truncate px-2.5 py-2 font-semibold text-slate-900">
+                      {money(invoice.total)}
+                      <span className="mt-0.5 block text-[10px] font-medium text-emerald-700">
+                        Paid {money(invoice.amountPaid)}
+                      </span>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-emerald-700">
-                      {money(invoice.amountPaid)} RWF
+                    <td className="truncate px-2.5 py-2 font-semibold" title={`${money(invoice.balance)} RWF`}>
+                      {money(invoice.balance)}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                      {money(invoice.balance)} RWF
-                    </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-2.5 py-2">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${statusStyle(invoice.status)}`}
+                        className={`block truncate rounded-full px-1.5 py-0.5 text-center text-[9px] font-extrabold uppercase tracking-wide ${statusStyle(invoice.status)}`}
                       >
                         {invoice.status.replaceAll("_", " ")}
                       </span>
                     </td>
                     <td
-                      className="whitespace-nowrap px-3 py-2.5 text-right"
+                      className="px-2 py-2 text-right"
                       onClick={(event) => event.stopPropagation()}
                     >
                       <button
@@ -1149,9 +1148,9 @@ export default function BillingPage() {
                         aria-label={`View ${invoice.invoiceNumber}`}
                         title="View invoice"
                         onClick={() => setInvoiceDetails(invoice)}
-                        className="mr-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 text-slate-600 transition hover:border-slate-400 hover:bg-slate-50"
+                        className="mr-0.5 inline-flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-slate-600 transition hover:border-slate-400 hover:bg-slate-50"
                       >
-                        <Eye size={14} />
+                        <Eye size={12} />
                       </button>
                       {invoice.balance > 0 && invoice.status !== "void" && (
                         <button
@@ -1159,9 +1158,9 @@ export default function BillingPage() {
                           aria-label={`Record payment for ${invoice.invoiceNumber}`}
                           title="Record payment"
                           onClick={() => openPaymentForInvoice(invoice)}
-                          className="mr-1 inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-950 text-white transition hover:bg-slate-800"
+                          className="mr-0.5 inline-flex h-6 w-6 items-center justify-center rounded bg-slate-950 text-white transition hover:bg-slate-800"
                         >
-                          <CreditCard size={14} />
+                          <CreditCard size={12} />
                         </button>
                       )}
                       <button
@@ -1169,9 +1168,9 @@ export default function BillingPage() {
                         aria-label={`Print ${invoice.invoiceNumber}`}
                         title="Print invoice"
                         onClick={() => printInvoice(invoice)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-slate-600 transition hover:border-red-200 hover:text-red-700"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded border border-gray-200 text-slate-600 transition hover:border-red-200 hover:text-red-700"
                       >
-                        <Printer size={14} />
+                        <Printer size={12} />
                       </button>
                     </td>
                   </tr>
@@ -1179,7 +1178,7 @@ export default function BillingPage() {
               )}
               {!loading && invoices.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-gray-500">
+                  <td colSpan={6} className="p-8 text-center text-gray-500">
                     Delivered orders will appear here as invoices.
                   </td>
                 </tr>
@@ -1553,7 +1552,7 @@ export default function BillingPage() {
             </form>
           </div>
         )}
-        <section className="border border-slate-200 bg-white p-3">
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white p-3">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
             <div>
               <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
@@ -1600,7 +1599,7 @@ export default function BillingPage() {
               className="min-w-0 rounded-md border border-gray-200 px-2 py-1.5 text-xs"
             />
           </div>
-          <div className="mt-2 max-h-[320px] space-y-1 overflow-y-auto pr-1">
+          <div className="mt-2 max-h-[356px] space-y-1 overflow-y-auto pr-1">
             {filteredPayments.map((payment) => (
               <div
                 key={payment._id}

@@ -31,7 +31,8 @@ export interface IProductionBatch
   // PRODUCTION ORDER
   // ---------------------------------------------------
 
-  productionOrder: mongoose.Types.ObjectId;
+  /** Legacy reference retained only on batches created by the old workflow. */
+  productionOrder?: mongoose.Types.ObjectId;
 
   // ---------------------------------------------------
   // PRODUCT SNAPSHOT
@@ -159,7 +160,7 @@ const productionBatchSchema =
       productionOrder: {
         type: Schema.Types.ObjectId,
         ref: "ProductionOrder",
-        required: true,
+        required: false,
       },
 
       // -------------------------------------------------

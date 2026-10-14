@@ -622,14 +622,14 @@ export default function RawMaterialConsumptionDetailsPage() {
             subtitle={consumption.batchNumber || "-"}
           />
 
-          {/* ORDER */}
+          {/* FORMULA */}
 
           <InfoCard
             icon={<ClipboardList size={19} className="text-amber-600" />}
             iconClass="bg-amber-50"
-            label="Production Order"
-            title={getProductionOrderName(consumption.productionOrder)}
-            subtitle={consumption.formulaName || "Formula not specified"}
+            label="Formula"
+            title={consumption.formulaName || "Formula not specified"}
+            subtitle={consumption.formulaVersion ? `Version ${consumption.formulaVersion}` : "Batch recipe"}
           />
 
           {/* CREATED */}

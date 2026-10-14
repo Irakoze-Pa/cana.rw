@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 
 import ProductionBatch from "./productionBatch.model";
 import ProductionOrder from "../productionOrder/productionOrder.model";
-import { createProductionOrder } from "../productionOrder/productionOrder.service";
 import Formula from "../../formula/formula.model";
 import Product from "../../product/product.model";
 import FinishedGoodsStoreBalance from "../../finishedGoods/storeBalance.model";
@@ -80,7 +79,7 @@ export class ProductionBatchServiceError extends Error {
   }
 }
 
-async function snapshotCompletedBatchCost(batch: any, productionOrder: any) {
+async function snapshotCompletedBatchCost(batch: any, productionOrder?: any) {
   if (batch.costedAt) return;
 
   const [transactions, product] = await Promise.all([
@@ -99,12 +98,15 @@ async function snapshotCompletedBatchCost(batch: any, productionOrder: any) {
         Number(transaction.totalCost || 0),
     0,
   );
-  const orderQuantity = Number(productionOrder.quantity || 0);
+  const orderQuantity = Number(productionOrder?.quantity || 0);
   const allocation =
     orderQuantity > 0 ? Number(batch.plannedQuantity || 0) / orderQuantity : 1;
-  const labor = Number(productionOrder.laborCost || 0) * allocation;
-  const energy = Number(productionOrder.energyCost || 0) * allocation;
-  const other = Number(productionOrder.otherCost || 0) * allocation;
+  const formula = await Formula.findById(batch.formula)
+    .select("laborCost energyCost otherCost")
+    .lean();
+  const labor = Number(productionOrder?.laborCost ?? formula?.laborCost ?? 0) * allocation;
+  const energy = Number(productionOrder?.energyCost ?? formula?.energyCost ?? 0) * allocation;
+  const other = Number(productionOrder?.otherCost ?? formula?.otherCost ?? 0) * allocation;
   const total = Math.max(0, materialCost + labor + energy + other);
   const output = Number(batch.actualQuantity || 0);
   const perKg = output > 0 ? total / output : 0;
@@ -289,7 +291,7 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
     validateObjectId(String(data.formula || ""), "formula ID");
 
     const formula = await Formula.findById(data.formula)
-      .select("batchSize status")
+      .select("product name code version batchSize batchUnit status")
       .lean();
 
     if (!formula) {
@@ -311,19 +313,36 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
       );
     }
 
-    // The production order remains an internal audit record only. Operators
-    // start directly from a product and formula, then enter the actual output
-    // at batch completion.
-    productionOrder = await createProductionOrder({
-      product: String(data.product),
-      formula: String(data.formula),
-      quantity: formulaBatchSize,
-      plannedDate: data.startDate || new Date(),
+    if (formula.product.toString() !== String(data.product)) {
+      throw new ProductionBatchServiceError(
+        "The selected formula does not belong to this product.",
+        400,
+      );
+    }
+    const product = await Product.findById(data.product)
+      .select("name code sku unit baseUnit")
+      .lean();
+    if (!product) {
+      throw new ProductionBatchServiceError("Product not found.", 404);
+    }
+    // A lightweight source snapshot replaces the old hidden Production Order.
+    productionOrder = {
+      _id: new mongoose.Types.ObjectId(),
+      isDirectBatch: true,
       status: "Released",
+      quantity: formulaBatchSize,
+      product: product._id,
+      productName: product.name,
+      productCode: product.code || "",
+      formula: formula._id,
+      formulaName: formula.name,
+      formulaCode: formula.code,
+      formulaVersion: formula.version,
+      unit: formula.batchUnit || product.baseUnit || product.unit || "kg",
+      items: [{}],
       directBatchRecord: true,
-      notes:
-        `System record for direct production batch. ${data.notes?.trim() || ""}`.trim(),
-    });
+      save: async () => undefined,
+    };
   }
 
   if (!productionOrder) {
@@ -435,7 +454,7 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
     const batch = await ProductionBatch.create({
       batchNo,
 
-      productionOrder: productionOrder._id,
+      productionOrder: data.productionOrder ? productionOrder._id : undefined,
 
       product: productionOrder.product,
 
@@ -660,11 +679,9 @@ export async function updateProductionBatch(
   // LOAD ORDER
   // ---------------------------------------------------
 
-  const productionOrder = await ProductionOrder.findById(batch.productionOrder);
-
-  if (!productionOrder) {
-    throw new ProductionBatchServiceError("Production order not found.", 404);
-  }
+  const productionOrder = batch.productionOrder
+    ? await ProductionOrder.findById(batch.productionOrder)
+    : null;
 
   // ---------------------------------------------------
   // FIELD PERMISSIONS
@@ -700,31 +717,21 @@ export async function updateProductionBatch(
       );
     }
 
-    const otherBatches = await ProductionBatch.find({
-      productionOrder: batch.productionOrder,
-
-      _id: {
-        $ne: batch._id,
-      },
-
-      status: {
-        $ne: "Cancelled",
-      },
-    })
-      .select("plannedQuantity actualQuantity status")
-      .lean();
-
-    const otherPlanned = getOrderCommittedQuantity(otherBatches);
-
-    const remainingForThisBatch = roundNumber(
-      Number(productionOrder.quantity) - otherPlanned,
-    );
-
-    if (quantity > remainingForThisBatch) {
-      throw new ProductionBatchServiceError(
-        `The new batch quantity (${quantity}) exceeds the remaining production order quantity (${remainingForThisBatch}).`,
-        409,
+    if (productionOrder) {
+      const otherBatches = await ProductionBatch.find({
+        productionOrder: batch.productionOrder,
+        _id: { $ne: batch._id },
+        status: { $ne: "Cancelled" },
+      }).select("plannedQuantity actualQuantity status").lean();
+      const remainingForThisBatch = roundNumber(
+        Number(productionOrder.quantity) - getOrderCommittedQuantity(otherBatches),
       );
+      if (quantity > remainingForThisBatch) {
+        throw new ProductionBatchServiceError(
+          `The new batch quantity (${quantity}) exceeds the remaining historical production order quantity (${remainingForThisBatch}).`,
+          409,
+        );
+      }
     }
 
     batch.plannedQuantity = quantity;
@@ -752,6 +759,7 @@ export async function updateProductionBatch(
     }
 
     if (
+      productionOrder &&
       !productionOrder.directBatchRecord &&
       actual > Number(batch.plannedQuantity)
     ) {
@@ -765,34 +773,25 @@ export async function updateProductionBatch(
     // ORDER TOTAL SAFETY
     // -------------------------------------------------
 
-    const otherActualBatches = await ProductionBatch.find({
-      productionOrder: batch.productionOrder,
-
-      _id: {
-        $ne: batch._id,
-      },
-
-      status: {
-        $ne: "Cancelled",
-      },
-    })
-      .select("actualQuantity")
-      .lean();
-
-    const otherActual = otherActualBatches.reduce(
-      (total, item) => total + Number(item.actualQuantity || 0),
-      0,
-    );
-
-    const maximumAllowedActual = roundNumber(
-      Number(productionOrder.quantity) - otherActual,
-    );
-
-    if (!productionOrder.directBatchRecord && actual > maximumAllowedActual) {
-      throw new ProductionBatchServiceError(
-        `Actual produced quantity cannot exceed the remaining production order quantity (${maximumAllowedActual}).`,
-        409,
+    if (productionOrder && !productionOrder.directBatchRecord) {
+      const otherActualBatches = await ProductionBatch.find({
+        productionOrder: batch.productionOrder,
+        _id: { $ne: batch._id },
+        status: { $ne: "Cancelled" },
+      }).select("actualQuantity").lean();
+      const otherActual = otherActualBatches.reduce(
+        (total, item) => total + Number(item.actualQuantity || 0),
+        0,
       );
+      const maximumAllowedActual = roundNumber(
+        Number(productionOrder.quantity) - otherActual,
+      );
+      if (actual > maximumAllowedActual) {
+        throw new ProductionBatchServiceError(
+          `Actual produced quantity cannot exceed the remaining historical production order quantity (${maximumAllowedActual}).`,
+          409,
+        );
+      }
     }
 
     batch.actualQuantity = actual;
@@ -824,7 +823,7 @@ export async function updateProductionBatch(
 
   batch.status = nextStatus;
 
-  if (nextStatus === "In Progress" && productionOrder.status === "Released") {
+  if (nextStatus === "In Progress" && productionOrder?.status === "Released") {
     productionOrder.status = "In Production";
   }
 
@@ -953,7 +952,7 @@ export async function updateProductionBatch(
 
   await batch.save();
 
-  await productionOrder.save();
+  if (productionOrder) await productionOrder.save();
 
   // Create the formula-based material issue list when actual production starts.
   // This is intentionally done once per batch and remains Draft until the
@@ -966,7 +965,9 @@ export async function updateProductionBatch(
 
     if (!existingConsumption) {
       await createMaterialConsumption({
-        productionOrder: String(batch.productionOrder),
+        productionOrder: batch.productionOrder
+          ? String(batch.productionOrder)
+          : undefined,
         productionBatch: String(batch._id),
         notes: `Created automatically when batch ${batch.batchNo} started.`,
       });
@@ -1079,7 +1080,9 @@ export async function updateProductionBatch(
   // SYNC ORDER
   // ---------------------------------------------------
 
-  await syncProductionOrderFromBatches(String(batch.productionOrder));
+  if (batch.productionOrder) {
+    await syncProductionOrderFromBatches(String(batch.productionOrder));
+  }
 
   return batch;
 }

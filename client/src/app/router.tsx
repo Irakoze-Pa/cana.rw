@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import MainLayout from "@/layouts/MainLayout";
 
@@ -71,7 +71,6 @@ import FormulasPage from "@/modules/management/formula/pages/FormulaPage";
 // PRODUCTION MODULE
 // =====================================================
 
-import ProductionOrdersPage from "@/modules/management/production/pages/ProductionOrdersPage";
 import ProductionBatchesPage from "@/modules/management/production/pages/ProductionBatchesPage";
 import ProductionWorkspacePage from "@/modules/management/production/pages/ProductionWorkspacePage";
 import SalesOrdersPage from "@/modules/management/sales/SalesOrdersPage";
@@ -401,7 +400,7 @@ const router = createBrowserRouter([
 
       {
         path: "production/orders",
-        element: <ProductionOrdersPage />,
+        element: <Navigate to="/management/production/batches" replace />,
       },
 
       {

@@ -41,7 +41,6 @@ type Summary = {
   completedBatches: number;
   openSales: number;
   pendingQuotations: number;
-  openProductionOrders: number;
   outstandingInvoices: number;
   outstandingBalance: number;
   overdueInvoices: number;
@@ -70,7 +69,7 @@ type Summary = {
 const empty: Summary = {
   products: 0, lowStock: 0, lowRawMaterials: 0, lowFinishedGoods: 0, purchaseOrders: 0, activeBatches: 0,
   completedBatches: 0, openSales: 0, pendingQuotations: 0,
-  openProductionOrders: 0, outstandingInvoices: 0, outstandingBalance: 0, overdueInvoices: 0, salesValue: 0,
+  outstandingInvoices: 0, outstandingBalance: 0, overdueInvoices: 0, salesValue: 0,
   deliveredValue: 0, monthSalesOrders: 0, monthDeliveredOrders: 0, activeEquipment: 0, openCompliance: 0,
   overdueCompliance: 0, recentSales: [], lowMaterials: [],
   treasuryBalance: 0, activeTreasuryAccounts: 0, periodRevenue: 0,
@@ -114,59 +113,69 @@ export default function AdminDashboard() {
   const metrics = [
     { label: "Quotation requests", value: data.pendingQuotations, note: "Waiting for review", to: "/management/quotations", icon: <FileText size={17} /> },
     { label: "Open sales orders", value: data.openSales, note: "Need fulfilment", to: "/management/sales", icon: <ShoppingCart size={17} /> },
-    { label: "Production orders", value: data.openProductionOrders, note: `${data.activeBatches} active batches`, to: "/management/production/orders", icon: <Factory size={17} /> },
+    { label: "Production batches", value: data.activeBatches, note: "Direct production workflow", to: "/management/production/batches", icon: <Factory size={17} /> },
     { label: "Raw-material risks", value: data.lowRawMaterials, note: "At or below minimum", to: "/management/raw-materials", icon: <AlertTriangle size={17} /> },
     { label: "Finished-goods risks", value: data.lowFinishedGoods, note: "Store balance below minimum", to: "/management/inventory/finished-goods", icon: <Package size={17} /> },
     { label: "Open procurement", value: data.purchaseOrders, note: "Orders to receive", to: "/management/purchase-orders", icon: <Truck size={17} /> },
     { label: "Outstanding invoices", value: data.outstandingInvoices, note: `${data.overdueInvoices} overdue · ${money(data.outstandingBalance)} due`, to: "/management/billing", icon: <CircleDollarSign size={17} /> },
     { label: "Factory actions", value: data.openCompliance, note: `${data.overdueCompliance} overdue`, to: "/management/compliance", icon: <ShieldCheck size={17} /> },
   ];
-  const attentionTotal = data.pendingQuotations + data.openSales + data.openProductionOrders + data.lowRawMaterials + data.lowFinishedGoods + data.purchaseOrders + data.outstandingInvoices + data.overdueCompliance;
+  const attentionTotal = data.pendingQuotations + data.openSales + data.activeBatches + data.lowRawMaterials + data.lowFinishedGoods + data.purchaseOrders + data.outstandingInvoices + data.overdueCompliance;
   const workload = [
     { label: "Quotations", value: data.pendingQuotations, to: "/management/quotations" },
     { label: "Sales orders", value: data.openSales, to: "/management/sales/orders" },
-    { label: "Production", value: data.openProductionOrders, to: "/management/production/orders" },
+    { label: "Production", value: data.activeBatches, to: "/management/production/batches" },
     { label: "Procurement", value: data.purchaseOrders, to: "/management/purchase-orders" },
     { label: "Collections", value: data.outstandingInvoices, to: "/management/billing" },
   ];
   const monthLabel = new Date().toLocaleDateString("en-RW", { month: "long", year: "numeric" });
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-4 pb-6">
-      <header className="border-b-2 border-slate-950 bg-white pb-4">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+    <div className="mx-auto max-w-[1500px] space-y-5 pb-8">
+      <header className="overflow-hidden border border-slate-950 bg-slate-950 text-white shadow-[0_18px_50px_-35px_rgba(15,23,42,.8)]">
+        <div className="h-1 bg-red-700" />
+        <div className="flex flex-col justify-between gap-5 px-4 py-5 sm:px-6 lg:flex-row lg:items-end lg:px-7 lg:py-6">
           <div>
-            <p className="cana-section-kicker text-red-700">Management overview · {monthLabel}</p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Business control centre</h1>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">Live operational position, financial exposure and work requiring action.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-red-400">Executive overview</p>
+              <span className="h-1 w-1 rounded-full bg-slate-600" />
+              <p className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400">{monthLabel}</p>
+            </div>
+            <h1 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-4xl">Business performance</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">One view of cash, commercial activity, production readiness and exceptions requiring management attention.</p>
           </div>
           <div className="grid grid-cols-[1fr_auto] gap-2 sm:flex sm:flex-wrap">
-            <Link to="/management/sales" className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-700 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-red-800 sm:px-4 sm:text-sm"><ShoppingCart size={16} />Sales workspace</Link>
-            <button type="button" onClick={() => void load()} aria-label="Refresh dashboard" className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 sm:px-4 sm:text-sm"><RefreshCw size={16} className={loading ? "animate-spin" : ""} /><span className="hidden sm:inline">Refresh</span></button>
+            <Link to="/management/sales" className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-700 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-red-800 sm:px-4 sm:text-sm"><ShoppingCart size={16} />Record a sale</Link>
+            <button type="button" onClick={() => void load()} aria-label="Refresh dashboard" className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-xs font-bold text-slate-200 transition hover:border-slate-500 sm:px-4 sm:text-sm"><RefreshCw size={16} className={loading ? "animate-spin" : ""} /><span className="hidden sm:inline">Refresh data</span></button>
           </div>
         </div>
-        <div className={`mt-4 grid gap-px overflow-hidden border border-slate-200 bg-slate-200 ${canViewFinance ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-3"}`}>
-          {canViewFinance ? <><HeadlineMetric label="Treasury available" value={money(data.treasuryBalance)} compactValue={compactMoney(data.treasuryBalance)} /><HeadlineMetric label="Revenue this month" value={money(data.periodRevenue)} compactValue={compactMoney(data.periodRevenue)} /><HeadlineMetric label="Net result this month" value={money(data.netProfit)} compactValue={compactMoney(data.netProfit)} tone={data.netProfit < 0 ? "negative" : "positive"} /></> : <><HeadlineMetric label="Sales booked this month" value={money(data.salesValue)} compactValue={compactMoney(data.salesValue)} /><HeadlineMetric label="Delivered this month" value={money(data.deliveredValue)} compactValue={compactMoney(data.deliveredValue)} /></>}
+        <div className={`grid border-t border-slate-800 ${canViewFinance ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-3"}`}>
+          {canViewFinance ? <><HeadlineMetric label="Available treasury" value={money(data.treasuryBalance)} compactValue={compactMoney(data.treasuryBalance)} /><HeadlineMetric label="Recognized revenue" value={money(data.periodRevenue)} compactValue={compactMoney(data.periodRevenue)} /><HeadlineMetric label="Accounting result" value={money(data.netProfit)} compactValue={compactMoney(data.netProfit)} tone={data.netProfit < 0 ? "negative" : "positive"} /></> : <><HeadlineMetric label="Sales booked" value={money(data.salesValue)} compactValue={compactMoney(data.salesValue)} /><HeadlineMetric label="Delivered value" value={money(data.deliveredValue)} compactValue={compactMoney(data.deliveredValue)} /></>}
           <HeadlineMetric label="Items requiring attention" value={String(attentionTotal)} />
         </div>
       </header>
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-      <section className="grid grid-cols-2 gap-px overflow-hidden border border-slate-200 bg-slate-200 xl:grid-cols-4">
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3 border-b border-slate-200 pb-2">
+          <div><p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-red-700">Priority work</p><h2 className="mt-0.5 text-lg font-extrabold text-slate-950">Operations requiring attention</h2></div>
+          <span className="text-xs font-semibold text-slate-500">Live operational records</span>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (
-          <Link key={metric.label} to={metric.to} className="group flex min-w-0 items-start justify-between gap-2 bg-white p-3 transition hover:bg-slate-50 sm:p-4">
-            <div className="min-w-0">
-              <p className="text-[9px] font-extrabold uppercase tracking-wide text-slate-500 sm:text-xs">{metric.label}</p>
-              <p className="mt-1 text-xl font-extrabold tracking-tight text-slate-950 sm:mt-2 sm:text-2xl">{loading ? "—" : metric.value}</p>
-              <p className="mt-1 hidden truncate text-xs text-slate-500 sm:block">{metric.note}</p>
+          <Link key={metric.label} to={metric.to} className="group flex min-w-0 items-center gap-3 border border-slate-200 bg-white p-3 transition hover:border-slate-950 hover:shadow-sm">
+            <span className={`grid h-10 w-10 shrink-0 place-items-center border ${metric.value > 0 ? "border-red-100 bg-red-50 text-red-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}>{metric.icon}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2"><p className="truncate text-[10px] font-extrabold uppercase tracking-wide text-slate-500">{metric.label}</p><ArrowRight size={13} className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-950" /></div>
+              <div className="mt-1 flex items-baseline gap-2"><p className="text-xl font-extrabold tracking-tight text-slate-950">{loading ? "—" : metric.value}</p><p className="truncate text-[11px] text-slate-500">{metric.note}</p></div>
             </div>
-            <span className="hidden border border-slate-200 bg-slate-50 p-2.5 text-slate-700 transition group-hover:border-slate-950 group-hover:bg-white sm:block">{metric.icon}</span>
           </Link>
         ))}
+        </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.05fr_.95fr]">
+      <section className="grid gap-4 bg-slate-100 p-3 sm:p-4 xl:grid-cols-[1.05fr_.95fr]">
         <SalesRealizationChart pipeline={data.salesValue} delivered={data.deliveredValue} outstanding={data.outstandingBalance} orders={data.monthSalesOrders} deliveredOrders={data.monthDeliveredOrders} loading={loading} />
         <WorkloadChart items={workload} loading={loading} />
       </section>
@@ -326,8 +335,8 @@ function WorkloadChart({ items, loading }: { items: Array<{ label: string; value
 }
 
 function HeadlineMetric({ label, value, compactValue, tone = "default" }: { label: string; value: string; compactValue?: string; tone?: "default" | "positive" | "negative" }) {
-  const valueTone = tone === "negative" ? "text-red-700" : tone === "positive" ? "text-emerald-700" : "text-slate-950";
-  return <div className="min-w-0 bg-white px-3 py-3 sm:px-4"><p className="truncate text-[8px] font-extrabold uppercase tracking-[.1em] text-slate-500 sm:text-[10px] sm:tracking-[.13em]">{label}</p><p className={`mt-1 truncate text-sm font-extrabold sm:text-xl ${valueTone}`}><span className="sm:hidden">{compactValue || value}</span><span className="hidden sm:inline">{value}</span></p></div>;
+  const valueTone = tone === "negative" ? "text-red-400" : "text-white";
+  return <div className="min-w-0 border-r border-slate-800 px-3 py-3.5 last:border-r-0 sm:px-5 sm:py-4"><p className="truncate text-[8px] font-extrabold uppercase tracking-[.1em] text-slate-500 sm:text-[10px] sm:tracking-[.13em]">{label}</p><p className={`mt-1.5 truncate text-sm font-extrabold tracking-tight sm:text-xl ${valueTone}`}><span className="sm:hidden">{compactValue || value}</span><span className="hidden sm:inline">{value}</span></p></div>;
 }
 
 function Panel({ title, description, action, to, icon, children }: { title: string; description: string; action: string; to: string; icon: React.ReactNode; children: React.ReactNode }) {

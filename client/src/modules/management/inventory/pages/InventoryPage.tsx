@@ -162,7 +162,7 @@ const InventoryPage = () => {
   };
 
   const handleRemoveStock = (item: Inventory) => {
-    window.location.assign("/management/production/orders");
+    window.location.assign("/management/production/batches");
   };
 
   const handleAdjustStock = (item: Inventory) => {
