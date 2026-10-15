@@ -34,7 +34,10 @@ router.post("/equipment", async (req, res, next) => { try {
   next(error);
 } });
 router.patch("/equipment/:id", async (req, res, next) => { try {
-  const data = await ComplianceEquipment.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
+  const allowed = ["code", "name", "area", "criticality", "cleaningFrequency", "maintenanceFrequency", "nextMaintenanceDate", "status"];
+  const update = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
+  if (update.nextMaintenanceDate && (typeof update.nextMaintenanceDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(update.nextMaintenanceDate))) return res.status(400).json({ message: "Use a valid next maintenance date." });
+  const data = await ComplianceEquipment.findByIdAndUpdate(req.params.id, { $set: update }, { new: true, runValidators: true });
   if (!data) return res.status(404).json({ message: "Equipment was not found." }); res.json({ data });
 } catch (error) { next(error); } });
 

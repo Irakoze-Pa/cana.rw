@@ -105,6 +105,8 @@ const statusStyle = (status: string) =>
       : status === "partially_paid"
         ? "bg-amber-50 text-amber-800"
         : "bg-red-50 text-red-700";
+const isCompletedPayment = (payment: Payment) =>
+  payment.status !== "void" && payment.status !== "pending";
 
 export default function BillingPage() {
   const [searchParams] = useSearchParams();
@@ -436,7 +438,7 @@ export default function BillingPage() {
       }),
     [payments, receiptFrom, receiptTo],
   );
-  const activePayments = filteredPayments.filter((payment) => payment.status === "received");
+  const activePayments = filteredPayments.filter(isCompletedPayment);
   const printPaymentRegister = () =>
     printCanaDocument({
       title: "Payment receipt register",
@@ -474,12 +476,16 @@ export default function BillingPage() {
             "Opening balance",
           payment.method.replaceAll("_", " "),
           payment.reference || "—",
-          payment.status === "void" ? "Reversed" : "Received",
+          payment.status === "void"
+            ? "Reversed"
+            : payment.status === "pending"
+              ? "Pending clearance"
+              : "Received",
           money(payment.amount),
         ]),
       },
       notes:
-        "Reversed receipts remain listed for audit purposes but are excluded from the total received.",
+        "Reversed receipts and uncleared cheques remain listed for audit purposes but are excluded from the total received.",
     });
   const paidInvoices = useMemo(
     () =>
@@ -522,7 +528,7 @@ export default function BillingPage() {
         0,
       ),
       receipts: payments
-        .filter((payment) => payment.status !== "void")
+        .filter(isCompletedPayment)
         .reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
     };
   }, [invoices, openingBalances, customerAccounts, payments]);

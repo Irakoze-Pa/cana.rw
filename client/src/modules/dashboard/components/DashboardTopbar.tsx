@@ -48,6 +48,7 @@ const titles: Record<string, string> = {
   "/management/payroll": "Payroll workspace",
   "/management/sites": "Site management",
   "/management/compliance": "Factory compliance",
+  "/management/compliance/equipment": "Equipment register",
   "/management/profile": "Profile & settings",
   "/dashboard": "My workspace",
   "/dashboard/quotations": "My quotations",

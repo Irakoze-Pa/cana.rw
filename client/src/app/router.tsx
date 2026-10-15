@@ -512,6 +512,7 @@ const router = createBrowserRouter([
       // FACTORY COMPLIANCE, SAFETY & SETTINGS
       // =================================================
       { path: "compliance", element: <FactoryCompliancePage view="overview" /> },
+      { path: "compliance/equipment", element: <FactoryCompliancePage view="equipment" /> },
       { path: "compliance/cleaning", element: <FactoryCompliancePage view="cleaning" /> },
       { path: "compliance/maintenance", element: <FactoryCompliancePage view="maintenance" /> },
       { path: "compliance/safety", element: <FactoryCompliancePage view="safety" /> },

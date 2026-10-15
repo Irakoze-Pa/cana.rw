@@ -8,8 +8,8 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDollarSign,
-  CircleHelp,
   ClipboardList,
+  Factory,
   Landmark,
   Plus,
   Printer,
@@ -59,9 +59,48 @@ type Summary = {
   liabilities: number;
   equity: number;
   cashAndBank: number;
+  fixedAssets: number;
   receivables: number;
   payables: number;
+  ownerLoans: number;
+  taxPayable: number;
   entryCount: number;
+};
+type FixedAsset = {
+  _id: string;
+  assetCode: string;
+  name: string;
+  category: string;
+  location: string;
+  recognitionDate: string;
+  openingValue: number;
+  status: "active" | "maintenance" | "disposed";
+  valuationStatus: "provisional" | "verified";
+  notes?: string;
+};
+type OwnerLoan = {
+  _id: string;
+  loanNumber: string;
+  lenderName: string;
+  lenderType?: string;
+  openingDate: string;
+  originalAmount: number;
+  reference?: string;
+  interestRate: number;
+  notes?: string;
+  status: "active" | "settled" | "void";
+  repayments?: { principal: number; interest: number }[];
+};
+type TaxLiability = {
+  _id: string;
+  taxNumber: string;
+  taxType: string;
+  authority: string;
+  period: string;
+  dueDate: string;
+  assessedAmount: number;
+  status: "unpaid" | "partial" | "paid" | "void";
+  payments?: { amount: number }[];
 };
 type Journal = {
   _id: string;
@@ -110,8 +149,19 @@ type Workspace = {
     notes?: string;
   } | null;
   treasury?: TreasuryWorkspace;
+  fixedAssets?: FixedAsset[];
+  ownerLoans?: OwnerLoan[];
+  taxLiabilities?: TaxLiability[];
 };
-type Tab = "overview" | "treasury" | "ledger" | "trial" | "journals";
+type Tab =
+  | "overview"
+  | "treasury"
+  | "loans"
+  | "taxes"
+  | "assets"
+  | "ledger"
+  | "trial"
+  | "journals";
 type DraftLine = {
   accountCode: string;
   debit: string;
@@ -127,8 +177,11 @@ const emptySummary: Summary = {
   liabilities: 0,
   equity: 0,
   cashAndBank: 0,
+  fixedAssets: 0,
   receivables: 0,
   payables: 0,
+  ownerLoans: 0,
+  taxPayable: 0,
   entryCount: 0,
 };
 const today = () => new Date().toISOString().slice(0, 10);
@@ -165,9 +218,16 @@ export default function AccountingPage() {
   const { confirm } = useConfirmation();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const initialTab: Tab = ["overview", "treasury", "ledger", "trial", "journals"].includes(
-    requestedTab || "",
-  )
+  const initialTab: Tab = [
+    "overview",
+    "treasury",
+    "loans",
+    "taxes",
+    "assets",
+    "ledger",
+    "trial",
+    "journals",
+  ].includes(requestedTab || "")
     ? (requestedTab as Tab)
     : "overview";
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -178,17 +238,31 @@ export default function AccountingPage() {
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [trial, setTrial] = useState<TrialRow[]>([]);
   const [journals, setJournals] = useState<Journal[]>([]);
-  const [configuration, setConfiguration] = useState<Workspace["configuration"]>(null);
+  const [configuration, setConfiguration] =
+    useState<Workspace["configuration"]>(null);
   const [treasury, setTreasury] = useState<TreasuryWorkspace>({
     accounts: [],
     transactions: [],
   });
+  const [fixedAssets, setFixedAssets] = useState<FixedAsset[]>([]);
+  const [ownerLoans, setOwnerLoans] = useState<OwnerLoan[]>([]);
+  const [taxes, setTaxes] = useState<TaxLiability[]>([]);
   const [expanded, setExpanded] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [journalOpen, setJournalOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [transactionOpen, setTransactionOpen] = useState(false);
+  const [assetEditor, setAssetEditor] = useState<FixedAsset | null | "new">(
+    null,
+  );
+  const [loanOpen, setLoanOpen] = useState(false);
+  const [taxOpen, setTaxOpen] = useState(false);
+  const [paymentTarget, setPaymentTarget] = useState<{
+    kind: "loan" | "tax";
+    id: string;
+    balance: number;
+  } | null>(null);
   const canJournal =
     user?.role === "admin" ||
     user?.role === "superadmin" ||
@@ -211,6 +285,9 @@ export default function AccountingPage() {
       setJournals(workspace.journals || []);
       setConfiguration(workspace.configuration || null);
       setTreasury(workspace.treasury || { accounts: [], transactions: [] });
+      setFixedAssets(workspace.fixedAssets || []);
+      setOwnerLoans(workspace.ownerLoans || []);
+      setTaxes(workspace.taxLiabilities || []);
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -283,17 +360,149 @@ export default function AccountingPage() {
           },
         ],
         table: {
-          headers: ["Account", "Type", "Institution / number", "Status", "Balance"],
+          headers: [
+            "Account",
+            "Type",
+            "Institution / number",
+            "Status",
+            "Balance",
+          ],
           rows: treasury.accounts.map((item) => [
             item.name,
             title(item.type),
-            [item.institution, item.accountNumber].filter(Boolean).join(" · ") || "—",
+            [item.institution, item.accountNumber]
+              .filter(Boolean)
+              .join(" · ") || "—",
             title(item.status),
             money(item.balance),
           ]),
         },
         notes:
           "Balances include the opening balance and all posted deposits, withdrawals and internal account transfers.",
+      });
+      return;
+    }
+    if (tab === "assets") {
+      printCanaDocument({
+        title: "Fixed-asset register",
+        reference: `FAR-${to.replaceAll("-", "")}`,
+        status: "Accounting asset register",
+        details: [
+          { label: "As at", value: to },
+          {
+            label: "Equipment items",
+            value: String(
+              fixedAssets.filter((item) => item.status !== "disposed").length,
+            ),
+          },
+          {
+            label: "Accounting value",
+            value: money(
+              fixedAssets
+                .filter((item) => item.status !== "disposed")
+                .reduce((sum, item) => sum + Number(item.openingValue || 0), 0),
+            ),
+          },
+        ],
+        table: {
+          headers: [
+            "Asset code",
+            "Equipment",
+            "Category",
+            "Location",
+            "Recognition date",
+            "Value",
+            "Valuation",
+          ],
+          rows: fixedAssets.map((item) => [
+            item.assetCode,
+            item.name,
+            item.category,
+            item.location,
+            displayDate(item.recognitionDate),
+            money(item.openingValue),
+            title(item.valuationStatus),
+          ]),
+        },
+        notes:
+          "Active equipment is included in Plant and equipment (account 1300). Provisional values should be verified against purchase documents or a formal valuation.",
+      });
+      return;
+    }
+    if (tab === "loans") {
+      printCanaDocument({
+        title: "Owner and director loan register",
+        reference: `OLR-${to.replaceAll("-", "")}`,
+        status: "Opening liabilities register",
+        details: [
+          { label: "Loans", value: String(ownerLoans.length) },
+          {
+            label: "Outstanding",
+            value: money(
+              ownerLoans.reduce(
+                (sum, item) => sum + Number(item.originalAmount || 0),
+                0,
+              ),
+            ),
+          },
+        ],
+        table: {
+          headers: [
+            "Loan",
+            "Lender",
+            "Opening date",
+            "Reference",
+            "Interest",
+            "Outstanding",
+          ],
+          rows: ownerLoans.map((item) => [
+            item.loanNumber,
+            item.lenderName,
+            displayDate(item.openingDate),
+            item.reference || "—",
+            `${item.interestRate || 0}%`,
+            money(item.originalAmount),
+          ]),
+        },
+        notes:
+          "These opening liabilities do not change current treasury balances.",
+      });
+      return;
+    }
+    if (tab === "taxes") {
+      printCanaDocument({
+        title: "Tax obligations register",
+        reference: `TAX-${to.replaceAll("-", "")}`,
+        status: "Tax liabilities",
+        details: [{ label: "Obligations", value: String(taxes.length) }],
+        table: {
+          headers: [
+            "Reference",
+            "Tax",
+            "Period",
+            "Due date",
+            "Assessed",
+            "Paid",
+            "Balance",
+            "Status",
+          ],
+          rows: taxes.map((item) => {
+            const paid = (item.payments || []).reduce(
+              (sum, p) => sum + Number(p.amount || 0),
+              0,
+            );
+            return [
+              item.taxNumber,
+              title(item.taxType),
+              item.period,
+              displayDate(item.dueDate),
+              money(item.assessedAmount),
+              money(paid),
+              money(item.assessedAmount - paid),
+              title(item.status),
+            ];
+          }),
+        },
       });
       return;
     }
@@ -377,6 +586,7 @@ export default function AccountingPage() {
         headers: ["Financial position", "Amount"],
         rows: [
           ["Cash and bank", money(summary.cashAndBank)],
+          ["Plant and equipment", money(summary.fixedAssets)],
           ["Customer receivables", money(summary.receivables)],
           ["Supplier payables", money(summary.payables)],
           ["Total assets", money(summary.assets)],
@@ -410,7 +620,9 @@ export default function AccountingPage() {
 
   const startFreshAccounting = async () => {
     const accepted = await confirm({
-      title: configuration ? "Restart accounting from today" : "Start accounting today",
+      title: configuration
+        ? "Restart accounting from today"
+        : "Start accounting today",
       description:
         "The ledger, trial balance and financial statements will begin from today. Older operational records will remain safely stored but will no longer appear in accounting. Current money-account balances will become today's opening balances.",
       confirmLabel: configuration ? "Restart from today" : "Start from today",
@@ -423,14 +635,22 @@ export default function AccountingPage() {
       await api.post("/accounting/start-fresh", {
         startDate: today(),
         confirmation: "START",
-        notes: "Accounting opening position established from verified balances.",
+        notes:
+          "Accounting opening position established from verified balances.",
       });
       setFrom(today());
       setTo(today());
-      toast("Accounting now starts from today. Earlier operational records were preserved.", "success");
+      toast(
+        "Accounting now starts from today. Earlier operational records were preserved.",
+        "success",
+      );
       await load();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to establish the accounting start date.");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to establish the accounting start date.",
+      );
       setLoading(false);
     }
   };
@@ -438,31 +658,31 @@ export default function AccountingPage() {
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: "overview", label: "Overview", icon: CircleDollarSign },
     { key: "treasury", label: "Money accounts", icon: Landmark },
+    { key: "loans", label: "Loans & borrowings", icon: WalletCards },
+    { key: "taxes", label: "Taxes", icon: ClipboardList },
+    { key: "assets", label: "Equipment assets", icon: Factory },
     { key: "ledger", label: "Ledger", icon: BookOpen },
     { key: "trial", label: "Trial balance", icon: Scale },
     { key: "journals", label: "Adjustments", icon: WalletCards },
   ];
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-4 pb-8">
-      <header className="flex flex-col justify-between gap-4 border-b-2 border-slate-950 pb-4 lg:flex-row lg:items-end">
+    <div className="mx-auto max-w-[1500px] space-y-3 pb-6">
+      <header className="flex flex-col justify-between gap-3 border-b border-slate-300 pb-3 lg:flex-row lg:items-center">
         <div>
           <p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-red-700">
             Finance control
           </p>
-          <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">
+          <h1 className="mt-0.5 text-2xl font-black tracking-tight text-slate-950">
             Finance & accounting
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Daily transactions post automatically; accounting reviews and controls the result.
-          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canPostJournal && (
             <button
               type="button"
               onClick={() => void startFreshAccounting()}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-800 hover:border-slate-950"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 hover:border-slate-950"
             >
               <RefreshCw size={16} />
               {configuration ? "Restart accounting" : "Start accounting"}
@@ -488,6 +708,35 @@ export default function AccountingPage() {
               Add account
             </button>
           )}
+          {tab === "assets" && canPostJournal && (
+            <button
+              type="button"
+              onClick={() => setAssetEditor("new")}
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-sm font-bold text-white"
+            >
+              <Plus size={16} /> Add equipment
+            </button>
+          )}
+          {tab === "loans" && canPostJournal && (
+            <button
+              type="button"
+              onClick={() => setLoanOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-sm font-bold text-white"
+            >
+              <Plus size={16} />
+              Record opening loan
+            </button>
+          )}
+          {tab === "taxes" && canPostJournal && (
+            <button
+              type="button"
+              onClick={() => setTaxOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2.5 text-sm font-bold text-white"
+            >
+              <Plus size={16} />
+              Add tax obligation
+            </button>
+          )}
           {tab === "journals" && canJournal && (
             <button
               type="button"
@@ -501,7 +750,7 @@ export default function AccountingPage() {
           <button
             type="button"
             onClick={printReport}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 hover:border-slate-950"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-slate-950"
           >
             <Printer size={16} />
             Print
@@ -510,7 +759,7 @@ export default function AccountingPage() {
             type="button"
             onClick={() => void load()}
             aria-label="Refresh accounting"
-            className="rounded-lg border border-slate-300 bg-white p-2.5 text-slate-600 hover:border-slate-950"
+            className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:border-slate-950"
           >
             <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
           </button>
@@ -524,24 +773,23 @@ export default function AccountingPage() {
       )}
 
       {configuration?.startDate && (
-        <section className="flex flex-col gap-1 border-l-4 border-slate-950 bg-slate-100 px-4 py-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
+        <section className="flex items-center justify-between border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
           <p>
-            <span className="font-extrabold text-slate-950">Accounting opening date:</span>{" "}
+            <span className="font-extrabold text-slate-950">
+              Accounting opening date:
+            </span>{" "}
             {new Date(configuration.startDate).toLocaleDateString("en-RW", {
               day: "2-digit",
               month: "short",
               year: "numeric",
             })}
           </p>
-          <p className="text-xs font-semibold text-slate-500">
-            Only transactions from this date are included in the ledger and trial balance.
-          </p>
         </section>
       )}
 
-      <section className="flex flex-col gap-3 border border-slate-200 bg-white p-3 lg:flex-row lg:items-center lg:justify-between">
+      <section className="flex flex-col gap-2 border border-slate-200 bg-white p-2 lg:flex-row lg:items-center lg:justify-between">
         <nav
-          className="flex gap-1 overflow-x-auto"
+          className="flex flex-wrap gap-1"
           aria-label="Accounting sections"
         >
           {tabs.map((item) => {
@@ -551,7 +799,7 @@ export default function AccountingPage() {
                 key={item.key}
                 type="button"
                 onClick={() => selectTab(item.key)}
-                className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition sm:text-sm ${tab === item.key ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold transition ${tab === item.key ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100"}`}
               >
                 <Icon size={15} />
                 {item.label}
@@ -593,6 +841,32 @@ export default function AccountingPage() {
       )}
       {tab === "treasury" && (
         <TreasuryPanel treasury={treasury} loading={loading} />
+      )}
+      {tab === "assets" && (
+        <FixedAssetsPanel
+          assets={fixedAssets}
+          loading={loading}
+          canEdit={canPostJournal}
+          onEdit={setAssetEditor}
+        />
+      )}
+      {tab === "loans" && (
+        <OwnerLoansPanel
+          loans={ownerLoans}
+          loading={loading}
+          onPay={(loan, balance) =>
+            setPaymentTarget({ kind: "loan", id: loan._id, balance })
+          }
+        />
+      )}
+      {tab === "taxes" && (
+        <TaxesPanel
+          taxes={taxes}
+          loading={loading}
+          onPay={(tax, balance) =>
+            setPaymentTarget({ kind: "tax", id: tax._id, balance })
+          }
+        />
       )}
       {tab === "ledger" && (
         <LedgerTable
@@ -649,6 +923,47 @@ export default function AccountingPage() {
           }}
         />
       )}
+      {assetEditor && (
+        <FixedAssetModal
+          asset={assetEditor === "new" ? undefined : assetEditor}
+          onClose={() => setAssetEditor(null)}
+          onSaved={async () => {
+            setAssetEditor(null);
+            await load();
+          }}
+        />
+      )}
+      {loanOpen && (
+        <OwnerLoanModal
+          onClose={() => setLoanOpen(false)}
+          onSaved={async () => {
+            setLoanOpen(false);
+            await load();
+          }}
+        />
+      )}
+      {taxOpen && (
+        <TaxModal
+          onClose={() => setTaxOpen(false)}
+          onSaved={async () => {
+            setTaxOpen(false);
+            await load();
+          }}
+        />
+      )}
+      {paymentTarget && (
+        <LiabilityPaymentModal
+          target={paymentTarget}
+          accounts={treasury.accounts.filter(
+            (item) => item.status === "active",
+          )}
+          onClose={() => setPaymentTarget(null)}
+          onSaved={async () => {
+            setPaymentTarget(null);
+            await load();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -673,28 +988,34 @@ function Overview({
     { label: "Operating costs", value: summary.expenses, icon: ArrowDownLeft },
     { label: "Net result", value: summary.netProfit, icon: CircleDollarSign },
     { label: "Cash & bank", value: summary.cashAndBank, icon: Landmark },
+    { label: "Equipment assets", value: summary.fixedAssets, icon: Factory },
     {
       label: "Customer receivables",
       value: summary.receivables,
       icon: WalletCards,
     },
     { label: "Supplier payables", value: summary.payables, icon: BookOpen },
+    { label: "Owner loans", value: summary.ownerLoans, icon: WalletCards },
+    { label: "Tax payable", value: summary.taxPayable, icon: ClipboardList },
   ];
   return (
     <>
-      <section className="grid grid-cols-2 gap-px overflow-hidden border border-slate-200 bg-slate-200 lg:grid-cols-3 xl:grid-cols-6">
+      <section className="grid grid-cols-2 gap-px overflow-hidden border border-slate-200 bg-slate-200 md:grid-cols-3 xl:grid-cols-5">
         {metrics.map((metric) => {
           const Icon = metric.icon;
           return (
-            <article key={metric.label} className="min-w-0 bg-white p-3 sm:p-4">
+            <article
+              key={metric.label}
+              className="min-w-0 bg-white px-3 py-2.5"
+            >
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[9px] font-extrabold uppercase tracking-wide text-slate-500 sm:text-[10px]">
                   {metric.label}
                 </p>
-                <Icon size={15} className="hidden text-slate-400 sm:block" />
+                <Icon size={14} className="text-slate-400" />
               </div>
               <p
-                className={`mt-2 truncate text-lg font-extrabold tracking-tight sm:text-xl ${metric.label === "Net result" && metric.value < 0 ? "text-red-700" : "text-slate-950"}`}
+                className={`mt-1 truncate text-base font-black tracking-tight sm:text-lg ${metric.label === "Net result" && metric.value < 0 ? "text-red-700" : "text-slate-950"}`}
                 title={money(metric.value)}
               >
                 {loading ? "—" : compactMoney(metric.value)}
@@ -711,9 +1032,6 @@ function Overview({
             </span>
             <div>
               <h2 className="text-sm font-extrabold">Complete finance setup</h2>
-              <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-300">
-                Add the real cash, bank and Mobile Money accounts with their opening balances. Until then, operational records remain valid but treasury balances cannot be reconciled.
-              </p>
             </div>
           </div>
           {canSetup && (
@@ -727,7 +1045,7 @@ function Overview({
           )}
         </section>
       )}
-      <section className="grid gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-5">
         <FinanceLink
           to="/management/billing"
           icon={WalletCards}
@@ -752,17 +1070,19 @@ function Overview({
           title="Cash & bank"
           detail={`${treasuryAccounts.filter((item) => item.status === "active").length} active financial accounts`}
         />
+        <FinanceLink
+          to="/management/accounting?tab=assets"
+          icon={Factory}
+          title="Equipment assets"
+          detail={`${money(summary.fixedAssets)} recognised`}
+        />
       </section>
-      <AccountingFlow />
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
+      <section className="grid gap-3 xl:grid-cols-[1.2fr_.8fr]">
         <div className="border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-4 py-3">
             <h2 className="font-extrabold text-slate-950">
               Management accounts
             </h2>
-            <p className="text-xs text-slate-500">
-              Income statement for the period and position as at the end date.
-            </p>
           </div>
           <div className="grid sm:grid-cols-2">
             <Statement
@@ -786,11 +1106,8 @@ function Overview({
         <div className="border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-4 py-3">
             <h2 className="font-extrabold text-slate-950">Chart of accounts</h2>
-            <p className="text-xs text-slate-500">
-              Controlled accounts used by automatic and manual postings.
-            </p>
           </div>
-          <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+          <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
             {groupedAccounts.map(([group, items]) => (
               <div key={group} className="px-4 py-3">
                 <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
@@ -816,34 +1133,6 @@ function Overview({
   );
 }
 
-function AccountingFlow() {
-  const steps = [
-    ["1", "Record operations", "Sales, receipts, purchases, supplier payments, payroll and expenses."],
-    ["2", "Track money", "Each cleared payment is linked to cash, bank or Mobile Money."],
-    ["3", "Post automatically", "The system creates balanced debit and credit entries in the ledger."],
-    ["4", "Review", "Finance checks balances, trial balance, profit or loss and exceptions."],
-  ];
-  return (
-    <section className="border border-slate-200 bg-white">
-      <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
-        <CircleHelp size={16} className="text-red-700" />
-        <h2 className="text-sm font-extrabold text-slate-950">How finance works in CANA</h2>
-      </div>
-      <div className="grid gap-px bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
-        {steps.map(([number, heading, detail]) => (
-          <article key={number} className="bg-white p-4">
-            <div className="flex items-center gap-2">
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-950 text-[10px] font-extrabold text-white">{number}</span>
-              <h3 className="text-xs font-extrabold text-slate-950">{heading}</h3>
-            </div>
-            <p className="mt-2 text-xs leading-5 text-slate-500">{detail}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function FinanceLink({
   to,
   icon: Icon,
@@ -856,13 +1145,16 @@ function FinanceLink({
   detail: string;
 }) {
   return (
-    <Link to={to} className="group flex items-center gap-3 bg-white p-4 hover:bg-slate-50">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-700 group-hover:bg-slate-950 group-hover:text-white">
-        <Icon size={17} />
+    <Link
+      to={to}
+      className="group flex items-center gap-2 bg-white px-3 py-2.5 hover:bg-slate-50"
+    >
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-700 group-hover:bg-slate-950 group-hover:text-white">
+        <Icon size={15} />
       </span>
       <span className="min-w-0">
         <b className="block truncate text-sm text-slate-950">{heading}</b>
-        <span className="block truncate text-xs text-slate-500">{detail}</span>
+        <span className="sr-only">{detail}</span>
       </span>
       <ChevronRight size={16} className="ml-auto shrink-0 text-slate-400" />
     </Link>
@@ -899,6 +1191,852 @@ function Statement({
   );
 }
 
+function OwnerLoansPanel({
+  loans,
+  loading,
+  onPay,
+}: {
+  loans: OwnerLoan[];
+  loading: boolean;
+  onPay: (loan: OwnerLoan, balance: number) => void;
+}) {
+  const outstanding = (item: OwnerLoan) =>
+    item.originalAmount -
+    (item.repayments || []).reduce(
+      (sum, payment) => sum + Number(payment.principal || 0),
+      0,
+    );
+  const total = loans.reduce((sum, item) => sum + outstanding(item), 0);
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="grid gap-px border-b bg-slate-200 sm:grid-cols-3">
+        <div className="bg-white p-3">
+          <p className="text-[10px] font-extrabold uppercase text-slate-500">
+            Loans & borrowings
+          </p>
+          <p className="mt-1 text-lg font-black">{loans.length}</p>
+        </div>
+        <div className="bg-white p-3">
+          <p className="text-[10px] font-extrabold uppercase text-slate-500">
+            Outstanding liability
+          </p>
+          <p className="mt-1 text-lg font-black">{money(total)}</p>
+        </div>
+        <div className="bg-white p-3">
+          <p className="text-[10px] font-extrabold uppercase text-slate-500">
+            Finance cost
+          </p>
+          <p className="mt-1 text-sm font-extrabold">
+            Interest only
+          </p>
+        </div>
+      </div>
+      <div className="max-h-[58vh] overflow-y-auto">
+        <table className="w-full table-fixed text-left text-[10px] sm:text-[11px] [&_td]:break-words [&_th]:break-words [&_th:nth-child(3)]:hidden [&_td:nth-child(3)]:hidden [&_th:nth-child(4)]:hidden [&_td:nth-child(4)]:hidden [&_th:nth-child(5)]:hidden [&_td:nth-child(5)]:hidden md:[&_th:nth-child(3)]:table-cell md:[&_td:nth-child(3)]:table-cell lg:[&_th:nth-child(4)]:table-cell lg:[&_td:nth-child(4)]:table-cell lg:[&_th:nth-child(5)]:table-cell lg:[&_td:nth-child(5)]:table-cell">
+          <thead className="sticky top-0 bg-slate-950 text-[10px] uppercase text-white">
+            <tr>
+              <th className="px-2 py-2.5 sm:px-3">Loan</th>
+              <th>Lender</th>
+              <th>Type</th>
+              <th>Date</th>
+              <th>Interest</th>
+              <th className="text-right">Outstanding</th>
+              <th className="px-2 text-right sm:px-3">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {loans.map((item) => {
+              const balance = outstanding(item);
+              return (
+                <tr key={item._id}>
+                  <td className="px-2 py-2.5 font-extrabold sm:px-3">
+                    {item.loanNumber}
+                    <span className="mt-0.5 block font-medium text-slate-500 md:hidden">
+                      {title(item.lenderType || "other")}
+                    </span>
+                  </td>
+                  <td>{item.lenderName}</td>
+                  <td>{title(item.lenderType || "other")}</td>
+                  <td>{displayDate(item.openingDate)}</td>
+                  <td>{item.interestRate || 0}%</td>
+                  <td className="text-right font-extrabold">
+                    {money(balance)}
+                  </td>
+                  <td className="px-2 text-right sm:px-3">
+                    {balance > 0 ? (
+                      <button
+                        onClick={() => onPay(item, balance)}
+                        className="font-bold text-red-700"
+                      >
+                        Repay
+                      </button>
+                    ) : (
+                      "Settled"
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {!loading && !loans.length && (
+              <tr>
+                <td colSpan={7} className="p-12 text-center text-slate-500">
+                  No loans or borrowings recorded.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function TaxesPanel({
+  taxes,
+  loading,
+  onPay,
+}: {
+  taxes: TaxLiability[];
+  loading: boolean;
+  onPay: (tax: TaxLiability, balance: number) => void;
+}) {
+  const balance = (item: TaxLiability) =>
+    item.assessedAmount -
+    (item.payments || []).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="max-h-[62vh] overflow-y-auto">
+        <table className="w-full table-fixed text-left text-[10px] sm:text-[11px] [&_td]:break-words [&_th]:break-words [&_th:nth-child(3)]:hidden [&_td:nth-child(3)]:hidden [&_th:nth-child(5)]:hidden [&_td:nth-child(5)]:hidden [&_th:nth-child(7)]:hidden [&_td:nth-child(7)]:hidden lg:[&_th:nth-child(3)]:table-cell lg:[&_td:nth-child(3)]:table-cell md:[&_th:nth-child(5)]:table-cell md:[&_td:nth-child(5)]:table-cell md:[&_th:nth-child(7)]:table-cell md:[&_td:nth-child(7)]:table-cell">
+          <thead className="sticky top-0 bg-slate-950 text-[10px] uppercase text-white">
+            <tr>
+              <th className="px-2 py-2.5 sm:px-3">Tax</th>
+              <th>Period</th>
+              <th>Authority</th>
+              <th>Due date</th>
+              <th className="text-right">Assessed</th>
+              <th className="text-right">Balance</th>
+              <th>Status</th>
+              <th className="px-2 text-right sm:px-3">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {taxes.map((item) => {
+              const due = balance(item);
+              return (
+                <tr key={item._id}>
+                  <td className="px-2 py-2.5 sm:px-3">
+                    <b>{title(item.taxType)}</b>
+                    <p className="text-[10px] text-slate-500">
+                      {item.taxNumber}
+                    </p>
+                  </td>
+                  <td>{item.period}</td>
+                  <td>{item.authority}</td>
+                  <td
+                    className={
+                      item.dueDate.slice(0, 10) < today() && due > 0
+                        ? "font-bold text-red-700"
+                        : ""
+                    }
+                  >
+                    {displayDate(item.dueDate)}
+                  </td>
+                  <td className="text-right">{money(item.assessedAmount)}</td>
+                  <td className="text-right font-extrabold">{money(due)}</td>
+                  <td>{title(item.status)}</td>
+                  <td className="px-2 text-right sm:px-3">
+                    {due > 0 ? (
+                      <button
+                        onClick={() => onPay(item, due)}
+                        className="font-bold text-red-700"
+                      >
+                        Pay
+                      </button>
+                    ) : (
+                      "Paid"
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {!loading && !taxes.length && (
+              <tr>
+                <td colSpan={8} className="p-12 text-center text-slate-500">
+                  No tax obligations recorded.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function OwnerLoanModal({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      await api.post("/accounting/owner-loans/opening", {
+        ...form,
+        originalAmount: parseMoneyInput(String(form.originalAmount || "")),
+        interestRate: Number(form.interestRate || 0),
+      });
+      toast(
+        "Opening owner loan recorded without changing treasury.",
+        "success",
+      );
+      await onSaved();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to record owner loan.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/60 p-3">
+      <form
+        onSubmit={submit}
+        className="w-full max-w-xl rounded-xl bg-white shadow-2xl"
+      >
+        <header className="flex justify-between border-b p-4">
+          <div>
+            <h2 className="font-extrabold">Record opening loan</h2>
+            <p className="text-xs text-slate-500">
+              Liability only — current treasury remains unchanged
+            </p>
+          </div>
+          <button type="button" onClick={onClose}>
+            <X size={16} />
+          </button>
+        </header>
+        <div className="grid gap-3 p-5 sm:grid-cols-2">
+          {error && <p className="text-red-700 sm:col-span-2">{error}</p>}
+          <Field label="Lender">
+            <input required name="lenderName" />
+          </Field>
+          <Field label="Lender type">
+            <select name="lenderType">
+              <option value="owner">Owner</option>
+              <option value="director">Director</option>
+              <option value="shareholder">Shareholder</option>
+              <option value="bank">Bank</option>
+              <option value="individual">Individual</option>
+              <option value="company">Company</option>
+              <option value="institution">Institution</option>
+              <option value="other">Other</option>
+            </select>
+          </Field>
+          <Field label="Amount (RWF)">
+            <input required name="originalAmount" inputMode="decimal" />
+          </Field>
+          <Field label="Opening date">
+            <input
+              required
+              name="openingDate"
+              type="date"
+              defaultValue={today()}
+            />
+          </Field>
+          <Field label="Reference">
+            <input name="reference" />
+          </Field>
+          <Field label="Interest rate %">
+            <input
+              name="interestRate"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue="0"
+            />
+          </Field>
+          <Field label="Notes">
+            <input name="notes" />
+          </Field>
+        </div>
+        <footer className="flex justify-end gap-2 border-t p-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border px-4 py-2 text-sm font-bold"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={saving}
+            className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white"
+          >
+            {saving ? "Recording…" : "Record opening loan"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function TaxModal({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [error, setError] = useState("");
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      await api.post("/accounting/taxes", {
+        ...form,
+        assessedAmount: parseMoneyInput(String(form.assessedAmount || "")),
+      });
+      toast("Tax obligation recorded.", "success");
+      await onSaved();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to record tax.",
+      );
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/60 p-3">
+      <form onSubmit={submit} className="w-full max-w-xl rounded-xl bg-white">
+        <header className="flex justify-between border-b p-4">
+          <div>
+            <h2 className="font-extrabold">Add tax obligation</h2>
+            <p className="text-xs text-slate-500">
+              Record assessed tax before payment
+            </p>
+          </div>
+          <button type="button" onClick={onClose}>
+            <X size={16} />
+          </button>
+        </header>
+        <div className="grid gap-3 p-5 sm:grid-cols-2">
+          {error && <p className="text-red-700 sm:col-span-2">{error}</p>}
+          <Field label="Tax type">
+            <select name="taxType">
+              <option value="vat">VAT</option>
+              <option value="paye">PAYE</option>
+              <option value="corporate_income_tax">Corporate income tax</option>
+              <option value="withholding_tax">Withholding tax</option>
+              <option value="rssb">RSSB</option>
+              <option value="other">Other</option>
+            </select>
+          </Field>
+          <Field label="Tax period">
+            <input required name="period" placeholder="Example: October 2026" />
+          </Field>
+          <Field label="Assessed amount">
+            <input required name="assessedAmount" inputMode="decimal" />
+          </Field>
+          <Field label="Due date">
+            <input required name="dueDate" type="date" />
+          </Field>
+          <Field label="Authority">
+            <input name="authority" defaultValue="Rwanda Revenue Authority" />
+          </Field>
+          <Field label="Reference">
+            <input name="reference" />
+          </Field>
+          <Field label="Notes">
+            <input name="notes" />
+          </Field>
+        </div>
+        <footer className="flex justify-end gap-2 border-t p-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border px-4 py-2 text-sm font-bold"
+          >
+            Cancel
+          </button>
+          <button className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white">
+            Save tax obligation
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function LiabilityPaymentModal({
+  target,
+  accounts,
+  onClose,
+  onSaved,
+}: {
+  target: { kind: "loan" | "tax"; id: string; balance: number };
+  accounts: TreasuryAccount[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [error, setError] = useState("");
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      if (target.kind === "loan")
+        await api.post(`/accounting/owner-loans/${target.id}/repayments`, {
+          ...form,
+          principal: Number(form.principal || 0),
+          interest: Number(form.interest || 0),
+        });
+      else
+        await api.post(`/accounting/taxes/${target.id}/payments`, {
+          ...form,
+          amount: Number(form.amount || 0),
+        });
+      toast(
+        target.kind === "loan"
+          ? "Loan repayment posted."
+          : "Tax payment posted.",
+        "success",
+      );
+      await onSaved();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to post payment.",
+      );
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/60 p-3">
+      <form onSubmit={submit} className="w-full max-w-lg rounded-xl bg-white">
+        <header className="flex justify-between border-b p-4">
+          <div>
+            <h2 className="font-extrabold">
+              {target.kind === "loan"
+                ? "Record loan repayment"
+                : "Record tax payment"}
+            </h2>
+            <p className="text-xs text-slate-500">
+              Outstanding {money(target.balance)}
+            </p>
+          </div>
+          <button type="button" onClick={onClose}>
+            <X size={16} />
+          </button>
+        </header>
+        <div className="grid gap-3 p-5 sm:grid-cols-2">
+          {error && <p className="text-red-700 sm:col-span-2">{error}</p>}
+          {target.kind === "loan" ? (
+            <>
+              <Field label="Principal">
+                <input
+                  required
+                  name="principal"
+                  type="number"
+                  min="0"
+                  max={target.balance}
+                />
+              </Field>
+              <Field label="Interest / finance cost">
+                <input name="interest" type="number" min="0" defaultValue="0" />
+              </Field>
+            </>
+          ) : (
+            <Field label="Payment amount">
+              <input
+                required
+                name="amount"
+                type="number"
+                min="1"
+                max={target.balance}
+              />
+            </Field>
+          )}
+          <Field label="Payment date">
+            <input
+              required
+              name="paymentDate"
+              type="date"
+              defaultValue={today()}
+            />
+          </Field>
+          <Field label="Payment account">
+            <select required name="treasuryAccount">
+              <option value="">Select account</option>
+              {accounts.map((item) => (
+                <option key={item._id} value={item._id}>
+                  {item.name} · {money(item.balance)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Reference">
+            <input name="reference" />
+          </Field>
+        </div>
+        <footer className="flex justify-end gap-2 border-t p-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border px-4 py-2 text-sm font-bold"
+          >
+            Cancel
+          </button>
+          <button className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white">
+            Post payment
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function FixedAssetsPanel({
+  assets,
+  loading,
+  canEdit,
+  onEdit,
+}: {
+  assets: FixedAsset[];
+  loading: boolean;
+  canEdit: boolean;
+  onEdit: (asset: FixedAsset) => void;
+}) {
+  const active = assets.filter((item) => item.status !== "disposed");
+  const total = active.reduce(
+    (sum, item) => sum + Number(item.openingValue || 0),
+    0,
+  );
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="grid gap-px border-b border-slate-200 bg-slate-200 sm:grid-cols-3">
+        <div className="bg-white p-4">
+          <p className="text-[10px] font-extrabold uppercase text-slate-500">
+            Registered equipment
+          </p>
+          <p className="mt-1 text-xl font-black text-slate-950">
+            {active.length}
+          </p>
+        </div>
+        <div className="bg-white p-4">
+          <p className="text-[10px] font-extrabold uppercase text-slate-500">
+            Accounting value
+          </p>
+          <p className="mt-1 text-xl font-black text-slate-950">
+            {money(total)}
+          </p>
+        </div>
+        <div className="bg-white p-4">
+          <p className="text-[10px] font-extrabold uppercase text-slate-500">
+            Valuation control
+          </p>
+          <p className="mt-1 text-sm font-extrabold text-slate-950">
+            {
+              active.filter((item) => item.valuationStatus === "verified")
+                .length
+            }{" "}
+            verified ·{" "}
+            {
+              active.filter((item) => item.valuationStatus === "provisional")
+                .length
+            }{" "}
+            provisional
+          </p>
+        </div>
+      </div>
+      <div className="border-b border-slate-200 px-4 py-3">
+        <h2 className="font-extrabold text-slate-950">Fixed-asset register</h2>
+        <p className="text-xs text-slate-500">
+          Each active item posts to Plant and equipment (1300) and is included
+          in total assets.
+        </p>
+      </div>
+      <div className="max-h-[58vh] overflow-y-auto">
+        <table className="w-full table-fixed text-left text-[10px] sm:text-[11px] [&_td]:break-words [&_th]:break-words [&_th:nth-child(2)]:hidden [&_td:nth-child(2)]:hidden [&_th:nth-child(3)]:hidden [&_td:nth-child(3)]:hidden [&_th:nth-child(5)]:hidden [&_td:nth-child(5)]:hidden md:[&_th:nth-child(2)]:table-cell md:[&_td:nth-child(2)]:table-cell lg:[&_th:nth-child(3)]:table-cell lg:[&_td:nth-child(3)]:table-cell md:[&_th:nth-child(5)]:table-cell md:[&_td:nth-child(5)]:table-cell">
+          <thead className="sticky top-0 bg-slate-950 text-[10px] uppercase text-white">
+            <tr>
+              <th className="px-4 py-3">Asset</th>
+              <th className="px-4 py-3">Category / location</th>
+              <th className="px-4 py-3">Recognition date</th>
+              <th className="px-4 py-3 text-right">Value</th>
+              <th className="px-4 py-3">Control</th>
+              <th className="px-4 py-3 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {assets.map((item) => (
+              <tr
+                key={item._id}
+                className={
+                  item.status === "disposed" ? "bg-slate-50 text-slate-400" : ""
+                }
+              >
+                <td className="px-4 py-3">
+                  <p className="font-extrabold text-slate-950">{item.name}</p>
+                  <p className="text-[10px] font-bold text-slate-500">
+                    {item.assetCode} · {title(item.status)}
+                  </p>
+                  <p className="text-[9px] text-slate-500 md:hidden">
+                    {item.category} · {item.location}
+                  </p>
+                </td>
+                <td className="px-4 py-3">
+                  <p className="font-semibold">{item.category}</p>
+                  <p className="text-[10px] text-slate-500">{item.location}</p>
+                </td>
+                <td className="px-4 py-3">
+                  {displayDate(item.recognitionDate)}
+                </td>
+                <td className="px-4 py-3 text-right font-extrabold text-slate-950">
+                  {money(item.openingValue)}
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`rounded-full px-2 py-1 text-[10px] font-extrabold uppercase ${item.valuationStatus === "verified" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}
+                  >
+                    {item.valuationStatus}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      onClick={() => onEdit(item)}
+                      className="font-bold text-red-700"
+                    >
+                      Edit
+                    </button>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+              </tr>
+            ))}
+            {!loading && !assets.length && (
+              <tr>
+                <td colSpan={6} className="p-12 text-center text-slate-500">
+                  No equipment assets registered.
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {!!assets.length && (
+            <tfoot className="sticky bottom-0 bg-slate-100 font-extrabold text-slate-950">
+              <tr>
+                <td colSpan={3} className="px-4 py-3">
+                  Active equipment total
+                </td>
+                <td className="px-4 py-3 text-right">{money(total)}</td>
+                <td colSpan={2} />
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function FixedAssetModal({
+  asset,
+  onClose,
+  onSaved,
+}: {
+  asset?: FixedAsset;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    assetCode: asset?.assetCode || "",
+    name: asset?.name || "",
+    category: asset?.category || "Production equipment",
+    location: asset?.location || "Factory",
+    recognitionDate: asset?.recognitionDate?.slice(0, 10) || today(),
+    openingValue: asset ? String(asset.openingValue) : "",
+    status: asset?.status || "active",
+    valuationStatus: asset?.valuationStatus || "provisional",
+    notes: asset?.notes || "",
+  });
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const payload = {
+        ...form,
+        openingValue: parseMoneyInput(form.openingValue),
+      };
+      if (asset)
+        await api.patch(`/accounting/fixed-assets/${asset._id}`, payload);
+      else await api.post("/accounting/fixed-assets", payload);
+      toast(
+        asset
+          ? "Equipment asset updated."
+          : "Equipment asset added to accounting.",
+        "success",
+      );
+      await onSaved();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to save equipment asset.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/60 p-3">
+      <form
+        onSubmit={submit}
+        className="w-full max-w-2xl rounded-xl bg-white shadow-2xl"
+      >
+        <header className="flex items-center justify-between border-b px-5 py-4">
+          <div>
+            <h2 className="font-extrabold">
+              {asset ? "Edit equipment asset" : "Register equipment asset"}
+            </h2>
+            <p className="text-xs text-slate-500">
+              Accounting value and asset-register details
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border p-2"
+          >
+            <X size={16} />
+          </button>
+        </header>
+        <div className="grid gap-3 p-5 sm:grid-cols-2">
+          {error && (
+            <p className="border border-red-200 bg-red-50 p-2 text-sm text-red-700 sm:col-span-2">
+              {error}
+            </p>
+          )}
+          <Field label="Asset code">
+            <input
+              required
+              value={form.assetCode}
+              onChange={(e) => setForm({ ...form, assetCode: e.target.value })}
+            />
+          </Field>
+          <Field label="Equipment name">
+            <input
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </Field>
+          <Field label="Category">
+            <input
+              required
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+            />
+          </Field>
+          <Field label="Location">
+            <input
+              required
+              value={form.location}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
+            />
+          </Field>
+          <Field label="Accounting value (RWF)">
+            <input
+              required
+              inputMode="decimal"
+              value={form.openingValue}
+              onChange={(e) =>
+                setForm({ ...form, openingValue: e.target.value })
+              }
+            />
+          </Field>
+          <Field label="Recognition date">
+            <input
+              required
+              type="date"
+              value={form.recognitionDate}
+              onChange={(e) =>
+                setForm({ ...form, recognitionDate: e.target.value })
+              }
+            />
+          </Field>
+          <label className="text-[10px] font-extrabold uppercase text-slate-500">
+            Asset status
+            <select
+              value={form.status}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  status: e.target.value as FixedAsset["status"],
+                })
+              }
+              className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm normal-case"
+            >
+              <option value="active">Active</option>
+              <option value="maintenance">Under maintenance</option>
+              <option value="disposed">Disposed</option>
+            </select>
+          </label>
+          <label className="text-[10px] font-extrabold uppercase text-slate-500">
+            Valuation
+            <select
+              value={form.valuationStatus}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  valuationStatus: e.target
+                    .value as FixedAsset["valuationStatus"],
+                })
+              }
+              className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm normal-case"
+            >
+              <option value="provisional">Provisional</option>
+              <option value="verified">Verified</option>
+            </select>
+          </label>
+          <Field label="Notes">
+            <input
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </Field>
+        </div>
+        <footer className="flex justify-end gap-2 border-t px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border px-4 py-2 text-sm font-bold"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={saving}
+            className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white"
+          >
+            {saving ? "Saving…" : "Save asset"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
 function LedgerTable({
   entries,
   loading,
@@ -910,10 +2048,144 @@ function LedgerTable({
   expanded: string;
   setExpanded: (value: string) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [accountFilter, setAccountFilter] = useState("");
+  const sources = useMemo(
+    () => [...new Set(entries.map((item) => item.source))].sort(),
+    [entries],
+  );
+  const ledgerAccounts = useMemo(
+    () =>
+      [
+        ...new Map(
+          entries
+            .flatMap((item) => item.lines)
+            .map((item) => [
+              item.accountCode,
+              `${item.accountCode} · ${item.accountName}`,
+            ]),
+        ).entries(),
+      ].sort(([left], [right]) => left.localeCompare(right)),
+    [entries],
+  );
+  const visibleEntries = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return entries.filter((item) => {
+      const matchesSearch =
+        !term ||
+        `${item.reference} ${item.description} ${item.source} ${item.lines
+          .map(
+            (line) =>
+              `${line.accountCode} ${line.accountName} ${line.memo || ""}`,
+          )
+          .join(" ")}`
+          .toLowerCase()
+          .includes(term);
+      const matchesSource = !sourceFilter || item.source === sourceFilter;
+      const matchesAccount =
+        !accountFilter ||
+        item.lines.some((line) => line.accountCode === accountFilter);
+      return matchesSearch && matchesSource && matchesAccount;
+    });
+  }, [accountFilter, entries, query, sourceFilter]);
+  const totals = useMemo(
+    () =>
+      visibleEntries
+        .flatMap((item) => item.lines)
+        .reduce(
+          (result, item) => ({
+            debit: result.debit + Number(item.debit || 0),
+            credit: result.credit + Number(item.credit || 0),
+          }),
+          { debit: 0, credit: 0 },
+        ),
+    [visibleEntries],
+  );
+  const balanced = Math.abs(totals.debit - totals.credit) < 0.01;
   return (
-    <section className="overflow-hidden border border-slate-200 bg-white">
-      <div className="max-h-[65vh] overflow-auto">
-        <table className="min-w-[850px] w-full text-left text-xs">
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="flex flex-col gap-3 border-b border-slate-200 p-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="font-extrabold text-slate-950">General ledger</h2>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${balanced ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}
+            >
+              {balanced ? "Balanced" : "Review"}
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {visibleEntries.length} posted transaction
+            {visibleEntries.length === 1 ? "" : "s"} in this view
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3 lg:w-[680px]">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search reference, description or account"
+            aria-label="Search ledger"
+            className="min-w-0 rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-950"
+          />
+          <select
+            value={sourceFilter}
+            onChange={(event) => setSourceFilter(event.target.value)}
+            aria-label="Filter ledger source"
+            className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700"
+          >
+            <option value="">All sources</option>
+            {sources.map((source) => (
+              <option key={source} value={source}>
+                {source}
+              </option>
+            ))}
+          </select>
+          <select
+            value={accountFilter}
+            onChange={(event) => setAccountFilter(event.target.value)}
+            aria-label="Filter ledger account"
+            className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700"
+          >
+            <option value="">All accounts</option>
+            {ledgerAccounts.map(([code, label]) => (
+              <option key={code} value={code}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="grid gap-px border-b border-slate-200 bg-slate-200 sm:grid-cols-3">
+        <div className="bg-white px-4 py-2.5">
+          <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
+            Debits
+          </p>
+          <p className="mt-1 font-black text-slate-950">
+            {money(totals.debit)}
+          </p>
+        </div>
+        <div className="bg-white px-4 py-2.5">
+          <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
+            Credits
+          </p>
+          <p className="mt-1 font-black text-slate-950">
+            {money(totals.credit)}
+          </p>
+        </div>
+        <div className="bg-white px-4 py-2.5">
+          <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
+            Difference
+          </p>
+          <p
+            className={`mt-1 font-black ${balanced ? "text-emerald-700" : "text-red-700"}`}
+          >
+            {money(Math.abs(totals.debit - totals.credit))}
+          </p>
+        </div>
+      </div>
+      <div className="max-h-[65vh] overflow-y-auto">
+        <table className="w-full table-fixed text-left text-[10px] sm:text-[11px] [&_td]:break-words [&_th]:break-words [&_th:nth-child(3)]:hidden [&_td:nth-child(3)]:hidden [&_th:nth-child(5)]:hidden [&_td:nth-child(5)]:hidden md:[&_th:nth-child(3)]:table-cell md:[&_td:nth-child(3)]:table-cell lg:[&_th:nth-child(5)]:table-cell lg:[&_td:nth-child(5)]:table-cell">
           <thead className="sticky top-0 z-10 bg-slate-950 text-[10px] uppercase tracking-wide text-white">
             <tr>
               <th className="w-9 px-3 py-3" />
@@ -926,9 +2198,13 @@ function LedgerTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {entries.map((item) => {
+            {visibleEntries.map((item) => {
               const debit = item.lines.reduce(
                 (sum, line) => sum + line.debit,
+                0,
+              );
+              const credit = item.lines.reduce(
+                (sum, line) => sum + line.credit,
                 0,
               );
               const open = expanded === item.id;
@@ -937,15 +2213,16 @@ function LedgerTable({
                   key={`${item.source}-${item.id}`}
                   item={item}
                   debit={debit}
+                  credit={credit}
                   open={open}
                   onToggle={() => setExpanded(open ? "" : item.id)}
                 />
               );
             })}
-            {!loading && !entries.length && (
+            {!loading && !visibleEntries.length && (
               <tr>
                 <td colSpan={7} className="p-12 text-center text-slate-500">
-                  No posted accounting entries in this period.
+                  No posted accounting entries match this view.
                 </td>
               </tr>
             )}
@@ -959,11 +2236,13 @@ function LedgerTable({
 function LedgerRows({
   item,
   debit,
+  credit,
   open,
   onToggle,
 }: {
   item: LedgerEntry;
   debit: number;
+  credit: number;
   open: boolean;
   onToggle: () => void;
 }) {
@@ -985,7 +2264,9 @@ function LedgerRows({
             {item.description}
           </td>
           <td className="px-3 py-3 text-right font-semibold">{money(debit)}</td>
-          <td className="px-3 py-3 text-right font-semibold">{money(debit)}</td>
+          <td className="px-3 py-3 text-right font-semibold">
+            {money(credit)}
+          </td>
         </tr>
       }
       {open && (
@@ -993,6 +2274,14 @@ function LedgerRows({
           <td colSpan={7} className="bg-slate-50 px-4 py-3">
             <div className="ml-6 overflow-hidden border border-slate-200 bg-white">
               <table className="w-full text-xs">
+                <thead className="bg-slate-100 text-[10px] uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Code</th>
+                    <th className="px-3 py-2 text-left">Account / memo</th>
+                    <th className="px-3 py-2 text-right">Debit</th>
+                    <th className="px-3 py-2 text-right">Credit</th>
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-slate-100">
                   {item.lines.map((line, index) => (
                     <tr key={`${line.accountCode}-${index}`}>
@@ -1033,8 +2322,6 @@ function TrialBalance({
   credit: number;
 }) {
   const balanced = Math.abs(debit - credit) < 0.01;
-  const simpleBalance = (item: TrialRow) =>
-    item.debitBalance || item.creditBalance;
   const balanceMeaning = (item: TrialRow) =>
     item.type === "asset"
       ? "What the business owns"
@@ -1046,12 +2333,12 @@ function TrialBalance({
             ? "Income"
             : "Cost";
   return (
-    <section className="overflow-hidden border border-slate-200 bg-white">
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div>
           <h2 className="font-extrabold">Trial balance</h2>
           <p className="text-xs text-slate-500">
-            One clear closing value for each account through the selected date.
+            Closing debit and credit balances through the selected date.
           </p>
         </div>
         <span
@@ -1061,14 +2348,43 @@ function TrialBalance({
           {balanced ? "Balanced" : "Review required"}
         </span>
       </div>
-      <div className="max-h-[62vh] overflow-auto">
-        <table className="min-w-[620px] w-full text-left text-xs">
-          <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500">
+      <div className="grid gap-px border-b border-slate-200 bg-slate-200 sm:grid-cols-3">
+        <div className="bg-white px-4 py-3">
+          <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
+            Total debit
+          </p>
+          <p className="mt-1 text-base font-black text-slate-950">
+            {money(debit)} RWF
+          </p>
+        </div>
+        <div className="bg-white px-4 py-3">
+          <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
+            Total credit
+          </p>
+          <p className="mt-1 text-base font-black text-slate-950">
+            {money(credit)} RWF
+          </p>
+        </div>
+        <div className="bg-white px-4 py-3">
+          <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
+            Difference
+          </p>
+          <p
+            className={`mt-1 text-base font-black ${balanced ? "text-emerald-700" : "text-red-700"}`}
+          >
+            {money(Math.abs(debit - credit))} RWF
+          </p>
+        </div>
+      </div>
+      <div className="max-h-[62vh] overflow-y-auto">
+        <table className="w-full table-fixed text-left text-[10px] sm:text-[11px] [&_td]:break-words [&_th]:break-words [&_th:nth-child(3)]:hidden [&_td:nth-child(3)]:hidden md:[&_th:nth-child(3)]:table-cell md:[&_td:nth-child(3)]:table-cell">
+          <thead className="sticky top-0 z-10 bg-slate-950 text-[10px] uppercase tracking-wide text-white">
             <tr>
               <th className="px-4 py-3">Code</th>
               <th className="px-4 py-3">Account</th>
-              <th className="px-4 py-3">Meaning</th>
-              <th className="px-4 py-3 text-right">Balance</th>
+              <th className="px-4 py-3">Classification</th>
+              <th className="px-4 py-3 text-right">Debit balance</th>
+              <th className="px-4 py-3 text-right">Credit balance</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -1077,16 +2393,22 @@ function TrialBalance({
                 <td className="px-4 py-2.5 font-extrabold">{item.code}</td>
                 <td className="px-4 py-2.5 font-semibold">{item.name}</td>
                 <td className="px-4 py-2.5 text-slate-500">
-                  {balanceMeaning(item)}
+                  <span className="block font-bold capitalize text-slate-700">
+                    {item.type}
+                  </span>
+                  <span className="text-[10px]">{balanceMeaning(item)}</span>
                 </td>
                 <td className="px-4 py-2.5 text-right font-extrabold text-slate-950">
-                  {money(simpleBalance(item))}
+                  {item.debitBalance ? money(item.debitBalance) : "—"}
+                </td>
+                <td className="px-4 py-2.5 text-right font-extrabold text-slate-950">
+                  {item.creditBalance ? money(item.creditBalance) : "—"}
                 </td>
               </tr>
             ))}
             {!loading && !rows.length && (
               <tr>
-                <td colSpan={4} className="p-12 text-center text-slate-500">
+                <td colSpan={5} className="p-12 text-center text-slate-500">
                   No account balances are available.
                 </td>
               </tr>
@@ -1094,14 +2416,11 @@ function TrialBalance({
           </tbody>
           <tfoot className="sticky bottom-0 bg-slate-950 font-extrabold text-white">
             <tr>
-              <td colSpan={4} className="px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span>Accounting check</span>
-                  <span className="text-xs font-semibold text-slate-300">
-                    Debit {money(debit)} · Credit {money(credit)}
-                  </span>
-                </div>
+              <td colSpan={3} className="px-4 py-3">
+                Closing totals
               </td>
+              <td className="px-4 py-3 text-right">{money(debit)}</td>
+              <td className="px-4 py-3 text-right">{money(credit)}</td>
             </tr>
           </tfoot>
         </table>
@@ -1123,8 +2442,8 @@ function JournalRegister({
 }) {
   return (
     <section className="overflow-hidden border border-slate-200 bg-white">
-      <div className="max-h-[65vh] overflow-auto">
-        <table className="min-w-[760px] w-full text-left text-xs">
+      <div className="max-h-[65vh] overflow-y-auto">
+        <table className="w-full table-fixed text-left text-[10px] sm:text-[11px] [&_td]:break-words [&_th]:break-words [&_th:nth-child(3)]:hidden [&_td:nth-child(3)]:hidden [&_th:nth-child(4)]:hidden [&_td:nth-child(4)]:hidden [&_th:nth-child(6)]:hidden [&_td:nth-child(6)]:hidden md:[&_th:nth-child(6)]:table-cell md:[&_td:nth-child(6)]:table-cell lg:[&_th:nth-child(3)]:table-cell lg:[&_td:nth-child(3)]:table-cell lg:[&_th:nth-child(4)]:table-cell lg:[&_td:nth-child(4)]:table-cell">
           <thead className="sticky top-0 bg-slate-950 text-[10px] uppercase text-white">
             <tr>
               <th className="px-4 py-3">Date</th>
@@ -1301,8 +2620,8 @@ function JournalModal({
               />
             </Field>
           </div>
-          <div className="overflow-x-auto border border-slate-200">
-            <table className="min-w-[700px] w-full text-xs">
+          <div className="overflow-hidden border border-slate-200">
+            <table className="w-full table-fixed text-[10px] sm:text-[11px] [&_td]:break-words [&_th]:break-words [&_th:nth-child(2)]:hidden [&_td:nth-child(2)]:hidden sm:[&_th:nth-child(2)]:table-cell sm:[&_td:nth-child(2)]:table-cell">
               <thead className="bg-slate-50 text-[10px] uppercase text-slate-500">
                 <tr>
                   <th className="px-3 py-2 text-left">Account</th>
@@ -1554,8 +2873,8 @@ function TreasuryPanel({
               {treasury.transactions.length} records
             </span>
           </div>
-          <div className="max-h-[470px] overflow-auto">
-            <table className="w-full min-w-[700px] text-left text-xs">
+          <div className="max-h-[470px] overflow-y-auto">
+            <table className="w-full table-fixed text-left text-[10px] sm:text-[11px] [&_td]:break-words [&_th]:break-words [&_th:nth-child(3)]:hidden [&_td:nth-child(3)]:hidden md:[&_th:nth-child(3)]:table-cell md:[&_td:nth-child(3)]:table-cell">
               <thead className="sticky top-0 z-10 bg-slate-950 text-[10px] uppercase text-white">
                 <tr>
                   <th className="px-3 py-3">Date / reference</th>
@@ -1684,7 +3003,9 @@ function TreasuryAccountModal({
             </p>
           )}
           <div className="border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600 sm:col-span-2">
-            Enter the balance that physically existed on the opening date. Future customer receipts, supplier payments, expenses and transfers will update this account automatically.
+            Enter the balance that physically existed on the opening date.
+            Future customer receipts, supplier payments, expenses and transfers
+            will update this account automatically.
           </div>
           <Field label="Account name">
             <input

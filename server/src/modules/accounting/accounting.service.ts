@@ -14,6 +14,9 @@ import PayrollRun from "../payroll/payrollRun.model";
 import ProductionBatch from "../production/productionBatch/productionBatch.model";
 import AccountingJournal, {
   AccountingConfiguration,
+  FixedAsset,
+  OwnerLoan,
+  TaxLiability,
   TreasuryAccount,
   TreasuryTransaction,
 } from "./accounting.model";
@@ -71,6 +74,12 @@ export const accounts: Account[] = [
     group: "Inventory",
   },
   {
+    code: "1300",
+    name: "Plant and equipment",
+    type: "asset",
+    group: "Fixed assets",
+  },
+  {
     code: "2000",
     name: "Supplier payables",
     type: "liability",
@@ -82,12 +91,14 @@ export const accounts: Account[] = [
     type: "liability",
     group: "Statutory liabilities",
   },
+  { code: "2200", name: "Owner and director loans payable", type: "liability", group: "Loans payable" },
   {
     code: "3000",
     name: "Opening funds",
     type: "equity",
     group: "Equity",
   },
+  { code: "3010", name: "Opening balance adjustment", type: "equity", group: "Equity" },
   {
     code: "4000",
     name: "Sales revenue",
@@ -166,6 +177,7 @@ export const accounts: Account[] = [
     type: "expense",
     group: "Operating expenses",
   },
+  { code: "5300", name: "Finance and interest expense", type: "expense", group: "Finance costs" },
 ];
 
 const account = (code: string) => {
@@ -219,7 +231,7 @@ const treasuryCode = (type: unknown) =>
   String(type) === "cash" ? "1000" : "1010";
 
 export async function treasuryWorkspace() {
-  const [treasuryAccounts, transactions, customerReceipts, supplierSettlements, operatingExpenses, paidPayrolls, paidAdvances] = await Promise.all([
+  const [treasuryAccounts, transactions, customerReceipts, supplierSettlements, operatingExpenses, paidPayrolls, paidAdvances, loans, taxes] = await Promise.all([
     TreasuryAccount.find().sort({ status: 1, name: 1 }).lean(),
     TreasuryTransaction.find()
       .populate(
@@ -229,7 +241,14 @@ export async function treasuryWorkspace() {
       .populate("createdBy", "fullName")
       .sort({ date: -1, createdAt: -1 })
       .lean(),
-    Payment.find({ status: "received", treasuryAccount: { $exists: true } })
+    Payment.find({
+      treasuryAccount: { $exists: true },
+      $or: [
+        { status: "received" },
+        { status: { $exists: false } },
+        { status: null },
+      ],
+    })
       .select("treasuryAccount amount receivedAt receiptNumber method")
       .lean(),
     SupplierPayment.find({ treasuryAccount: { $exists: true }, $or: [{ chequeStatus: "cleared" }, { chequeStatus: { $exists: false } }] })
@@ -245,6 +264,8 @@ export async function treasuryWorkspace() {
       .select("treasuryAccount amount paymentDate reason")
       .populate("staff", "fullName")
       .lean(),
+    OwnerLoan.find({ status: { $ne: "void" }, "repayments.0": { $exists: true } }).select("repayments lenderName loanNumber").lean(),
+    TaxLiability.find({ status: { $ne: "void" }, "payments.0": { $exists: true } }).select("payments taxType taxNumber").lean(),
   ]);
   const balances = treasuryAccounts.map((accountItem: any) => {
     const accountId = String(accountItem._id);
@@ -282,9 +303,11 @@ export async function treasuryWorkspace() {
     const advancesPaid = (paidAdvances as any[])
       .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.paymentDate))
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const loanPaid = (loans as any[]).flatMap((item) => item.repayments || []).filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.paymentDate)).reduce((sum, item) => sum + Number(item.principal || 0) + Number(item.interest || 0), 0);
+    const taxPaid = (taxes as any[]).flatMap((item) => item.payments || []).filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.paymentDate)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
     return {
       ...accountItem,
-      balance: Number(accountItem.openingBalance || 0) + movement + receipts - settlements - expensesPaid - payrollPaid - advancesPaid,
+      balance: Number(accountItem.openingBalance || 0) + movement + receipts - settlements - expensesPaid - payrollPaid - advancesPaid - loanPaid - taxPaid,
     };
   });
   const accountById = new Map(balances.map((item: any) => [String(item._id), item]));
@@ -369,11 +392,20 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
     journals,
     treasuryAccounts,
     treasuryTransactions,
+    fixedAssets,
+    ownerLoans,
+    taxLiabilities,
   ] = await Promise.all([
     Invoice.find({ status: { $nin: ["draft", "void"] } })
       .populate("customer", "fullName businessName")
       .lean(),
-    Payment.find({ status: "received" })
+    Payment.find({
+      $or: [
+        { status: "received" },
+        { status: { $exists: false } },
+        { status: null },
+      ],
+    })
       .populate("customer", "fullName businessName")
       .lean(),
     CustomerOpeningBalance.find({ status: { $ne: "void" } })
@@ -409,9 +441,36 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
     TreasuryTransaction.find({ status: "posted" })
       .populate("account destinationAccount", "name type")
       .lean(),
+    FixedAsset.find({ status: { $ne: "disposed" }, openingValue: { $gt: 0 } }).lean(),
+    OwnerLoan.find({ status: { $ne: "void" }, originalAmount: { $gt: 0 } }).populate("repayments.treasuryAccount", "type name").lean(),
+    TaxLiability.find({ status: { $ne: "void" }, assessedAmount: { $gt: 0 } }).populate("payments.treasuryAccount", "type name").lean(),
   ]);
 
   const entries: LedgerEntry[] = [];
+  for (const loan of ownerLoans as any[]) {
+    const value = amount(loan.originalAmount);
+    if (!value) continue;
+    entries.push(entry(`owner-loan-${loan._id}`, loan.openingDate || loan.createdAt, "Owner loan opening", loan.loanNumber, `${loan.lenderName} opening loan`, [line("3010", value, 0, "Pre-existing owner funding not added to current treasury"), line("2200", 0, value, loan.lenderName)]));
+    for (const payment of loan.repayments || []) { const principal = amount(payment.principal); const interest = amount(payment.interest); const paid = principal + interest; if (paid) entries.push(entry(`loan-payment-${payment._id}`, payment.paymentDate, "Loan repayment", payment.paymentNumber, `${loan.lenderName} loan repayment`, [line("2200", principal, 0, "Principal repaid"), ...(interest ? [line("5300", interest, 0, "Loan interest")] : []), line(treasuryCode(payment.treasuryAccount?.type), 0, paid, payment.reference || "Loan payment")])); }
+  }
+  for (const tax of taxLiabilities as any[]) { const assessed = amount(tax.assessedAmount); if (!assessed) continue; entries.push(entry(`tax-${tax._id}`, tax.createdAt, "Tax assessment", tax.taxNumber, `${String(tax.taxType).replace(/_/g, " ")} · ${tax.period}`, [line(tax.basis === "opening" ? "3010" : "5280", assessed, 0, tax.basis === "opening" ? "Opening tax obligation" : "Current-period tax expense"), line("2100", 0, assessed, tax.authority)])); for (const payment of tax.payments || []) { const paid = amount(payment.amount); if (paid) entries.push(entry(`tax-payment-${payment._id}`, payment.paymentDate, "Tax payment", payment.paymentNumber, `${tax.taxNumber} tax payment`, [line("2100", paid, 0, tax.authority), line(treasuryCode(payment.treasuryAccount?.type), 0, paid, payment.reference || "Tax payment")])); } }
+  for (const asset of fixedAssets as any[]) {
+    const value = amount(asset.openingValue);
+    if (!value) continue;
+    entries.push(
+      entry(
+        `fixed-asset-${asset._id}`,
+        asset.recognitionDate || asset.createdAt,
+        "Fixed asset opening",
+        asset.assetCode,
+        `${asset.name} recognised as company equipment`,
+        [
+          line("1300", value, 0, `${asset.name} · ${asset.location || "Factory"}`),
+          line("3000", 0, value, "Opening capital invested in equipment"),
+        ],
+      ),
+    );
+  }
   for (const treasuryAccountItem of treasuryAccounts as any[]) {
     const opening = amount(treasuryAccountItem.openingBalance);
     if (!opening) continue;
@@ -846,8 +905,11 @@ export function accountingSummary(
     liabilities,
     equity,
     cashAndBank: amount(byCode["1000"]) + amount(byCode["1010"]),
+    fixedAssets: amount(byCode["1300"]),
     receivables: amount(byCode["1100"]),
     payables: amount(-(byCode["2000"] || 0)),
+    ownerLoans: amount(-(byCode["2200"] || 0)),
+    taxPayable: amount(-(byCode["2100"] || 0)),
     entryCount: periodEntries.length,
   };
 }

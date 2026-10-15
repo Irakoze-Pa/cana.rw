@@ -487,7 +487,15 @@ export async function listCustomerAccounts() {
     CustomerOpeningBalance.find({ status: { $ne: "void" } })
       .select("customer amount balance")
       .lean(),
-    Payment.find({ status: "received" })
+    // Valid legacy receipts created before the status field existed are paid
+    // transactions too. Pending cheques and reversed receipts are excluded.
+    Payment.find({
+      $or: [
+        { status: "received" },
+        { status: { $exists: false } },
+        { status: null },
+      ],
+    })
       .select("customer amount")
       .lean(),
   ]);

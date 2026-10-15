@@ -127,3 +127,58 @@ const accountingConfigurationSchema = new Schema(
 export const AccountingConfiguration =
   mongoose.models.AccountingConfiguration ||
   mongoose.model("AccountingConfiguration", accountingConfigurationSchema);
+
+const fixedAssetSchema = new Schema(
+  {
+    assetCode: { type: String, required: true, trim: true, uppercase: true, unique: true, index: true },
+    name: { type: String, required: true, trim: true },
+    category: { type: String, trim: true, default: "Production equipment" },
+    location: { type: String, trim: true, default: "Factory" },
+    recognitionDate: { type: Date, required: true, default: Date.now, index: true },
+    openingValue: { type: Number, required: true, min: 0 },
+    status: { type: String, enum: ["active", "maintenance", "disposed"], default: "active", index: true },
+    valuationStatus: { type: String, enum: ["provisional", "verified"], default: "provisional" },
+    notes: { type: String, trim: true, default: "" },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+    updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+  },
+  { timestamps: true },
+);
+
+export const FixedAsset =
+  mongoose.models.FixedAsset || mongoose.model("FixedAsset", fixedAssetSchema);
+
+const ownerLoanSchema = new Schema(
+  {
+    loanNumber: { type: String, required: true, unique: true, index: true },
+    lenderName: { type: String, required: true, trim: true },
+    lenderType: { type: String, enum: ["owner", "director", "shareholder", "bank", "individual", "company", "institution", "other"], default: "owner" },
+    openingDate: { type: Date, required: true, default: Date.now, index: true },
+    originalAmount: { type: Number, required: true, min: 0.01 },
+    reference: { type: String, trim: true, default: "" },
+    interestRate: { type: Number, min: 0, default: 0 },
+    notes: { type: String, trim: true, default: "" },
+    status: { type: String, enum: ["active", "settled", "void"], default: "active", index: true },
+    repayments: [{ paymentNumber: { type: String, required: true }, paymentDate: { type: Date, required: true }, principal: { type: Number, min: 0, default: 0 }, interest: { type: Number, min: 0, default: 0 }, treasuryAccount: { type: Schema.Types.ObjectId, ref: "TreasuryAccount", required: true }, reference: { type: String, trim: true, default: "" }, createdBy: { type: Schema.Types.ObjectId, ref: "User" } }],
+    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+  },
+  { timestamps: true },
+);
+
+export const OwnerLoan = mongoose.models.OwnerLoan || mongoose.model("OwnerLoan", ownerLoanSchema);
+
+const taxLiabilitySchema = new Schema({
+  taxNumber: { type: String, required: true, unique: true, index: true },
+  taxType: { type: String, enum: ["vat", "paye", "corporate_income_tax", "withholding_tax", "rssb", "other"], required: true },
+  basis: { type: String, enum: ["opening", "current"], default: "current" },
+  authority: { type: String, trim: true, default: "Rwanda Revenue Authority" },
+  period: { type: String, required: true, trim: true },
+  dueDate: { type: Date, required: true },
+  assessedAmount: { type: Number, required: true, min: 0.01 },
+  reference: { type: String, trim: true, default: "" },
+  notes: { type: String, trim: true, default: "" },
+  status: { type: String, enum: ["unpaid", "partial", "paid", "void"], default: "unpaid", index: true },
+  payments: [{ paymentNumber: { type: String, required: true }, paymentDate: { type: Date, required: true }, amount: { type: Number, required: true, min: 0.01 }, treasuryAccount: { type: Schema.Types.ObjectId, ref: "TreasuryAccount", required: true }, reference: { type: String, trim: true, default: "" }, createdBy: { type: Schema.Types.ObjectId, ref: "User" } }],
+  createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+}, { timestamps: true });
+export const TaxLiability = mongoose.models.TaxLiability || mongoose.model("TaxLiability", taxLiabilitySchema);

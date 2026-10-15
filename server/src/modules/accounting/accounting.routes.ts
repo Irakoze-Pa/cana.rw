@@ -6,6 +6,9 @@ import {
 } from "../../middleware/auth.middleware";
 import AccountingJournal, {
   AccountingConfiguration,
+  FixedAsset,
+  OwnerLoan,
+  TaxLiability,
   TreasuryAccount,
   TreasuryTransaction,
 } from "./accounting.model";
@@ -70,9 +73,121 @@ router.get("/workspace", async (req, res, next) => {
         journals,
         configuration,
         treasury: await treasuryWorkspace(),
+        fixedAssets: await FixedAsset.find().populate("createdBy updatedBy", "fullName").sort({ assetCode: 1 }).lean(),
+        ownerLoans: await OwnerLoan.find({ status: { $ne: "void" } }).populate("createdBy repayments.treasuryAccount", "fullName name type").sort({ openingDate: -1 }).lean(),
+        taxLiabilities: await TaxLiability.find({ status: { $ne: "void" } }).populate("createdBy payments.treasuryAccount", "fullName name type").sort({ dueDate: 1 }).lean(),
       },
     });
   } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/owner-loans/opening", authorizeRoles("admin"), async (req: AuthRequest, res, next) => {
+  try {
+    const lenderName = String(req.body?.lenderName || "").trim();
+    const lenderType = String(req.body?.lenderType || "other");
+    const originalAmount = Number(req.body?.originalAmount);
+    const openingDate = new Date(req.body?.openingDate || new Date());
+    const interestRate = Number(req.body?.interestRate || 0);
+    if (!lenderName) throw new Error("Owner or lender name is required.");
+    if (!Number.isFinite(originalAmount) || originalAmount <= 0) throw new Error("Loan amount must be greater than zero.");
+    if (!Number.isFinite(openingDate.getTime())) throw new Error("Enter a valid opening date.");
+    if (!Number.isFinite(interestRate) || interestRate < 0) throw new Error("Interest rate cannot be negative.");
+    if (!["owner", "director", "shareholder", "bank", "individual", "company", "institution", "other"].includes(lenderType)) throw new Error("Select a valid lender type.");
+    const data = await OwnerLoan.create({ loanNumber: `LN-${new Date().getFullYear()}-${String(Date.now()).slice(-7)}`, lenderName, lenderType, originalAmount, openingDate, interestRate, reference: String(req.body?.reference || "").trim(), notes: String(req.body?.notes || "").trim(), createdBy: req.user?.id });
+    res.status(201).json({ data, message: "Opening owner loan recorded without changing treasury." });
+  } catch (error) { next(error); }
+});
+
+router.post("/owner-loans/:id/repayments", authorizeRoles("admin"), async (req: AuthRequest, res, next) => { try {
+  const loan = await OwnerLoan.findById(req.params.id); if (!loan || loan.status === "void") return res.status(404).json({ message: "Loan was not found." });
+  const principal = Number(req.body?.principal || 0); const interest = Number(req.body?.interest || 0); if ((!principal && !interest) || principal < 0 || interest < 0) throw new Error("Enter a principal or interest payment.");
+  const paidPrincipal = loan.repayments.reduce((sum: number, item: any) => sum + Number(item.principal || 0), 0); if (principal > loan.originalAmount - paidPrincipal + 0.001) throw new Error("Principal payment exceeds the outstanding loan balance.");
+  const account = await TreasuryAccount.findById(req.body?.treasuryAccount); if (!account || account.status !== "active") throw new Error("Select an active payment account.");
+  const workspace = await treasuryWorkspace(); const balance = Number((workspace.accounts as any[]).find((item) => String(item._id) === String(account._id))?.balance || 0); if (principal + interest > balance) throw new Error(`Insufficient funds. Available: ${balance.toLocaleString("en-RW")} RWF.`);
+  loan.repayments.push({ paymentNumber: `LR-${new Date().getFullYear()}-${String(Date.now()).slice(-7)}`, paymentDate: req.body?.paymentDate || new Date(), principal, interest, treasuryAccount: account._id, reference: String(req.body?.reference || "").trim(), createdBy: req.user?.id } as any);
+  if (paidPrincipal + principal >= loan.originalAmount - 0.001) loan.status = "settled"; await loan.save(); res.status(201).json({ data: loan });
+} catch (error) { next(error); } });
+
+router.post("/taxes", authorizeRoles("admin"), async (req: AuthRequest, res, next) => { try {
+  const assessedAmount = Number(req.body?.assessedAmount); if (!Number.isFinite(assessedAmount) || assessedAmount <= 0) throw new Error("Tax amount must be greater than zero.");
+  const taxType = String(req.body?.taxType || ""); if (!["vat", "paye", "corporate_income_tax", "withholding_tax", "rssb", "other"].includes(taxType)) throw new Error("Select a valid tax type.");
+  if (!String(req.body?.period || "").trim()) throw new Error("Tax period is required.");
+  const basis = String(req.body?.basis || "current"); if (!["opening", "current"].includes(basis)) throw new Error("Select opening or current tax.");
+  const data = await TaxLiability.create({ taxNumber: `TAX-${new Date().getFullYear()}-${String(Date.now()).slice(-7)}`, taxType, basis, authority: String(req.body?.authority || "Rwanda Revenue Authority").trim(), period: String(req.body.period).trim(), dueDate: req.body?.dueDate, assessedAmount, reference: String(req.body?.reference || "").trim(), notes: String(req.body?.notes || "").trim(), createdBy: req.user?.id }); res.status(201).json({ data });
+} catch (error) { next(error); } });
+
+router.post("/taxes/:id/payments", authorizeRoles("admin"), async (req: AuthRequest, res, next) => { try {
+  const tax = await TaxLiability.findById(req.params.id); if (!tax || tax.status === "void") return res.status(404).json({ message: "Tax obligation was not found." });
+  const amount = Number(req.body?.amount); const paid = tax.payments.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0); if (!Number.isFinite(amount) || amount <= 0) throw new Error("Payment must be greater than zero."); if (amount > tax.assessedAmount - paid + 0.001) throw new Error("Payment exceeds the outstanding tax balance.");
+  const account = await TreasuryAccount.findById(req.body?.treasuryAccount); if (!account || account.status !== "active") throw new Error("Select an active payment account."); const workspace = await treasuryWorkspace(); const balance = Number((workspace.accounts as any[]).find((item) => String(item._id) === String(account._id))?.balance || 0); if (amount > balance) throw new Error(`Insufficient funds. Available: ${balance.toLocaleString("en-RW")} RWF.`);
+  tax.payments.push({ paymentNumber: `TP-${new Date().getFullYear()}-${String(Date.now()).slice(-7)}`, paymentDate: req.body?.paymentDate || new Date(), amount, treasuryAccount: account._id, reference: String(req.body?.reference || "").trim(), createdBy: req.user?.id } as any); const total = paid + amount; tax.status = total >= tax.assessedAmount - 0.001 ? "paid" : "partial"; await tax.save(); res.status(201).json({ data: tax });
+} catch (error) { next(error); } });
+
+router.get("/fixed-assets", async (_req, res, next) => {
+  try {
+    res.json({ data: await FixedAsset.find().populate("createdBy updatedBy", "fullName").sort({ assetCode: 1 }).lean() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/fixed-assets", authorizeRoles("admin"), async (req: AuthRequest, res, next) => {
+  try {
+    const assetCode = String(req.body?.assetCode || "").trim().toUpperCase();
+    const name = String(req.body?.name || "").trim();
+    const openingValue = Number(req.body?.openingValue);
+    const recognitionDate = new Date(req.body?.recognitionDate || new Date());
+    if (!assetCode || !name) throw new Error("Asset code and equipment name are required.");
+    if (!Number.isFinite(openingValue) || openingValue < 0) throw new Error("Equipment value must be zero or greater.");
+    if (!Number.isFinite(recognitionDate.getTime())) throw new Error("Enter a valid recognition date.");
+    const data = await FixedAsset.create({
+      assetCode,
+      name,
+      category: String(req.body?.category || "Production equipment").trim(),
+      location: String(req.body?.location || "Factory").trim(),
+      recognitionDate,
+      openingValue,
+      status: req.body?.status || "active",
+      valuationStatus: req.body?.valuationStatus || "provisional",
+      notes: String(req.body?.notes || "").trim(),
+      createdBy: req.user?.id,
+      updatedBy: req.user?.id,
+    });
+    res.status(201).json({ data });
+  } catch (error) {
+    if ((error as { code?: number }).code === 11000) return res.status(409).json({ message: "This asset code already exists." });
+    next(error);
+  }
+});
+
+router.patch("/fixed-assets/:id", authorizeRoles("admin"), async (req: AuthRequest, res, next) => {
+  try {
+    const asset = await FixedAsset.findById(req.params.id);
+    if (!asset) return res.status(404).json({ message: "Equipment asset was not found." });
+    if (req.body?.assetCode !== undefined) asset.assetCode = String(req.body.assetCode).trim().toUpperCase();
+    if (req.body?.name !== undefined) asset.name = String(req.body.name).trim();
+    if (req.body?.category !== undefined) asset.category = String(req.body.category).trim();
+    if (req.body?.location !== undefined) asset.location = String(req.body.location).trim();
+    if (req.body?.openingValue !== undefined) {
+      const value = Number(req.body.openingValue);
+      if (!Number.isFinite(value) || value < 0) throw new Error("Equipment value must be zero or greater.");
+      asset.openingValue = value;
+    }
+    if (req.body?.recognitionDate !== undefined) {
+      const date = new Date(req.body.recognitionDate);
+      if (!Number.isFinite(date.getTime())) throw new Error("Enter a valid recognition date.");
+      asset.recognitionDate = date;
+    }
+    if (["active", "maintenance", "disposed"].includes(req.body?.status)) asset.status = req.body.status;
+    if (["provisional", "verified"].includes(req.body?.valuationStatus)) asset.valuationStatus = req.body.valuationStatus;
+    if (req.body?.notes !== undefined) asset.notes = String(req.body.notes).trim();
+    asset.updatedBy = req.user?.id;
+    await asset.save();
+    res.json({ data: asset });
+  } catch (error) {
+    if ((error as { code?: number }).code === 11000) return res.status(409).json({ message: "This asset code already exists." });
     next(error);
   }
 });

@@ -435,6 +435,13 @@ const groups: Group[] = [
         permissions: ["production", "inventory"],
       },
       {
+        label: "Equipment register",
+        to: "/management/compliance/equipment",
+        icon: Factory,
+        departments: ["production", "management", "warehouse"],
+        permissions: ["production", "inventory"],
+      },
+      {
         label: "Maintenance register",
         to: "/management/compliance/maintenance",
         icon: Wrench,
