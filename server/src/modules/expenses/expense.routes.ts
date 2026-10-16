@@ -79,9 +79,17 @@ router.patch("/cheques/:chequeNumber/status", async (req, res, next) => {
     const current = records[0].chequeStatus || "cleared";
     if (![...activeChequeStatuses].includes(current)) throw new Error(`A ${current} cheque cannot be changed.`);
     if (status === "deposited" && !["issued", "due"].includes(current)) throw new Error("Only an issued or due cheque can be deposited.");
-    if (status === "cleared" && records[0].treasuryAccount) await validateFundingAccount({ treasuryAccount: records[0].treasuryAccount, method: "bank_cheque" }, records.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+    let clearingAccount = records[0].treasuryAccount || req.body?.treasuryAccount;
+    if (status === "cleared") {
+      if (!clearingAccount) {
+        const activeBanks = await TreasuryAccount.find({ type: "bank", status: "active" }).select("_id").lean();
+        if (activeBanks.length !== 1) throw new Error("Select the bank account from which this cheque cleared.");
+        clearingAccount = activeBanks[0]._id;
+      }
+      await validateFundingAccount({ treasuryAccount: clearingAccount, method: "bank_cheque" }, records.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+    }
     const now = new Date();
-    await Expense.updateMany({ method: "bank_cheque", chequeNumber }, { $set: { chequeStatus: status, ...(status === "deposited" ? { depositedAt: now } : {}), ...(status === "cleared" ? { clearedAt: now } : {}) }, $push: { statusHistory: { status, at: now, note: `Expense cheque marked ${status}` } } });
+    await Expense.updateMany({ method: "bank_cheque", chequeNumber }, { $set: { chequeStatus: status, ...(status === "deposited" ? { depositedAt: now } : {}), ...(status === "cleared" ? { clearedAt: now, treasuryAccount: clearingAccount } : {}) }, $push: { statusHistory: { status, at: now, note: `Expense cheque marked ${status}` } } });
     res.json({ data: await Expense.find({ method: "bank_cheque", chequeNumber }).sort({ expenseNumber: 1 }).lean() });
   } catch (error) { next(error); }
 });

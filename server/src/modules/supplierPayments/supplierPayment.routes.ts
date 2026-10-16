@@ -145,11 +145,20 @@ router.patch("/:id/cheque-status", async (req, res, next) => {
     if (["cleared", "bounced", "cancelled"].includes(current)) throw new Error(`A ${current} cheque cannot be changed.`);
     if (status === "deposited" && !["issued", "due"].includes(current)) throw new Error("Only an issued or due cheque can be deposited.");
     if (status === "cleared") {
-      if (payment.treasuryAccount) {
-        const workspace = await treasuryWorkspace();
-        const available = Number((workspace.accounts as any[]).find((item) => String(item._id) === String(payment.treasuryAccount))?.balance || 0);
-        if (Number(payment.amount) > available + 0.0001) throw new Error(`Insufficient funds to clear this cheque. Available account balance: ${available.toLocaleString("en-RW")} RWF.`);
+      if (!payment.treasuryAccount) {
+        const requestedAccount = req.body?.treasuryAccount;
+        if (requestedAccount && mongoose.Types.ObjectId.isValid(requestedAccount)) payment.treasuryAccount = requestedAccount;
+        else {
+          const activeBanks = await TreasuryAccount.find({ type: "bank", status: "active" }).select("_id").lean();
+          if (activeBanks.length !== 1) throw new Error("Select the bank account from which this cheque cleared.");
+          payment.treasuryAccount = activeBanks[0]._id;
+        }
       }
+      const account: any = await TreasuryAccount.findOne({ _id: payment.treasuryAccount, type: "bank", status: "active" }).lean();
+      if (!account) throw new Error("Select an active bank account for this cheque.");
+      const workspace = await treasuryWorkspace();
+      const available = Number((workspace.accounts as any[]).find((item) => String(item._id) === String(payment.treasuryAccount))?.balance || 0);
+      if (Number(payment.amount) > available + 0.0001) throw new Error(`Insufficient funds to clear this cheque. Available account balance: ${available.toLocaleString("en-RW")} RWF.`);
       if (payment.purchaseOrder) {
         const order = await PurchaseOrder.findById(payment.purchaseOrder).lean();
         const paid = await SupplierPayment.aggregate([{ $match: { purchaseOrder: payment.purchaseOrder, _id: { $ne: payment._id }, ...clearedFilter } }, { $group: { _id: null, total: { $sum: "$amount" } } }]);

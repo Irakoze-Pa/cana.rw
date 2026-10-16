@@ -51,6 +51,16 @@ type TrialRow = Account & {
   debitBalance: number;
   creditBalance: number;
 };
+type StatementLine = { code: string; name: string; amount: number };
+type BalanceSheetData = {
+  assets: StatementLine[];
+  liabilities: StatementLine[];
+  equity: StatementLine[];
+  totalAssets: number;
+  totalLiabilities: number;
+  totalEquity: number;
+  difference: number;
+};
 type Summary = {
   revenue: number;
   expenses: number;
@@ -159,6 +169,7 @@ type Tab =
   | "loans"
   | "taxes"
   | "assets"
+  | "balance"
   | "ledger"
   | "trial"
   | "journals";
@@ -195,6 +206,63 @@ const monthStart = () => {
 };
 const money = (value: number) =>
   `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 })} RWF`;
+const buildBalanceSheet = (rows: TrialRow[]): BalanceSheetData => {
+  const assets = rows
+    .filter((item) => item.type === "asset")
+    .map((item) => ({
+      code: item.code,
+      name: item.name,
+      amount: item.debitBalance - item.creditBalance,
+    }))
+    .filter((item) => Math.abs(item.amount) >= 0.01);
+  const liabilities = rows
+    .filter((item) => item.type === "liability")
+    .map((item) => ({
+      code: item.code,
+      name: item.name,
+      amount: item.creditBalance - item.debitBalance,
+    }))
+    .filter((item) => Math.abs(item.amount) >= 0.01);
+  const equity = rows
+    .filter((item) => item.type === "equity")
+    .map((item) => ({
+      code: item.code,
+      name: item.name,
+      amount: item.creditBalance - item.debitBalance,
+    }))
+    .filter((item) => Math.abs(item.amount) >= 0.01);
+  const accumulatedResult = rows.reduce(
+    (sum, item) =>
+      sum +
+      (item.type === "revenue"
+        ? item.creditBalance - item.debitBalance
+        : item.type === "expense"
+          ? -(item.debitBalance - item.creditBalance)
+          : 0),
+    0,
+  );
+  if (Math.abs(accumulatedResult) >= 0.01)
+    equity.push({
+      code: "RESULT",
+      name: "Accumulated profit / (loss)",
+      amount: accumulatedResult,
+    });
+  const totalAssets = assets.reduce((sum, item) => sum + item.amount, 0);
+  const totalLiabilities = liabilities.reduce(
+    (sum, item) => sum + item.amount,
+    0,
+  );
+  const totalEquity = equity.reduce((sum, item) => sum + item.amount, 0);
+  return {
+    assets,
+    liabilities,
+    equity,
+    totalAssets,
+    totalLiabilities,
+    totalEquity,
+    difference: totalAssets - totalLiabilities - totalEquity,
+  };
+};
 const compactMoney = (value: number) =>
   `${new Intl.NumberFormat("en-RW", { notation: "compact", maximumFractionDigits: 1 }).format(Number(value || 0))} RWF`;
 const displayDate = (value: string) =>
@@ -224,6 +292,7 @@ export default function AccountingPage() {
     "loans",
     "taxes",
     "assets",
+    "balance",
     "ledger",
     "trial",
     "journals",
@@ -322,6 +391,7 @@ export default function AccountingPage() {
   );
   const trialDebit = trial.reduce((sum, item) => sum + item.debitBalance, 0);
   const trialCredit = trial.reduce((sum, item) => sum + item.creditBalance, 0);
+  const balanceSheet = useMemo(() => buildBalanceSheet(trial), [trial]);
   const groupedAccounts = useMemo(
     () =>
       Object.entries(
@@ -572,6 +642,73 @@ export default function AccountingPage() {
       });
       return;
     }
+    if (tab === "balance") {
+      const sectionRows = (
+        heading: string,
+        rows: StatementLine[],
+        totalLabel: string,
+        total: number,
+      ) => [
+        [heading.toUpperCase(), ""],
+        ...rows.map((item) => [
+          `${item.code} · ${item.name}`,
+          money(item.amount),
+        ]),
+        [totalLabel, money(total)],
+      ];
+      printCanaDocument({
+        title: "Statement of financial position",
+        reference: `BS-${to.replaceAll("-", "")}`,
+        status: "Official balance sheet",
+        details: [
+          { label: "As at", value: to },
+          { label: "Total assets", value: money(balanceSheet.totalAssets) },
+          {
+            label: "Liabilities & equity",
+            value: money(
+              balanceSheet.totalLiabilities + balanceSheet.totalEquity,
+            ),
+          },
+          {
+            label: "Status",
+            value:
+              Math.abs(balanceSheet.difference) < 0.01
+                ? "Balanced"
+                : `Review difference: ${money(Math.abs(balanceSheet.difference))}`,
+          },
+        ],
+        table: {
+          headers: ["Account", "Amount (RWF)"],
+          rows: [
+            ...sectionRows(
+              "Assets",
+              balanceSheet.assets,
+              "Total assets",
+              balanceSheet.totalAssets,
+            ),
+            ...sectionRows(
+              "Liabilities",
+              balanceSheet.liabilities,
+              "Total liabilities",
+              balanceSheet.totalLiabilities,
+            ),
+            ...sectionRows(
+              "Equity",
+              balanceSheet.equity,
+              "Total equity",
+              balanceSheet.totalEquity,
+            ),
+            [
+              "Total liabilities and equity",
+              money(balanceSheet.totalLiabilities + balanceSheet.totalEquity),
+            ],
+          ],
+        },
+        notes:
+          "Generated from posted accounting entries through the selected date. Assets must equal liabilities plus equity.",
+      });
+      return;
+    }
     printCanaDocument({
       title: "Finance & accounting summary",
       reference: `FAS-${from.replaceAll("-", "")}-${to.replaceAll("-", "")}`,
@@ -661,6 +798,7 @@ export default function AccountingPage() {
     { key: "loans", label: "Loans & borrowings", icon: WalletCards },
     { key: "taxes", label: "Taxes", icon: ClipboardList },
     { key: "assets", label: "Equipment assets", icon: Factory },
+    { key: "balance", label: "Balance sheet", icon: Scale },
     { key: "ledger", label: "Ledger", icon: BookOpen },
     { key: "trial", label: "Trial balance", icon: Scale },
     { key: "journals", label: "Adjustments", icon: WalletCards },
@@ -788,10 +926,7 @@ export default function AccountingPage() {
       )}
 
       <section className="flex flex-col gap-2 border border-slate-200 bg-white p-2 lg:flex-row lg:items-center lg:justify-between">
-        <nav
-          className="flex flex-wrap gap-1"
-          aria-label="Accounting sections"
-        >
+        <nav className="flex flex-wrap gap-1" aria-label="Accounting sections">
           {tabs.map((item) => {
             const Icon = item.icon;
             return (
@@ -874,6 +1009,14 @@ export default function AccountingPage() {
           loading={loading}
           expanded={expanded}
           setExpanded={setExpanded}
+        />
+      )}
+      {tab === "balance" && (
+        <BalanceSheet
+          data={balanceSheet}
+          loading={loading}
+          asAt={to}
+          onOpenLedger={() => selectTab("ledger")}
         />
       )}
       {tab === "trial" && (
@@ -1226,9 +1369,7 @@ function OwnerLoansPanel({
           <p className="text-[10px] font-extrabold uppercase text-slate-500">
             Finance cost
           </p>
-          <p className="mt-1 text-sm font-extrabold">
-            Interest only
-          </p>
+          <p className="mt-1 text-sm font-extrabold">Interest only</p>
         </div>
       </div>
       <div className="max-h-[58vh] overflow-y-auto">
@@ -2253,9 +2394,7 @@ function LedgerRows({
           <td className="px-3 py-3 text-slate-400">
             {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
           </td>
-          <td className="whitespace-nowrap px-3 py-3">
-            {displayDate(item.date)}
-          </td>
+          <td className="px-2 py-2.5 sm:px-3">{displayDate(item.date)}</td>
           <td className="px-3 py-3 font-semibold">{item.source}</td>
           <td className="px-3 py-3 font-bold text-slate-950">
             {item.reference}
@@ -2307,6 +2446,137 @@ function LedgerRows({
         </tr>
       )}
     </>
+  );
+}
+
+function BalanceSheet({
+  data,
+  loading,
+  asAt,
+  onOpenLedger,
+}: {
+  data: BalanceSheetData;
+  loading: boolean;
+  asAt: string;
+  onOpenLedger: () => void;
+}) {
+  const balanced = Math.abs(data.difference) < 0.01;
+  const sections = [
+    {
+      title: "Assets",
+      subtitle: "What the business owns",
+      rows: data.assets,
+      total: data.totalAssets,
+    },
+    {
+      title: "Liabilities",
+      subtitle: "What the business owes",
+      rows: data.liabilities,
+      total: data.totalLiabilities,
+    },
+    {
+      title: "Equity",
+      subtitle: "Owner funding and accumulated result",
+      rows: data.equity,
+      total: data.totalEquity,
+    },
+  ];
+
+  return (
+    <section className="space-y-3">
+      <header className="flex flex-col gap-3 border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-red-700">
+            Statement of financial position
+          </p>
+          <h2 className="mt-0.5 text-lg font-black text-slate-950">
+            Balance sheet
+          </h2>
+          <p className="text-xs text-slate-500">As at {displayDate(asAt)}</p>
+        </div>
+        <div
+          className={`inline-flex items-center gap-2 self-start rounded-md px-3 py-2 text-xs font-extrabold sm:self-auto ${balanced ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}
+        >
+          <CheckCircle2 size={15} />
+          {balanced
+            ? "Balanced"
+            : `Difference ${money(Math.abs(data.difference))}`}
+        </div>
+      </header>
+
+      <div className="grid gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-3">
+        {[
+          ["Total assets", data.totalAssets],
+          ["Total liabilities", data.totalLiabilities],
+          ["Total equity", data.totalEquity],
+        ].map(([label, amount]) => (
+          <div key={String(label)} className="bg-white px-3 py-2.5">
+            <p className="text-[10px] font-extrabold uppercase text-slate-500">
+              {label}
+            </p>
+            <p className="mt-1 text-base font-black text-slate-950">
+              {money(Number(amount))}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid items-start gap-3 xl:grid-cols-3">
+        {sections.map((section) => (
+          <article
+            key={section.title}
+            className="overflow-hidden border border-slate-200 bg-white"
+          >
+            <div className="border-b border-slate-200 bg-slate-950 px-3 py-2.5 text-white">
+              <h3 className="text-sm font-extrabold">{section.title}</h3>
+              <p className="text-[10px] text-slate-300">{section.subtitle}</p>
+            </div>
+            <div className="max-h-[420px] overflow-y-auto">
+              {section.rows.map((item) => (
+                <button
+                  key={`${section.title}-${item.code}`}
+                  type="button"
+                  onClick={onOpenLedger}
+                  className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-100 px-3 py-2 text-left transition hover:bg-slate-50"
+                >
+                  <span className="min-w-0">
+                    <b className="block truncate text-xs text-slate-900">
+                      {item.name}
+                    </b>
+                    <small className="text-[10px] font-bold text-slate-400">
+                      {item.code}
+                    </small>
+                  </span>
+                  <strong
+                    className={`text-xs ${item.amount < 0 ? "text-red-700" : "text-slate-950"}`}
+                  >
+                    {money(item.amount)}
+                  </strong>
+                </button>
+              ))}
+              {!loading && !section.rows.length && (
+                <p className="px-3 py-8 text-center text-xs text-slate-500">
+                  No balances in this section.
+                </p>
+              )}
+            </div>
+            <footer className="flex items-center justify-between bg-slate-50 px-3 py-2.5 text-xs font-black text-slate-950">
+              <span>Total {section.title.toLowerCase()}</span>
+              <span>{money(section.total)}</span>
+            </footer>
+          </article>
+        ))}
+      </div>
+
+      <footer className="flex flex-col gap-1 border border-slate-300 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-xs font-extrabold uppercase text-slate-600">
+          Total liabilities and equity
+        </span>
+        <strong className="text-base font-black text-slate-950">
+          {money(data.totalLiabilities + data.totalEquity)}
+        </strong>
+      </footer>
+    </section>
   );
 }
 
@@ -2458,7 +2728,7 @@ function JournalRegister({
           <tbody className="divide-y divide-slate-100">
             {journals.map((item) => (
               <tr key={item._id}>
-                <td className="whitespace-nowrap px-4 py-3">
+                <td className="px-2 py-2.5 sm:px-3">
                   {displayDate(item.date)}
                 </td>
                 <td className="px-4 py-3 font-extrabold">

@@ -5,6 +5,7 @@ import Balance from "./storeBalance.model";
 import Transfer from "./storeTransfer.model";
 import Product from "../product/product.model";
 import FinishedGoodsAdjustment from "./finishedGoodsAdjustment.model";
+import ProductionBatch from "../production/productionBatch/productionBatch.model";
 
 const router = Router();
 router.use(protect, authorizeRoles(UserRole.ADMIN, UserRole.STAFF));
@@ -17,8 +18,41 @@ async function ensureProductionBalances() {
 router.get("/balances", async (_req, res, next) => {
   try {
     await ensureProductionBalances();
-    const balances = await Balance.find().populate({ path: "product", select: "name code unit baseUnit packSizeKg category status", match: { status: "Active" } }).sort({ updatedAt: -1 });
-    res.json({ data: balances.filter((balance) => balance.product) });
+    const balances: any[] = await Balance.find()
+      .populate({ path: "product", select: "name code unit baseUnit packSizeKg category status", match: { status: "Active" } })
+      .sort({ updatedAt: -1 })
+      .lean();
+    const productIds = balances.filter((balance) => balance.product).map((balance) => balance.product._id);
+    const costedBatches: any[] = await ProductionBatch.find({
+      product: { $in: productIds },
+      status: "Completed",
+      costPerKg: { $gt: 0 },
+    })
+      .select("product batchNo costPerKg costPerPack updatedAt")
+      .sort({ updatedAt: -1 })
+      .lean();
+    const latestCostByProduct = new Map<string, any>();
+    costedBatches.forEach((batch) => {
+      const id = String(batch.product);
+      if (!latestCostByProduct.has(id)) latestCostByProduct.set(id, batch);
+    });
+    res.json({
+      data: balances.filter((balance) => balance.product).map((balance) => {
+        const cost = latestCostByProduct.get(String(balance.product._id));
+        const costPerUnit = balance.product.baseUnit === "pcs" ? Number(cost?.costPerPack || 0) : Number(cost?.costPerKg || 0);
+        return {
+          ...balance,
+          valuation: {
+            costPerUnit,
+            costPerKg: Number(cost?.costPerKg || 0),
+            costPerPack: Number(cost?.costPerPack || 0),
+            inventoryValue: Number((Number(balance.quantity || 0) * costPerUnit).toFixed(2)),
+            sourceBatch: cost?.batchNo || "",
+            status: costPerUnit > 0 ? "costed" : "missing_cost",
+          },
+        };
+      }),
+    });
   } catch (error) { next(error); }
 });
 

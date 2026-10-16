@@ -8,6 +8,7 @@ const supplierPaymentSchema = new Schema({
   amount: { type: Number, required: true, min: 0.01 },
   method: { type: String, enum: ["cash", "bank_transfer", "bank_cheque", "mobile_money", "other"], required: true },
   treasuryAccount: { type: Schema.Types.ObjectId, ref: "TreasuryAccount", index: true },
+  includedInOpeningBalance: { type: Boolean, default: false, index: true },
   chequeNumber: { type: String, trim: true, default: "" },
   bankName: { type: String, trim: true, default: "" },
   chequeDate: Date,

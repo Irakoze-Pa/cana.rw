@@ -6,10 +6,12 @@ import {
 } from "react";
 import {
   ArrowRightLeft,
+  CircleDollarSign,
   Factory,
   PencilLine,
   PackageCheck,
   RefreshCw,
+  Printer,
   Send,
   SlidersHorizontal,
   Store,
@@ -20,6 +22,7 @@ import { Link } from "react-router-dom";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
 import { useAuth } from "@/context/authContext";
+import { printCanaDocument } from "@/modules/management/utils/printCanaDocument";
 
 type Product = {
   _id: string;
@@ -37,6 +40,14 @@ type Balance = {
   store: "production" | "sales";
   quantity: number;
   minimumQuantity?: number;
+  valuation?: {
+    costPerUnit: number;
+    costPerKg: number;
+    costPerPack: number;
+    inventoryValue: number;
+    sourceBatch?: string;
+    status: "costed" | "missing_cost";
+  };
 };
 type Transfer = {
   _id: string;
@@ -196,6 +207,89 @@ export default function FinishedGoodsPage() {
   const totalSales = scopedBalances
     .filter((balance) => balance.store === "sales")
     .reduce((sum, balance) => sum + balance.quantity, 0);
+  const productionValue = scopedBalances
+    .filter((balance) => balance.store === "production")
+    .reduce(
+      (sum, balance) =>
+        sum + Number(balance.valuation?.inventoryValue || 0),
+      0,
+    );
+  const salesValue = scopedBalances
+    .filter((balance) => balance.store === "sales")
+    .reduce(
+      (sum, balance) =>
+        sum + Number(balance.valuation?.inventoryValue || 0),
+      0,
+    );
+  const totalFinishedGoodsValue = productionValue + salesValue;
+  const missingCostProducts = products.filter(
+    (product) =>
+      !balances.some(
+        (balance) =>
+          balance.product?._id === product._id &&
+          balance.valuation?.status === "costed",
+      ),
+  );
+  const valuationFor = (productId: string) =>
+    balances.find((balance) => balance.product?._id === productId)?.valuation;
+  const printFinishedGoodsValuation = () =>
+    printCanaDocument({
+      title:
+        catalogue === "scaffold"
+          ? "Scaffolding equipment valuation"
+          : "Finished-goods inventory valuation",
+      reference: `FGV-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`,
+      status: "Official store valuation",
+      details: [
+        {
+          label: "Report date",
+          value: new Date().toLocaleDateString("en-RW"),
+        },
+        { label: "Products", value: String(products.length) },
+        {
+          label: "Production Store",
+          value: `${number(productionValue)} RWF`,
+        },
+        { label: "Sales Store", value: `${number(salesValue)} RWF` },
+        {
+          label: "Total inventory value",
+          value: `${number(totalFinishedGoodsValue)} RWF`,
+        },
+      ],
+      table: {
+        headers: [
+          "Code",
+          "Finished product",
+          "Production Store",
+          "Sales Store",
+          "Total stock",
+          "Production cost",
+          "Stock value (RWF)",
+        ],
+        rows: products.map((product) => {
+          const production = balanceFor(product._id, "production");
+          const sales = balanceFor(product._id, "sales");
+          const valuation = valuationFor(product._id);
+          return [
+            product.code,
+            product.name,
+            stockWithPacks(production, product),
+            stockWithPacks(sales, product),
+            stockWithPacks(production + sales, product),
+            valuation?.status === "costed"
+              ? `${number(valuation.costPerUnit)} RWF / ${product.baseUnit === "pcs" ? "pc" : "kg"}`
+              : "Cost pending",
+            valuation?.status === "costed"
+              ? number(
+                  (production + sales) * Number(valuation.costPerUnit || 0),
+                )
+              : "—",
+          ];
+        }),
+      },
+      notes:
+        "Paint inventory is valued at the latest completed production-batch cost per kg. Transfers between stores do not change total company inventory value. Products without a completed costed batch are shown as cost pending.",
+    });
   const lowBalances = scopedBalances.filter((balance) => Number(balance.minimumQuantity || 0) > 0 && Number(balance.quantity || 0) <= Number(balance.minimumQuantity || 0));
   return (
     <div className="mx-auto max-w-7xl space-y-4 pb-6">
@@ -215,6 +309,7 @@ export default function FinishedGoodsPage() {
           {canManageMinimums && <button onClick={() => setShowMinimum(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"><SlidersHorizontal size={16} />Minimum balances</button>}
           {isSuperAdmin && <button onClick={() => setShowAdjustment(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"><SlidersHorizontal size={16} />Adjust stock</button>}
           <Link to="/management/products" className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800"><PencilLine size={16} />Product catalogue</Link>
+          <button onClick={printFinishedGoodsValuation} disabled={!products.length} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-black disabled:opacity-40"><Printer size={16} />Print valuation</button>
           <button onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16} />Refresh</button>
         </div>
       </header>
@@ -229,7 +324,7 @@ export default function FinishedGoodsPage() {
           {error}
         </p>
       )}
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Metric
           icon={<Factory size={19} />}
           label="Production Store"
@@ -248,8 +343,22 @@ export default function FinishedGoodsPage() {
           value={String(scopedTransfers.length)}
           unit=""
         />
+        <Metric
+          icon={<CircleDollarSign size={19} />}
+          label="Finished-goods value"
+          value={number(totalFinishedGoodsValue)}
+          unit="RWF"
+        />
         <Metric icon={<PackageCheck size={19} />} label="Low balance alerts" value={String(lowBalances.length)} unit="stores" />
       </section>
+      {catalogue === "paint" && missingCostProducts.length > 0 && (
+        <section className="flex flex-col gap-2 border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            <strong>{missingCostProducts.length} product{missingCostProducts.length === 1 ? "" : "s"}</strong> have stock but no completed costed production batch. Their value is excluded until production cost is available.
+          </p>
+          <Link to="/management/production/batches" className="shrink-0 font-extrabold text-amber-950 underline">Review batches</Link>
+        </section>
+      )}
       <section className="grid gap-4 xl:grid-cols-[.95fr_1.55fr]">
         <form
           onSubmit={sendTransfer}

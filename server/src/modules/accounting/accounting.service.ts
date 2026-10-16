@@ -251,11 +251,11 @@ export async function treasuryWorkspace() {
     })
       .select("treasuryAccount amount receivedAt receiptNumber method")
       .lean(),
-    SupplierPayment.find({ treasuryAccount: { $exists: true }, $or: [{ chequeStatus: "cleared" }, { chequeStatus: { $exists: false } }] })
+    SupplierPayment.find({ treasuryAccount: { $exists: true }, includedInOpeningBalance: { $ne: true }, $or: [{ chequeStatus: "cleared" }, { chequeStatus: { $exists: false } }] })
       .select("treasuryAccount amount paidAt paymentNumber method")
       .lean(),
     Expense.find({ treasuryAccount: { $exists: true }, $or: [{ method: { $ne: "bank_cheque" } }, { chequeStatus: "cleared" }, { chequeStatus: { $exists: false } }] })
-      .select("treasuryAccount amount date expenseNumber method")
+      .select("treasuryAccount amount date clearedAt expenseNumber method")
       .lean(),
     PayrollRun.find({ status: "paid", treasuryAccount: { $exists: true } })
       .select("treasuryAccount lines paidAt payrollNumber period")
@@ -295,7 +295,10 @@ export async function treasuryWorkspace() {
       .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.paidAt))
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const expensesPaid = (operatingExpenses as any[])
-      .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.date))
+      .filter((item) => {
+        const bankMovementDate = item.method === "bank_cheque" ? item.clearedAt || item.date : item.date;
+        return String(item.treasuryAccount) === accountId && onOrAfterOpening(bankMovementDate);
+      })
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const payrollPaid = (paidPayrolls as any[])
       .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.paidAt))
@@ -337,7 +340,7 @@ export async function treasuryWorkspace() {
     ...(operatingExpenses as any[]).map((item) => ({
       _id: `expense-${item._id}`,
       transactionNumber: item.expenseNumber,
-      date: item.date,
+      date: item.method === "bank_cheque" ? item.clearedAt || item.date : item.date,
       type: "withdrawal",
       amount: item.amount,
       description: "Operating expense",

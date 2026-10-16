@@ -37,7 +37,7 @@ type Invoice = {
   amountPaid: number;
   balance: number;
   status: string;
-  customer?: { fullName?: string };
+  customer?: { _id?: string; fullName?: string };
   salesOrder?: { _id?: string; orderNumber?: string };
 };
 type Payment = {
@@ -52,13 +52,20 @@ type Payment = {
   chequeNumber?: string;
   bankName?: string;
   chequeDate?: string;
-  chequeStatus?: "received" | "due" | "deposited" | "cleared" | "bounced" | "cancelled";
+  chequeStatus?:
+    "received" | "due" | "deposited" | "cleared" | "bounced" | "cancelled";
   voidReason?: string;
   customer?: { fullName?: string };
   invoice?: { invoiceNumber?: string };
   openingBalance?: { openingNumber?: string; description?: string };
 };
-type TreasuryAccount = { _id: string; name: string; type: "cash" | "bank" | "mobile_money"; balance: number; status: string };
+type TreasuryAccount = {
+  _id: string;
+  name: string;
+  type: "cash" | "bank" | "mobile_money";
+  balance: number;
+  status: string;
+};
 const requiredTreasuryType = (method: string): TreasuryAccount["type"] =>
   method === "cash"
     ? "cash"
@@ -117,8 +124,12 @@ export default function BillingPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [accountSearch, setAccountSearch] = useState("");
-  const [accountFilter, setAccountFilter] = useState<"all" | "outstanding" | "settled">("outstanding");
-  const [workspaceView, setWorkspaceView] = useState<"accounts" | "invoices" | "openings">("accounts");
+  const [accountFilter, setAccountFilter] = useState<
+    "all" | "outstanding" | "settled"
+  >("outstanding");
+  const [workspaceView, setWorkspaceView] = useState<
+    "accounts" | "invoices" | "openings"
+  >("accounts");
   const [invoiceFilter, setInvoiceFilter] = useState<
     "all" | "unpaid" | "paid" | "void"
   >("all");
@@ -129,7 +140,9 @@ export default function BillingPage() {
     [],
   );
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
+  const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>(
+    [],
+  );
   const [receiptFrom, setReceiptFrom] = useState("");
   const [receiptTo, setReceiptTo] = useState("");
   const [loading, setLoading] = useState(true);
@@ -180,14 +193,22 @@ export default function BillingPage() {
         api.get<{ data: OpeningBalance[] }>("/billing/opening-balances"),
         api.get<{ data: CustomerAccount[] }>("/billing/customer-accounts"),
         api.get<{ data: Payment[] }>("/billing/payments"),
-        api.get<{ data: { accounts: TreasuryAccount[] } }>("/accounting/treasury-accounts").catch(() => ({ data: { data: { accounts: [] } } })),
+        api
+          .get<{ data: { accounts: TreasuryAccount[] } }>(
+            "/accounting/treasury-accounts",
+          )
+          .catch(() => ({ data: { data: { accounts: [] } } })),
       ]);
       setCustomers(customerData.data.data || []);
       setInvoices(invoiceData.data.data || []);
       setOpeningBalances(openingData.data.data || []);
       setCustomerAccounts(accountData.data.data || []);
       setPayments(paymentData.data.data || []);
-      setTreasuryAccounts((treasuryData.data.data.accounts || []).filter((item) => item.status === "active"));
+      setTreasuryAccounts(
+        (treasuryData.data.data.accounts || []).filter(
+          (item) => item.status === "active",
+        ),
+      );
       setLastUpdated(new Date());
     } catch (cause) {
       setError(
@@ -239,8 +260,14 @@ export default function BillingPage() {
     if (
       !(await confirm({
         title: "Confirm payment allocation",
-        description: paymentForm.method === "bank_cheque" ? `Register cheque ${paymentForm.chequeNumber || ""} for ${money(Number(paymentForm.amount || 0))} RWF against ${targetReference}? The balance changes only after clearance.` : `Apply ${money(Number(paymentForm.amount || 0))} RWF to ${targetReference}? ${outcome} A receipt will be created.`,
-        confirmLabel: paymentForm.method === "bank_cheque" ? "Register cheque" : "Record payment",
+        description:
+          paymentForm.method === "bank_cheque"
+            ? `Register cheque ${paymentForm.chequeNumber || ""} for ${money(Number(paymentForm.amount || 0))} RWF against ${targetReference}? The balance changes only after clearance.`
+            : `Apply ${money(Number(paymentForm.amount || 0))} RWF to ${targetReference}? ${outcome} A receipt will be created.`,
+        confirmLabel:
+          paymentForm.method === "bank_cheque"
+            ? "Register cheque"
+            : "Record payment",
         tone: "warning",
       }))
     )
@@ -266,7 +293,12 @@ export default function BillingPage() {
         chequeDate: new Date().toISOString().slice(0, 10),
       });
       await load();
-      toast(paymentForm.method === "bank_cheque" ? "Customer cheque registered pending clearance." : "Payment received and receipt recorded.", "success");
+      toast(
+        paymentForm.method === "bank_cheque"
+          ? "Customer cheque registered pending clearance."
+          : "Payment received and receipt recorded.",
+        "success",
+      );
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Unable to record payment.",
@@ -275,10 +307,36 @@ export default function BillingPage() {
       setSaving(false);
     }
   };
-  const updateCustomerCheque = async (payment: Payment, status: "deposited" | "cleared" | "bounced" | "cancelled") => {
-    if (!(await confirm({ title: `${status[0].toUpperCase()}${status.slice(1)} customer cheque`, description: status === "cleared" ? `Confirm cheque ${payment.chequeNumber} cleared? The linked balance will reduce by ${money(payment.amount)} RWF.` : `Mark cheque ${payment.chequeNumber} as ${status}?`, confirmLabel: `Mark ${status}`, tone: status === "bounced" || status === "cancelled" ? "danger" : "warning" }))) return;
-    try { await api.patch(`/billing/payments/${payment._id}/cheque-status`, { status }); await load(); toast(`Customer cheque marked ${status}.`, "success"); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to update customer cheque."); }
+  const updateCustomerCheque = async (
+    payment: Payment,
+    status: "deposited" | "cleared" | "bounced" | "cancelled",
+  ) => {
+    if (
+      !(await confirm({
+        title: `${status[0].toUpperCase()}${status.slice(1)} customer cheque`,
+        description:
+          status === "cleared"
+            ? `Confirm cheque ${payment.chequeNumber} cleared? The linked balance will reduce by ${money(payment.amount)} RWF.`
+            : `Mark cheque ${payment.chequeNumber} as ${status}?`,
+        confirmLabel: `Mark ${status}`,
+        tone:
+          status === "bounced" || status === "cancelled" ? "danger" : "warning",
+      }))
+    )
+      return;
+    try {
+      await api.patch(`/billing/payments/${payment._id}/cheque-status`, {
+        status,
+      });
+      await load();
+      toast(`Customer cheque marked ${status}.`, "success");
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to update customer cheque.",
+      );
+    }
   };
   const reverseRecordedPayment = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -545,12 +603,93 @@ export default function BillingPage() {
     () => receivableAccounts.filter((account) => Number(account.balance) > 0),
     [receivableAccounts],
   );
+  const printCustomerDebtList = () => {
+    const debtCustomerIds = new Set(
+      customersWithDebt.map((account) => account.customer._id),
+    );
+    const invoiceDebt = invoices.reduce(
+      (sum, invoice) =>
+        sum +
+        (invoice.status !== "void" &&
+        invoice.customer?._id &&
+        debtCustomerIds.has(invoice.customer._id)
+          ? Number(invoice.balance || 0)
+          : 0),
+      0,
+    );
+    const openingDebt = openingBalances.reduce(
+      (sum, opening) =>
+        sum +
+        (opening.status !== "void" &&
+        opening.customer?._id &&
+        debtCustomerIds.has(opening.customer._id)
+          ? Number(opening.balance || 0)
+          : 0),
+      0,
+    );
+    const totalDue = customersWithDebt.reduce(
+      (sum, account) => sum + Number(account.balance || 0),
+      0,
+    );
+
+    printCanaDocument({
+      title: "Customer debt register",
+      reference: `CDR-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`,
+      status: "Official receivables report",
+      details: [
+        {
+          label: "Report date",
+          value: new Date().toLocaleDateString("en-RW"),
+        },
+        {
+          label: "Customers owing",
+          value: String(customersWithDebt.length),
+        },
+        { label: "Invoice debt", value: `${money(invoiceDebt)} RWF` },
+        { label: "Opening debt", value: `${money(openingDebt)} RWF` },
+        { label: "Total outstanding", value: `${money(totalDue)} RWF` },
+      ],
+      table: {
+        headers: [
+          "No.",
+          "Customer / company",
+          "Contact",
+          "Sales invoices",
+          "Opening debt",
+          "Payments",
+          "Balance due (RWF)",
+          "Status",
+        ],
+        rows: customersWithDebt.map((account, index) => [
+          String(index + 1),
+          account.customer.businessName
+            ? `${account.customer.businessName}\n${account.customer.fullName}`
+            : account.customer.fullName || "Customer",
+          account.customer.phone || "—",
+          money(account.invoiceTotal),
+          money(account.openingTotal),
+          money(account.amountPaid),
+          money(account.balance),
+          Number(account.amountPaid) > 0 ? "Part paid" : "Unpaid",
+        ]),
+      },
+      notes:
+        "This register includes customers with an outstanding invoice or opening balance. Reversed receipts and uncleared customer cheques are excluded from payments received.",
+    });
+  };
   const visibleCustomerAccounts = useMemo(() => {
     const term = accountSearch.trim().toLowerCase();
     return receivableAccounts.filter((account) => {
-      const matchesSearch = !term || `${account.customer.fullName || ""} ${account.customer.businessName || ""} ${account.customer.phone || ""}`.toLowerCase().includes(term);
+      const matchesSearch =
+        !term ||
+        `${account.customer.fullName || ""} ${account.customer.businessName || ""} ${account.customer.phone || ""}`
+          .toLowerCase()
+          .includes(term);
       const balance = Number(account.balance || 0);
-      const matchesStatus = accountFilter === "all" || (accountFilter === "outstanding" && balance > 0) || (accountFilter === "settled" && balance <= 0);
+      const matchesStatus =
+        accountFilter === "all" ||
+        (accountFilter === "outstanding" && balance > 0) ||
+        (accountFilter === "settled" && balance <= 0);
       return matchesSearch && matchesStatus;
     });
   }, [accountFilter, accountSearch, receivableAccounts]);
@@ -687,12 +826,17 @@ export default function BillingPage() {
           </div>
         ))}
       </section>
-      <nav className="flex overflow-x-auto rounded-t-xl border border-slate-200 bg-white" aria-label="Billing workspace views">
-        {([
-          ["accounts", "Customer accounts", receivableAccounts.length],
-          ["invoices", "Invoices & receipts", invoices.length],
-          ["openings", "Opening debts", openingBalances.length],
-        ] as const).map(([value, label, count]) => (
+      <nav
+        className="flex overflow-x-auto rounded-t-xl border border-slate-200 bg-white"
+        aria-label="Billing workspace views"
+      >
+        {(
+          [
+            ["accounts", "Customer accounts", receivableAccounts.length],
+            ["invoices", "Invoices & receipts", invoices.length],
+            ["openings", "Opening debts", openingBalances.length],
+          ] as const
+        ).map(([value, label, count]) => (
           <button
             key={value}
             type="button"
@@ -700,12 +844,25 @@ export default function BillingPage() {
             aria-pressed={workspaceView === value}
             className={`relative shrink-0 px-4 py-3 text-xs font-extrabold transition ${workspaceView === value ? "text-slate-950" : "text-slate-500 hover:text-slate-800"}`}
           >
-            {label} <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] ${workspaceView === value ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600"}`}>{count}</span>
-            {workspaceView === value && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-red-700" />}
+            {label}{" "}
+            <span
+              className={`ml-1 rounded-full px-2 py-0.5 text-[10px] ${workspaceView === value ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600"}`}
+            >
+              {count}
+            </span>
+            {workspaceView === value && (
+              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-red-700" />
+            )}
           </button>
         ))}
       </nav>
-      <section className={workspaceView === "accounts" ? "overflow-hidden border border-slate-200 bg-white" : "hidden"}>
+      <section
+        className={
+          workspaceView === "accounts"
+            ? "overflow-hidden border border-slate-200 bg-white"
+            : "hidden"
+        }
+      >
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5">
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
@@ -715,9 +872,21 @@ export default function BillingPage() {
               Customer debt & payment list
             </h2>
           </div>
-          <span className="text-xs font-semibold text-slate-500">
-            {customersWithDebt.length} outstanding · {receivableAccounts.length} total
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">
+              {customersWithDebt.length} outstanding ·{" "}
+              {receivableAccounts.length} total
+            </span>
+            <button
+              type="button"
+              onClick={printCustomerDebtList}
+              disabled={!customersWithDebt.length}
+              className="inline-flex items-center gap-1.5 rounded-md bg-slate-950 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Printer size={13} />
+              Print debt list
+            </button>
+          </div>
         </div>
         <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 p-2.5 sm:flex-row sm:items-center">
           <input
@@ -728,8 +897,24 @@ export default function BillingPage() {
             className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-slate-950"
           />
           <div className="flex gap-1">
-            {([['outstanding', `Outstanding · ${customersWithDebt.length}`], ['settled', `Settled · ${receivableAccounts.length - customersWithDebt.length}`], ['all', `All · ${receivableAccounts.length}`]] as const).map(([value, label]) => (
-              <button key={value} type="button" onClick={() => setAccountFilter(value)} className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${accountFilter === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"}`}>{label}</button>
+            {(
+              [
+                ["outstanding", `Outstanding · ${customersWithDebt.length}`],
+                [
+                  "settled",
+                  `Settled · ${receivableAccounts.length - customersWithDebt.length}`,
+                ],
+                ["all", `All · ${receivableAccounts.length}`],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setAccountFilter(value)}
+                className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${accountFilter === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"}`}
+              >
+                {label}
+              </button>
             ))}
           </div>
         </div>
@@ -747,10 +932,14 @@ export default function BillingPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visibleCustomerAccounts.map((account) => (
-                <tr key={`summary-${account.customer._id}`} className="hover:bg-slate-50">
+                <tr
+                  key={`summary-${account.customer._id}`}
+                  className="hover:bg-slate-50"
+                >
                   <td className="px-3 py-2.5">
                     <p className="font-bold text-slate-950">
-                      {account.customer.businessName || account.customer.fullName}
+                      {account.customer.businessName ||
+                        account.customer.fullName}
                     </p>
                     <p className="mt-0.5 text-[11px] text-slate-500">
                       {account.customer.businessName
@@ -771,15 +960,24 @@ export default function BillingPage() {
                     {money(account.balance)} RWF
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5">
-                    <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide ${Number(account.balance) <= 0 ? "bg-emerald-50 text-emerald-700" : Number(account.amountPaid) > 0 ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"}`}>
-                      {Number(account.balance) <= 0 ? "Settled" : Number(account.amountPaid) > 0 ? "Part paid" : "Unpaid"}
+                    <span
+                      className={`inline-flex rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide ${Number(account.balance) <= 0 ? "bg-emerald-50 text-emerald-700" : Number(account.amountPaid) > 0 ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"}`}
+                    >
+                      {Number(account.balance) <= 0
+                        ? "Settled"
+                        : Number(account.amountPaid) > 0
+                          ? "Part paid"
+                          : "Unpaid"}
                     </span>
                   </td>
                 </tr>
               ))}
               {!loading && !visibleCustomerAccounts.length && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-sm text-slate-500">
+                  <td
+                    colSpan={6}
+                    className="px-3 py-8 text-center text-sm text-slate-500"
+                  >
                     No customer accounts match this view.
                   </td>
                 </tr>
@@ -788,7 +986,9 @@ export default function BillingPage() {
           </table>
         </div>
       </section>
-      <div className={`${workspaceView === "invoices" ? "flex" : "hidden"} flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500`}>
+      <div
+        className={`${workspaceView === "invoices" ? "flex" : "hidden"} flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500`}
+      >
         <span>
           Issued invoice value:{" "}
           <strong className="text-slate-800">
@@ -962,7 +1162,9 @@ export default function BillingPage() {
           </form>
         </div>
       )}
-      <div className={`${workspaceView === "invoices" ? "flex" : "hidden"} flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2.5 lg:flex-row lg:items-center`}>
+      <div
+        className={`${workspaceView === "invoices" ? "flex" : "hidden"} flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2.5 lg:flex-row lg:items-center`}
+      >
         <input
           aria-label="Search invoices"
           placeholder="Search invoice or customer"
@@ -993,7 +1195,9 @@ export default function BillingPage() {
           ))}
         </div>
       </div>
-      <div className={`${workspaceView === "invoices" ? "grid" : "hidden"} items-start gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.9fr)]`}>
+      <div
+        className={`${workspaceView === "invoices" ? "grid" : "hidden"} items-start gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.9fr)]`}
+      >
         <section className="max-h-[430px] space-y-1.5 overflow-y-auto overscroll-contain pr-1 md:hidden">
           {loading ? (
             <p className="border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
@@ -1094,103 +1298,114 @@ export default function BillingPage() {
             </button>
           </div>
           <div className="max-h-[430px] overflow-y-auto overscroll-contain">
-          <table className="w-full table-fixed text-left text-[11px]">
-            <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase text-white">
-              <tr>
-                <th className="w-[18%] px-2.5 py-2.5">Invoice</th>
-                <th className="w-[20%] px-2.5 py-2.5">Client</th>
-                <th className="w-[18%] px-2.5 py-2.5">Value (RWF)</th>
-                <th className="w-[17%] px-2.5 py-2.5">Balance</th>
-                <th className="w-[14%] px-2.5 py-2.5">Status</th>
-                <th className="w-[13%] px-2.5 py-2.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
+            <table className="w-full table-fixed text-left text-[11px]">
+              <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase text-white">
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500">
-                    Loading billing data…
-                  </td>
+                  <th className="w-[18%] px-2.5 py-2.5">Invoice</th>
+                  <th className="w-[20%] px-2.5 py-2.5">Client</th>
+                  <th className="w-[18%] px-2.5 py-2.5">Value (RWF)</th>
+                  <th className="w-[17%] px-2.5 py-2.5">Balance</th>
+                  <th className="w-[14%] px-2.5 py-2.5">Status</th>
+                  <th className="w-[13%] px-2.5 py-2.5 text-right">Actions</th>
                 </tr>
-              ) : (
-                matchingInvoices.map((invoice) => (
-                  <tr
-                    key={invoice._id}
-                    id={`invoice-${invoice._id}`}
-                    onClick={() => setInvoiceDetails(invoice)}
-                    className={`cursor-pointer transition hover:bg-slate-50 ${linkedInvoiceId === invoice._id ? "bg-red-50" : ""}`}
-                  >
-                    <td className="truncate px-2.5 py-2 font-semibold" title={invoice.invoiceNumber}>
-                      <span className="block truncate">{invoice.invoiceNumber}</span>
-                      <span className="block truncate text-[10px] font-normal text-gray-400">
-                        {invoice.salesOrder?.orderNumber}
-                      </span>
-                    </td>
-                    <td className="truncate px-2.5 py-2" title={invoice.customer?.fullName}>
-                      {invoice.customer?.fullName}
-                    </td>
-                    <td className="truncate px-2.5 py-2 font-semibold text-slate-900">
-                      {money(invoice.total)}
-                      <span className="mt-0.5 block text-[10px] font-medium text-emerald-700">
-                        Paid {money(invoice.amountPaid)}
-                      </span>
-                    </td>
-                    <td className="truncate px-2.5 py-2 font-semibold" title={`${money(invoice.balance)} RWF`}>
-                      {money(invoice.balance)}
-                    </td>
-                    <td className="px-2.5 py-2">
-                      <span
-                        className={`block truncate rounded-full px-1.5 py-0.5 text-center text-[9px] font-extrabold uppercase tracking-wide ${statusStyle(invoice.status)}`}
-                      >
-                        {invoice.status.replaceAll("_", " ")}
-                      </span>
-                    </td>
-                    <td
-                      className="px-2 py-2 text-right"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        aria-label={`View ${invoice.invoiceNumber}`}
-                        title="View invoice"
-                        onClick={() => setInvoiceDetails(invoice)}
-                        className="mr-0.5 inline-flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-slate-600 transition hover:border-slate-400 hover:bg-slate-50"
-                      >
-                        <Eye size={12} />
-                      </button>
-                      {invoice.balance > 0 && invoice.status !== "void" && (
-                        <button
-                          type="button"
-                          aria-label={`Record payment for ${invoice.invoiceNumber}`}
-                          title="Record payment"
-                          onClick={() => openPaymentForInvoice(invoice)}
-                          className="mr-0.5 inline-flex h-6 w-6 items-center justify-center rounded bg-slate-950 text-white transition hover:bg-slate-800"
-                        >
-                          <CreditCard size={12} />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        aria-label={`Print ${invoice.invoiceNumber}`}
-                        title="Print invoice"
-                        onClick={() => printInvoice(invoice)}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded border border-gray-200 text-slate-600 transition hover:border-red-200 hover:text-red-700"
-                      >
-                        <Printer size={12} />
-                      </button>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-gray-500">
+                      Loading billing data…
                     </td>
                   </tr>
-                ))
-              )}
-              {!loading && invoices.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500">
-                    Delivered orders will appear here as invoices.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  matchingInvoices.map((invoice) => (
+                    <tr
+                      key={invoice._id}
+                      id={`invoice-${invoice._id}`}
+                      onClick={() => setInvoiceDetails(invoice)}
+                      className={`cursor-pointer transition hover:bg-slate-50 ${linkedInvoiceId === invoice._id ? "bg-red-50" : ""}`}
+                    >
+                      <td
+                        className="truncate px-2.5 py-2 font-semibold"
+                        title={invoice.invoiceNumber}
+                      >
+                        <span className="block truncate">
+                          {invoice.invoiceNumber}
+                        </span>
+                        <span className="block truncate text-[10px] font-normal text-gray-400">
+                          {invoice.salesOrder?.orderNumber}
+                        </span>
+                      </td>
+                      <td
+                        className="truncate px-2.5 py-2"
+                        title={invoice.customer?.fullName}
+                      >
+                        {invoice.customer?.fullName}
+                      </td>
+                      <td className="truncate px-2.5 py-2 font-semibold text-slate-900">
+                        {money(invoice.total)}
+                        <span className="mt-0.5 block text-[10px] font-medium text-emerald-700">
+                          Paid {money(invoice.amountPaid)}
+                        </span>
+                      </td>
+                      <td
+                        className="truncate px-2.5 py-2 font-semibold"
+                        title={`${money(invoice.balance)} RWF`}
+                      >
+                        {money(invoice.balance)}
+                      </td>
+                      <td className="px-2.5 py-2">
+                        <span
+                          className={`block truncate rounded-full px-1.5 py-0.5 text-center text-[9px] font-extrabold uppercase tracking-wide ${statusStyle(invoice.status)}`}
+                        >
+                          {invoice.status.replaceAll("_", " ")}
+                        </span>
+                      </td>
+                      <td
+                        className="px-2 py-2 text-right"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          aria-label={`View ${invoice.invoiceNumber}`}
+                          title="View invoice"
+                          onClick={() => setInvoiceDetails(invoice)}
+                          className="mr-0.5 inline-flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-slate-600 transition hover:border-slate-400 hover:bg-slate-50"
+                        >
+                          <Eye size={12} />
+                        </button>
+                        {invoice.balance > 0 && invoice.status !== "void" && (
+                          <button
+                            type="button"
+                            aria-label={`Record payment for ${invoice.invoiceNumber}`}
+                            title="Record payment"
+                            onClick={() => openPaymentForInvoice(invoice)}
+                            className="mr-0.5 inline-flex h-6 w-6 items-center justify-center rounded bg-slate-950 text-white transition hover:bg-slate-800"
+                          >
+                            <CreditCard size={12} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          aria-label={`Print ${invoice.invoiceNumber}`}
+                          title="Print invoice"
+                          onClick={() => printInvoice(invoice)}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded border border-gray-200 text-slate-600 transition hover:border-red-200 hover:text-red-700"
+                        >
+                          <Printer size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+                {!loading && invoices.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-gray-500">
+                      Delivered orders will appear here as invoices.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
         {invoiceDetails && (
@@ -1505,27 +1720,87 @@ export default function BillingPage() {
                   <option value="cash">Cash</option>
                   <option value="card">Card</option>
                 </select>
-                {treasuryAccounts.length > 0 && <select
-                  disabled={!treasuryAccounts.length}
-                  value={paymentForm.treasuryAccount}
-                  onChange={(event) => setPaymentForm({ ...paymentForm, treasuryAccount: event.target.value })}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
-                >
-                  <option value="">
-                    {treasuryAccounts.length
-                      ? "Receiving account (optional)"
-                      : "Accounting not configured"}
-                  </option>
-                  {treasuryAccounts.map((item) => {
-                    const compatible = item.type === requiredTreasuryType(paymentForm.method);
-                    return (
-                      <option key={item._id} value={item._id} disabled={!compatible}>
-                        {item.name} · {treasuryTypeLabel(item.type)} · {money(item.balance)} RWF{compatible ? "" : " — change payment method"}
-                      </option>
-                    );
-                  })}
-                </select>}
-                {paymentForm.method === "bank_cheque" && <><input required value={paymentForm.chequeNumber} onChange={(event) => setPaymentForm({ ...paymentForm, chequeNumber: event.target.value })} placeholder="Cheque number" className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" /><input required value={paymentForm.bankName} onChange={(event) => setPaymentForm({ ...paymentForm, bankName: event.target.value })} placeholder="Bank name" className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" /><label className="text-xs font-bold text-slate-600">Maturity date<input required type="date" value={paymentForm.chequeDate} onChange={(event) => setPaymentForm({ ...paymentForm, chequeDate: event.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm" /></label><p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">The invoice remains outstanding until Finance confirms that the cheque cleared.</p></>}
+                {treasuryAccounts.length > 0 && (
+                  <select
+                    disabled={!treasuryAccounts.length}
+                    value={paymentForm.treasuryAccount}
+                    onChange={(event) =>
+                      setPaymentForm({
+                        ...paymentForm,
+                        treasuryAccount: event.target.value,
+                      })
+                    }
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
+                  >
+                    <option value="">
+                      {treasuryAccounts.length
+                        ? "Receiving account (optional)"
+                        : "Accounting not configured"}
+                    </option>
+                    {treasuryAccounts.map((item) => {
+                      const compatible =
+                        item.type === requiredTreasuryType(paymentForm.method);
+                      return (
+                        <option
+                          key={item._id}
+                          value={item._id}
+                          disabled={!compatible}
+                        >
+                          {item.name} · {treasuryTypeLabel(item.type)} ·{" "}
+                          {money(item.balance)} RWF
+                          {compatible ? "" : " — change payment method"}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+                {paymentForm.method === "bank_cheque" && (
+                  <>
+                    <input
+                      required
+                      value={paymentForm.chequeNumber}
+                      onChange={(event) =>
+                        setPaymentForm({
+                          ...paymentForm,
+                          chequeNumber: event.target.value,
+                        })
+                      }
+                      placeholder="Cheque number"
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
+                    />
+                    <input
+                      required
+                      value={paymentForm.bankName}
+                      onChange={(event) =>
+                        setPaymentForm({
+                          ...paymentForm,
+                          bankName: event.target.value,
+                        })
+                      }
+                      placeholder="Bank name"
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
+                    />
+                    <label className="text-xs font-bold text-slate-600">
+                      Maturity date
+                      <input
+                        required
+                        type="date"
+                        value={paymentForm.chequeDate}
+                        onChange={(event) =>
+                          setPaymentForm({
+                            ...paymentForm,
+                            chequeDate: event.target.value,
+                          })
+                        }
+                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
+                      />
+                    </label>
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                      The invoice remains outstanding until Finance confirms
+                      that the cheque cleared.
+                    </p>
+                  </>
+                )}
                 <input
                   value={paymentForm.reference}
                   onChange={(event) =>
@@ -1631,7 +1906,45 @@ export default function BillingPage() {
                 >
                   {money(payment.amount)} RWF
                 </span>
-                {payment.status === "pending" ? <div className="flex items-center gap-1"><span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase text-amber-800">{payment.chequeStatus}</span>{payment.chequeStatus !== "deposited" && <button type="button" title="Mark deposited" onClick={() => void updateCustomerCheque(payment, "deposited")} className="rounded border p-1.5"><CreditCard size={12}/></button>}<button type="button" title="Mark cleared" onClick={() => void updateCustomerCheque(payment, "cleared")} className="rounded bg-emerald-700 p-1.5 text-white"><CheckCircle2 size={12}/></button><button type="button" title="Mark bounced" onClick={() => void updateCustomerCheque(payment, "bounced")} className="rounded border border-red-200 p-1.5 text-red-700"><X size={12}/></button></div> : payment.status === "void" ? (
+                {payment.status === "pending" ? (
+                  <div className="flex items-center gap-1">
+                    <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase text-amber-800">
+                      {payment.chequeStatus}
+                    </span>
+                    {payment.chequeStatus !== "deposited" && (
+                      <button
+                        type="button"
+                        title="Mark deposited"
+                        onClick={() =>
+                          void updateCustomerCheque(payment, "deposited")
+                        }
+                        className="rounded border p-1.5"
+                      >
+                        <CreditCard size={12} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      title="Mark cleared"
+                      onClick={() =>
+                        void updateCustomerCheque(payment, "cleared")
+                      }
+                      className="rounded bg-emerald-700 p-1.5 text-white"
+                    >
+                      <CheckCircle2 size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Mark bounced"
+                      onClick={() =>
+                        void updateCustomerCheque(payment, "bounced")
+                      }
+                      className="rounded border border-red-200 p-1.5 text-red-700"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : payment.status === "void" ? (
                   <span className="rounded-full bg-slate-200 px-2 py-1 text-[10px] font-bold uppercase text-slate-600">
                     Reversed
                   </span>
@@ -1650,14 +1963,16 @@ export default function BillingPage() {
                     Reverse
                   </button>
                 ) : null}
-                {payment.status === "received" && <button
-                  onClick={() => printReceipt(payment)}
-                  aria-label={`Print receipt ${payment.receiptNumber}`}
-                  title="Print receipt"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700"
-                >
-                  <Printer size={13} />
-                </button>}
+                {payment.status === "received" && (
+                  <button
+                    onClick={() => printReceipt(payment)}
+                    aria-label={`Print receipt ${payment.receiptNumber}`}
+                    title="Print receipt"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700"
+                  >
+                    <Printer size={13} />
+                  </button>
+                )}
               </div>
             ))}
             {filteredPayments.length === 0 && (
@@ -1726,7 +2041,13 @@ export default function BillingPage() {
           </form>
         </div>
       )}
-      <section className={workspaceView === "openings" ? "overflow-hidden border border-slate-200 bg-white" : "hidden"}>
+      <section
+        className={
+          workspaceView === "openings"
+            ? "overflow-hidden border border-slate-200 bg-white"
+            : "hidden"
+        }
+      >
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">

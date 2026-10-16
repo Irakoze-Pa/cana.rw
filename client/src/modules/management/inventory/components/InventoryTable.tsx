@@ -25,14 +25,16 @@ const formatNumber = (value: number) => {
     maximumFractionDigits: 2,
   }).format(value || 0);
 };
-const packSummary = (quantity: number, unit: string, sizes?: number[]) => !sizes?.length ? "" : `${formatNumber(quantity / sizes[0])} packs @ ${formatNumber(sizes[0])} ${unit}`;
+const packSummary = (quantity: number, unit: string, sizes?: number[]) =>
+  !sizes?.length
+    ? ""
+    : `${formatNumber(quantity / sizes[0])} packs @ ${formatNumber(sizes[0])} ${unit}`;
 
 const getStatus = (item: Inventory) => {
   if (item.status === "Inactive") {
     return {
       label: "Inactive",
-      className:
-        "border-gray-200 bg-gray-100 text-gray-600",
+      className: "border-gray-200 bg-gray-100 text-gray-600",
       icon: XCircle,
     };
   }
@@ -40,15 +42,10 @@ const getStatus = (item: Inventory) => {
   const quantity = item.availableQuantity ?? item.quantity ?? 0;
   const minimumStock = item.minimumStock || 0;
 
-  if (
-    item.isOutOfStock ||
-    quantity <= 0 ||
-    item.status === "Out of Stock"
-  ) {
+  if (item.isOutOfStock || quantity <= 0 || item.status === "Out of Stock") {
     return {
       label: "Out of Stock",
-      className:
-        "border-red-200 bg-red-50 text-red-700",
+      className: "border-red-200 bg-red-50 text-red-700",
       icon: XCircle,
     };
   }
@@ -60,16 +57,14 @@ const getStatus = (item: Inventory) => {
   ) {
     return {
       label: "Low Stock",
-      className:
-        "border-amber-200 bg-amber-50 text-amber-700",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
       icon: AlertTriangle,
     };
   }
 
   return {
     label: "Available",
-    className:
-      "border-green-200 bg-green-50 text-green-700",
+    className: "border-green-200 bg-green-50 text-green-700",
     icon: CheckCircle2,
   };
 };
@@ -89,9 +84,7 @@ const InventoryTable = ({
           <div className="flex flex-col items-center gap-3">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-red-600" />
 
-            <p className="text-sm text-gray-500">
-              Loading inventory...
-            </p>
+            <p className="text-sm text-gray-500">Loading inventory...</p>
           </div>
         </div>
       </div>
@@ -111,8 +104,8 @@ const InventoryTable = ({
           </h3>
 
           <p className="mt-1 max-w-sm text-sm text-gray-500">
-            Inventory records will appear here once raw
-            materials are added to inventory.
+            Inventory records will appear here once raw materials are added to
+            inventory.
           </p>
         </div>
       </div>
@@ -134,14 +127,13 @@ const InventoryTable = ({
         </div>
 
         <div className="rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600">
-          {inventory.length}{" "}
-          {inventory.length === 1 ? "item" : "items"}
+          {inventory.length} {inventory.length === 1 ? "item" : "items"}
         </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="min-w-[980px] w-full">
+      <div className="max-h-[64vh] overflow-y-auto">
+        <table className="w-full table-fixed text-[11px] [&_td]:break-words [&_th]:break-words [&_th:nth-child(3)]:hidden [&_td:nth-child(3)]:hidden [&_th:nth-child(4)]:hidden [&_td:nth-child(4)]:hidden [&_th:nth-child(6)]:hidden [&_td:nth-child(6)]:hidden lg:[&_th:nth-child(3)]:table-cell lg:[&_td:nth-child(3)]:table-cell md:[&_th:nth-child(4)]:table-cell md:[&_td:nth-child(4)]:table-cell lg:[&_th:nth-child(6)]:table-cell lg:[&_td:nth-child(6)]:table-cell">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50/70">
               <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -160,6 +152,10 @@ const InventoryTable = ({
                 Lot Avg. Cost
               </th>
 
+              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                Stock value
+              </th>
+
               <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                 Status
               </th>
@@ -176,11 +172,9 @@ const InventoryTable = ({
               const StatusIcon = status.icon;
 
               const availableQuantity =
-                item.availableQuantity ??
-                item.quantity ?? 0;
+                item.availableQuantity ?? item.quantity ?? 0;
 
-              const minimumStock =
-                item.minimumStock || 0;
+              const minimumStock = item.minimumStock || 0;
 
               return (
                 <tr
@@ -188,9 +182,9 @@ const InventoryTable = ({
                   className="group transition hover:bg-gray-50/70"
                 >
                   {/* Raw Material */}
-                  <td className="px-5 py-4">
+                  <td className="px-2 py-3 sm:px-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50">
+                      <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 sm:flex">
                         <Boxes className="h-5 w-5 text-red-600" />
                       </div>
 
@@ -203,17 +197,18 @@ const InventoryTable = ({
                           {item.rawMaterialCode}
                         </p>
 
-                        {typeof item.rawMaterial === "object" && item.rawMaterial?.category && (
-                          <span className="mt-1 inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
-                            {item.rawMaterial.category}
-                          </span>
-                        )}
+                        {typeof item.rawMaterial === "object" &&
+                          item.rawMaterial?.category && (
+                            <span className="mt-1 inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
+                              {item.rawMaterial.category}
+                            </span>
+                          )}
                       </div>
                     </div>
                   </td>
 
                   {/* Available stock */}
-                  <td className="px-4 py-4">
+                  <td className="px-2 py-3 sm:px-4">
                     <p
                       className={`text-sm font-semibold ${
                         availableQuantity <= 0
@@ -221,13 +216,17 @@ const InventoryTable = ({
                           : "text-gray-900"
                       }`}
                     >
-                      {formatNumber(
-                        availableQuantity
-                      )}
+                      {formatNumber(availableQuantity)}
                     </p>
 
                     <p className="mt-0.5 text-xs text-gray-400">
-                      {packSummary(availableQuantity, item.unit, typeof item.rawMaterial === "object" ? item.rawMaterial?.packSizes : undefined) || item.unit}
+                      {packSummary(
+                        availableQuantity,
+                        item.unit,
+                        typeof item.rawMaterial === "object"
+                          ? item.rawMaterial?.packSizes
+                          : undefined,
+                      ) || item.unit}
                     </p>
                   </td>
 
@@ -237,23 +236,34 @@ const InventoryTable = ({
                       {formatNumber(minimumStock)}
                     </p>
 
-                    <p className="mt-0.5 text-xs text-gray-400">
-                      {item.unit}
-                    </p>
+                    <p className="mt-0.5 text-xs text-gray-400">{item.unit}</p>
                   </td>
 
                   {/* Average Cost */}
                   <td className="px-4 py-4">
                     <p className="text-sm font-semibold text-gray-900">
+                      {formatNumber(item.averageCostPerUnit || 0)}
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-400">
+                      RWF / {item.unit}
+                    </p>
+                  </td>
+
+                  {/* Inventory Value */}
+                  <td className="px-2 py-3 text-right sm:px-4">
+                    <p className="text-sm font-extrabold text-slate-950">
                       {formatNumber(
-                        item.averageCostPerUnit || 0
+                        Number(item.quantity || 0) *
+                          Number(item.averageCostPerUnit || 0),
                       )}
                     </p>
-                    <p className="mt-0.5 text-xs text-gray-400">RWF / {item.unit}</p>
+                    <p className="mt-0.5 text-xs font-medium text-gray-400">
+                      RWF
+                    </p>
                   </td>
 
                   {/* Status */}
-                  <td className="px-4 py-4">
+                  <td className="px-2 py-3 sm:px-4">
                     <span
                       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${status.className}`}
                     >
@@ -270,51 +280,37 @@ const InventoryTable = ({
                       <button
                         type="button"
                         title="Record a supplier delivery"
-                        onClick={() =>
-                          onAddStock(item)
-                        }
+                        onClick={() => onAddStock(item)}
                         className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
                       >
                         <ArrowDownToLine className="h-4 w-4" />
 
-                        <span className="hidden xl:inline">
-                          Receive
-                        </span>
+                        <span className="hidden xl:inline">Receive</span>
                       </button>
 
                       {/* Remove */}
                       <button
                         type="button"
                         title="Issue through a production batch"
-                        onClick={() =>
-                          onRemoveStock(item)
-                        }
-                        disabled={
-                          availableQuantity <= 0
-                        }
-                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        onClick={() => onRemoveStock(item)}
+                        disabled={availableQuantity <= 0}
+                        className="hidden h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-40 sm:inline-flex"
                       >
                         <ArrowUpFromLine className="h-4 w-4" />
 
-                        <span className="hidden xl:inline">
-                          Issue
-                        </span>
+                        <span className="hidden xl:inline">Issue</span>
                       </button>
 
                       {/* Adjust */}
                       <button
                         type="button"
                         title="Adjust Stock"
-                        onClick={() =>
-                          onAdjustStock(item)
-                        }
+                        onClick={() => onAdjustStock(item)}
                         className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700"
                       >
                         <Settings2 className="h-4 w-4" />
 
-                        <span className="hidden xl:inline">
-                          Adjust
-                        </span>
+                        <span className="hidden xl:inline">Adjust</span>
                       </button>
 
                       {/* Transactions */}
@@ -322,9 +318,7 @@ const InventoryTable = ({
                         <button
                           type="button"
                           title="View Transactions"
-                          onClick={() =>
-                            onViewTransactions(item)
-                          }
+                          onClick={() => onViewTransactions(item)}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900"
                         >
                           <MoreHorizontal className="h-4 w-4" />
@@ -346,17 +340,12 @@ const InventoryTable = ({
           <span className="font-semibold text-gray-700">
             {inventory.length}
           </span>{" "}
-          inventory{" "}
-          {inventory.length === 1
-            ? "record"
-            : "records"}
+          inventory {inventory.length === 1 ? "record" : "records"}
         </p>
 
         <div className="hidden items-center gap-2 text-xs text-gray-400 sm:flex">
           <CheckCircle2 className="h-3.5 w-3.5" />
-
-          Stock is controlled through lots and
-          transactions
+          Stock is controlled through lots and transactions
         </div>
       </div>
     </div>
