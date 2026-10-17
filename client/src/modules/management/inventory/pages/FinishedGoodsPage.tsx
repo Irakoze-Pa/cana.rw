@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRightLeft,
   CircleDollarSign,
@@ -61,7 +56,19 @@ type Transfer = {
   performedBy?: { fullName: string };
   createdAt: string;
 };
-type Adjustment = { _id: string; reference: string; product: Product | null; store: "production" | "sales"; quantityChange: number; quantityBefore: number; quantityAfter: number; unit: string; reason: string; performedBy?: { fullName: string }; createdAt: string };
+type Adjustment = {
+  _id: string;
+  reference: string;
+  product: Product | null;
+  store: "production" | "sales";
+  quantityChange: number;
+  quantityBefore: number;
+  quantityAfter: number;
+  unit: string;
+  reason: string;
+  performedBy?: { fullName: string };
+  createdAt: string;
+};
 const number = (value: number) => Number(value || 0).toLocaleString("en-RW");
 const storeName = (store: string) =>
   store === "production" ? "Production Store" : "Sales Store";
@@ -74,7 +81,8 @@ const packs = (quantity: number, product?: Product | null) => {
 };
 const stockWithPacks = (quantity: number, product?: Product | null) =>
   `${packs(quantity, product) || `${number(quantity)} ${product?.baseUnit || "kg"}`} ${packs(quantity, product) ? `· ${number(quantity)} ${product?.baseUnit || "kg"}` : ""}`;
-const isScaffolding = (product?: Product | null) => product?.category === "Scaffolding" || /scaffold/i.test(product?.name || "");
+const isScaffolding = (product?: Product | null) =>
+  product?.category === "Scaffolding" || /scaffold/i.test(product?.name || "");
 
 export default function FinishedGoodsPage() {
   const { user } = useAuth();
@@ -85,8 +93,18 @@ export default function FinishedGoodsPage() {
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [showAdjustment, setShowAdjustment] = useState(false);
   const [showMinimum, setShowMinimum] = useState(false);
-  const [adjustment, setAdjustment] = useState({ product: "", store: "production", quantityChange: "", quantityMode: "packs" as "packs" | "kg" | "pcs", reason: "" });
-  const [minimumForm, setMinimumForm] = useState({ product: "", store: "sales", minimumQuantity: "" });
+  const [adjustment, setAdjustment] = useState({
+    product: "",
+    store: "production",
+    quantityChange: "",
+    quantityMode: "packs" as "packs" | "kg" | "pcs",
+    reason: "",
+  });
+  const [minimumForm, setMinimumForm] = useState({
+    product: "",
+    store: "sales",
+    minimumQuantity: "",
+  });
   const [form, setForm] = useState({
     product: "",
     fromStore: "production",
@@ -98,15 +116,19 @@ export default function FinishedGoodsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const isSuperAdmin = user?.role === "superadmin";
-  const canManageMinimums = user?.role === "superadmin" || user?.role === "admin";
+  const canManageMinimums =
+    user?.role === "superadmin" || user?.role === "admin";
   const load = useCallback(async () => {
     try {
       setError("");
-      const [balanceResponse, transferResponse, adjustmentResponse] = await Promise.all([
-        api.get<{ data: Balance[] }>("/finished-goods/balances"),
-        api.get<{ data: Transfer[] }>("/finished-goods/transfers"),
-        isSuperAdmin ? api.get<{ data: Adjustment[] }>("/finished-goods/adjustments") : Promise.resolve({ data: { data: [] as Adjustment[] } }),
-      ]);
+      const [balanceResponse, transferResponse, adjustmentResponse] =
+        await Promise.all([
+          api.get<{ data: Balance[] }>("/finished-goods/balances"),
+          api.get<{ data: Transfer[] }>("/finished-goods/transfers"),
+          isSuperAdmin
+            ? api.get<{ data: Adjustment[] }>("/finished-goods/adjustments")
+            : Promise.resolve({ data: { data: [] as Adjustment[] } }),
+        ]);
       setBalances(balanceResponse.data.data || []);
       setTransfers(transferResponse.data.data || []);
       setAdjustments(adjustmentResponse.data.data || []);
@@ -126,24 +148,12 @@ export default function FinishedGoodsPage() {
       void load();
     };
 
-    window.addEventListener(
-      "cana:stock-updated",
-      refreshStockRows,
-    );
-    window.addEventListener(
-      "focus",
-      refreshStockRows,
-    );
+    window.addEventListener("cana:stock-updated", refreshStockRows);
+    window.addEventListener("focus", refreshStockRows);
 
     return () => {
-      window.removeEventListener(
-        "cana:stock-updated",
-        refreshStockRows,
-      );
-      window.removeEventListener(
-        "focus",
-        refreshStockRows,
-      );
+      window.removeEventListener("cana:stock-updated", refreshStockRows);
+      window.removeEventListener("focus", refreshStockRows);
     };
   }, [load]);
   const allProducts = useMemo(() => {
@@ -154,7 +164,15 @@ export default function FinishedGoodsPage() {
     );
     return [...seen.values()];
   }, [balances]);
-  const products = useMemo(() => allProducts.filter((product) => catalogue === "scaffold" ? isScaffolding(product) : !isScaffolding(product)), [allProducts, catalogue]);
+  const products = useMemo(
+    () =>
+      allProducts.filter((product) =>
+        catalogue === "scaffold"
+          ? isScaffolding(product)
+          : !isScaffolding(product),
+      ),
+    [allProducts, catalogue],
+  );
   const balanceFor = (productId: string, store: string) =>
     Number(
       balances.find(
@@ -163,15 +181,25 @@ export default function FinishedGoodsPage() {
       )?.quantity || 0,
     );
   const selected = products.find((product) => product._id === form.product);
-  const selectedAdjustmentProduct = products.find((product) => product._id === adjustment.product);
-  const isPieceProduct = selected?.baseUnit === "pcs" || isScaffolding(selected);
-  const transferQuantity = Number(form.quantityInput) * (form.quantityMode === "packs" ? Number(selected?.packSizeKg || 0) : 1);
+  const selectedAdjustmentProduct = products.find(
+    (product) => product._id === adjustment.product,
+  );
+  const isPieceProduct =
+    selected?.baseUnit === "pcs" || isScaffolding(selected);
+  const transferQuantity =
+    Number(form.quantityInput) *
+    (form.quantityMode === "packs" ? Number(selected?.packSizeKg || 0) : 1);
   const sendTransfer = async (event: React.FormEvent) => {
     event.preventDefault();
     if (form.fromStore === form.toStore)
       return setError("Select two different stores.");
     if (!selected) return setError("Select a finished product to transfer.");
-    if (!Number.isFinite(transferQuantity) || transferQuantity <= 0) return setError(form.quantityMode === "packs" ? "Enter a valid number of packs. This product must have a pack size before packs can be transferred." : `Enter a valid quantity in ${isPieceProduct ? "pieces" : "kg"}.`);
+    if (!Number.isFinite(transferQuantity) || transferQuantity <= 0)
+      return setError(
+        form.quantityMode === "packs"
+          ? "Enter a valid number of packs. This product must have a pack size before packs can be transferred."
+          : `Enter a valid quantity in ${isPieceProduct ? "pieces" : "kg"}.`,
+      );
     try {
       setBusy(true);
       setError("");
@@ -197,10 +225,108 @@ export default function FinishedGoodsPage() {
       setBusy(false);
     }
   };
-  const submitAdjustment = async (event: React.FormEvent) => { event.preventDefault(); const isPiece = selectedAdjustmentProduct?.baseUnit === "pcs" || isScaffolding(selectedAdjustmentProduct); const packSizeKg = Number(selectedAdjustmentProduct?.packSizeKg || 0); const rawChange = Number(adjustment.quantityChange); const change = adjustment.quantityMode === "packs" ? rawChange * packSizeKg : rawChange; const unit = adjustment.quantityMode === "packs" ? "packs" : isPiece ? "pieces" : "kg"; if (adjustment.quantityMode === "packs" && (!Number.isFinite(packSizeKg) || packSizeKg <= 0)) return setError("Set this product's pack weight before adjusting it by pack."); if (!Number.isFinite(rawChange) || rawChange === 0 || !Number.isFinite(change)) return setError(`Enter a non-zero adjustment in ${unit}. Use a positive value to add stock or a negative value to remove stock.`); try { setBusy(true); setError(""); await api.post("/finished-goods/adjustments", { product: adjustment.product, store: adjustment.store, quantityChange: change, reason: adjustment.reason }); toast(`Stock adjustment recorded: ${rawChange > 0 ? "+" : ""}${rawChange} ${unit}.`, "success"); setAdjustment({ product: "", store: "production", quantityChange: "", quantityMode: "packs", reason: "" }); setShowAdjustment(false); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to record stock adjustment."); } finally { setBusy(false); } };
-  const saveMinimum = async (event: React.FormEvent) => { event.preventDefault(); const minimumQuantity = Number(minimumForm.minimumQuantity); if (!minimumForm.product || !Number.isFinite(minimumQuantity) || minimumQuantity < 0) return setError("Select a product and enter a zero or positive minimum balance."); try { setBusy(true); setError(""); await api.patch("/finished-goods/balances/minimum", { ...minimumForm, minimumQuantity }); toast("Finished-goods minimum balance saved.", "success"); setShowMinimum(false); setMinimumForm({ product: "", store: "sales", minimumQuantity: "" }); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save the minimum balance."); } finally { setBusy(false); } };
-  const scopedBalances = balances.filter((balance) => balance.product && products.some((product) => product._id === balance.product?._id));
-  const scopedTransfers = transfers.filter((transfer) => transfer.product && (catalogue === "scaffold" ? isScaffolding(transfer.product) : !isScaffolding(transfer.product)));
+  const submitAdjustment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const isPiece =
+      selectedAdjustmentProduct?.baseUnit === "pcs" ||
+      isScaffolding(selectedAdjustmentProduct);
+    const packSizeKg = Number(selectedAdjustmentProduct?.packSizeKg || 0);
+    const rawChange = Number(adjustment.quantityChange);
+    const change =
+      adjustment.quantityMode === "packs" ? rawChange * packSizeKg : rawChange;
+    const unit =
+      adjustment.quantityMode === "packs" ? "packs" : isPiece ? "pieces" : "kg";
+    if (
+      adjustment.quantityMode === "packs" &&
+      (!Number.isFinite(packSizeKg) || packSizeKg <= 0)
+    )
+      return setError(
+        "Set this product's pack weight before adjusting it by pack.",
+      );
+    if (
+      !Number.isFinite(rawChange) ||
+      rawChange === 0 ||
+      !Number.isFinite(change)
+    )
+      return setError(
+        `Enter a non-zero adjustment in ${unit}. Use a positive value to add stock or a negative value to remove stock.`,
+      );
+    try {
+      setBusy(true);
+      setError("");
+      await api.post("/finished-goods/adjustments", {
+        product: adjustment.product,
+        store: adjustment.store,
+        quantityChange: change,
+        reason: adjustment.reason,
+      });
+      toast(
+        `Stock adjustment recorded: ${rawChange > 0 ? "+" : ""}${rawChange} ${unit}.`,
+        "success",
+      );
+      setAdjustment({
+        product: "",
+        store: "production",
+        quantityChange: "",
+        quantityMode: "packs",
+        reason: "",
+      });
+      setShowAdjustment(false);
+      await load();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to record stock adjustment.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const saveMinimum = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const minimumQuantity = Number(minimumForm.minimumQuantity);
+    if (
+      !minimumForm.product ||
+      !Number.isFinite(minimumQuantity) ||
+      minimumQuantity < 0
+    )
+      return setError(
+        "Select a product and enter a zero or positive minimum balance.",
+      );
+    try {
+      setBusy(true);
+      setError("");
+      await api.patch("/finished-goods/balances/minimum", {
+        ...minimumForm,
+        minimumQuantity,
+      });
+      toast("Finished-goods minimum balance saved.", "success");
+      setShowMinimum(false);
+      setMinimumForm({ product: "", store: "sales", minimumQuantity: "" });
+      await load();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to save the minimum balance.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const scopedBalances = balances.filter(
+    (balance) =>
+      balance.product &&
+      products.some((product) => product._id === balance.product?._id),
+  );
+  const scopedTransfers = transfers.filter(
+    (transfer) =>
+      transfer.product &&
+      (catalogue === "scaffold"
+        ? isScaffolding(transfer.product)
+        : !isScaffolding(transfer.product)),
+  );
   const totalProduction = scopedBalances
     .filter((balance) => balance.store === "production")
     .reduce((sum, balance) => sum + balance.quantity, 0);
@@ -210,15 +336,13 @@ export default function FinishedGoodsPage() {
   const productionValue = scopedBalances
     .filter((balance) => balance.store === "production")
     .reduce(
-      (sum, balance) =>
-        sum + Number(balance.valuation?.inventoryValue || 0),
+      (sum, balance) => sum + Number(balance.valuation?.inventoryValue || 0),
       0,
     );
   const salesValue = scopedBalances
     .filter((balance) => balance.store === "sales")
     .reduce(
-      (sum, balance) =>
-        sum + Number(balance.valuation?.inventoryValue || 0),
+      (sum, balance) => sum + Number(balance.valuation?.inventoryValue || 0),
       0,
     );
   const totalFinishedGoodsValue = productionValue + salesValue;
@@ -290,7 +414,11 @@ export default function FinishedGoodsPage() {
       notes:
         "Paint inventory is valued at the latest completed production-batch cost per kg. Transfers between stores do not change total company inventory value. Products without a completed costed batch are shown as cost pending.",
     });
-  const lowBalances = scopedBalances.filter((balance) => Number(balance.minimumQuantity || 0) > 0 && Number(balance.quantity || 0) <= Number(balance.minimumQuantity || 0));
+  const lowBalances = scopedBalances.filter(
+    (balance) =>
+      Number(balance.minimumQuantity || 0) > 0 &&
+      Number(balance.quantity || 0) <= Number(balance.minimumQuantity || 0),
+  );
   return (
     <div className="mx-auto max-w-7xl space-y-4 pb-6">
       <header className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
@@ -301,24 +429,360 @@ export default function FinishedGoodsPage() {
           <div>
             <p className="cana-section-kicker">Inventory & stores</p>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
-              {catalogue === "scaffold" ? "Scaffolding equipment stores" : "Finished-goods stores"}
+              {catalogue === "scaffold"
+                ? "Scaffolding equipment stores"
+                : "Finished-goods stores"}
             </h1>
           </div>
         </div>
         <div className="flex gap-2">
-          {canManageMinimums && <button onClick={() => setShowMinimum(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"><SlidersHorizontal size={16} />Minimum balances</button>}
-          {isSuperAdmin && <button onClick={() => setShowAdjustment(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"><SlidersHorizontal size={16} />Adjust stock</button>}
-          <Link to="/management/products" className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800"><PencilLine size={16} />Product catalogue</Link>
-          <button onClick={printFinishedGoodsValuation} disabled={!products.length} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-black disabled:opacity-40"><Printer size={16} />Print valuation</button>
-          <button onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"><RefreshCw size={16} />Refresh</button>
+          {canManageMinimums && (
+            <button
+              onClick={() => setShowMinimum(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+            >
+              <SlidersHorizontal size={16} />
+              Minimum balances
+            </button>
+          )}
+          {isSuperAdmin && (
+            <button
+              onClick={() => setShowAdjustment(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+            >
+              <SlidersHorizontal size={16} />
+              Adjust stock
+            </button>
+          )}
+          <Link
+            to="/management/products"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800"
+          >
+            <PencilLine size={16} />
+            Product catalogue
+          </Link>
+          <button
+            onClick={printFinishedGoodsValuation}
+            disabled={!products.length}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-black disabled:opacity-40"
+          >
+            <Printer size={16} />
+            Print valuation
+          </button>
+          <button
+            onClick={() => void load()}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"
+          >
+            <RefreshCw size={16} />
+            Refresh
+          </button>
         </div>
       </header>
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => { setCatalogue("paint"); setForm((current) => ({ ...current, product: "", quantityInput: "", quantityMode: "packs" })); }} className={`rounded-lg px-4 py-2 text-sm font-bold transition ${catalogue === "paint" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>Paint finished goods</button>
-        <button type="button" onClick={() => { setCatalogue("scaffold"); setForm((current) => ({ ...current, product: "", quantityInput: "", quantityMode: "pcs" })); }} className={`rounded-lg px-4 py-2 text-sm font-bold transition ${catalogue === "scaffold" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>Scaffolding equipment</button>
+        <button
+          type="button"
+          onClick={() => {
+            setCatalogue("paint");
+            setForm((current) => ({
+              ...current,
+              product: "",
+              quantityInput: "",
+              quantityMode: "packs",
+            }));
+          }}
+          className={`rounded-lg px-4 py-2 text-sm font-bold transition ${catalogue === "paint" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+        >
+          Paint finished goods
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setCatalogue("scaffold");
+            setForm((current) => ({
+              ...current,
+              product: "",
+              quantityInput: "",
+              quantityMode: "pcs",
+            }));
+          }}
+          className={`rounded-lg px-4 py-2 text-sm font-bold transition ${catalogue === "scaffold" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+        >
+          Scaffolding equipment
+        </button>
       </div>
-      {showAdjustment && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"><form onSubmit={submitAdjustment} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-red-600">SuperAdmin control</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Adjust finished-goods stock</h2><p className="mt-2 text-sm leading-6 text-slate-500">Enter packs for paint products. The system records the matching kg movement automatically.</p></div><button type="button" onClick={() => setShowAdjustment(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></div><div className="mt-6 space-y-4"><label className="block text-sm font-bold text-slate-700">Finished product<select required value={adjustment.product} onChange={(event) => { const product = products.find((item) => item._id === event.target.value); setAdjustment({ ...adjustment, product: event.target.value, quantityChange: "", quantityMode: product?.baseUnit === "pcs" || isScaffolding(product) ? "pcs" : "packs" }); }} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Select product</option>{products.map((product) => <option key={product._id} value={product._id}>{product.name} · {product.code}</option>)}</select></label><label className="block text-sm font-bold text-slate-700">Store<select value={adjustment.store} onChange={(event) => setAdjustment({ ...adjustment, store: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="production">Production Store</option><option value="sales">Sales Store</option></select></label>{selectedAdjustmentProduct && <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">Current balance: <strong>{stockWithPacks(balanceFor(selectedAdjustmentProduct._id, adjustment.store), selectedAdjustmentProduct)}</strong></p>}<div className="rounded-xl border border-red-100 bg-red-50/40 p-3"><div className="flex items-center justify-between gap-3"><p className="text-sm font-bold text-slate-800">Adjustment quantity</p>{selectedAdjustmentProduct?.baseUnit === "pcs" || isScaffolding(selectedAdjustmentProduct) ? <span className="rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-slate-700">By piece</span> : <select value={adjustment.quantityMode} onChange={(event) => setAdjustment({ ...adjustment, quantityMode: event.target.value as "packs" | "kg" })} className="h-9 rounded-lg border border-red-200 bg-white px-2.5 text-xs font-bold text-slate-700"><option value="packs">By pack</option><option value="kg">By kg</option></select>}</div><label className="mt-3 block text-sm font-bold text-slate-700">{adjustment.quantityMode === "packs" ? `Packs to add or remove${selectedAdjustmentProduct?.packSizeKg ? ` (${selectedAdjustmentProduct.packSizeKg} kg per pack)` : ""}` : adjustment.quantityMode === "pcs" ? "Pieces to add or remove" : "Kilograms to add or remove"}<input required step="any" type="number" value={adjustment.quantityChange} onChange={(event) => setAdjustment({ ...adjustment, quantityChange: event.target.value })} placeholder={adjustment.quantityMode === "packs" ? "Example: 4 or -2" : "Example: 80 or -20"} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/></label>{adjustment.quantityMode === "packs" && adjustment.quantityChange && selectedAdjustmentProduct?.packSizeKg && <p className="mt-2 text-xs font-semibold text-slate-600">Stock movement: {Number(adjustment.quantityChange) * Number(selectedAdjustmentProduct.packSizeKg)} kg</p>}</div><label className="block text-sm font-bold text-slate-700">Reason for correction<textarea required minLength={3} value={adjustment.reason} onChange={(event) => setAdjustment({ ...adjustment, reason: event.target.value })} rows={3} placeholder="Example: Physical stock count correction" className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm"/></label></div><button disabled={busy} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:bg-slate-300"><SlidersHorizontal size={16}/>{busy ? "Recording…" : "Record adjustment"}</button></form></div>}
-      {showMinimum && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"><form onSubmit={saveMinimum} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-red-600">SuperAdmin control</p><h2 className="mt-1 text-xl font-extrabold text-slate-950">Set minimum balance</h2><p className="mt-2 text-sm leading-6 text-slate-500">The store is marked low when its balance reaches this quantity.</p></div><button type="button" onClick={() => setShowMinimum(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18}/></button></div><div className="mt-6 space-y-4"><label className="block text-sm font-bold text-slate-700">Finished product<select required value={minimumForm.product} onChange={(event) => { const product = event.target.value; const existing = balances.find((balance) => balance.product?._id === product && balance.store === minimumForm.store); setMinimumForm({ ...minimumForm, product, minimumQuantity: existing ? String(existing.minimumQuantity || "") : "" }); }} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Select product</option>{products.map((product) => <option key={product._id} value={product._id}>{product.name} · {product.code}</option>)}</select></label><label className="block text-sm font-bold text-slate-700">Store<select value={minimumForm.store} onChange={(event) => setMinimumForm({ ...minimumForm, store: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="sales">Sales Store</option><option value="production">Production Store</option></select></label><label className="block text-sm font-bold text-slate-700">Minimum balance<input required min="0" step="any" type="number" value={minimumForm.minimumQuantity} onChange={(event) => setMinimumForm({ ...minimumForm, minimumQuantity: event.target.value })} placeholder="Example: 100" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/></label></div><button disabled={busy} className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:bg-slate-300">{busy ? "Saving…" : "Save minimum balance"}</button></form></div>}
+      {showAdjustment && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
+          <form
+            onSubmit={submitAdjustment}
+            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[.14em] text-red-600">
+                  SuperAdmin control
+                </p>
+                <h2 className="mt-1 text-xl font-extrabold text-slate-950">
+                  Adjust finished-goods stock
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Enter packs for paint products. The system records the
+                  matching kg movement automatically.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAdjustment(false)}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="mt-6 space-y-4">
+              <label className="block text-sm font-bold text-slate-700">
+                Finished product
+                <select
+                  required
+                  value={adjustment.product}
+                  onChange={(event) => {
+                    const product = products.find(
+                      (item) => item._id === event.target.value,
+                    );
+                    setAdjustment({
+                      ...adjustment,
+                      product: event.target.value,
+                      quantityChange: "",
+                      quantityMode:
+                        product?.baseUnit === "pcs" || isScaffolding(product)
+                          ? "pcs"
+                          : "packs",
+                    });
+                  }}
+                  className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                >
+                  <option value="">Select product</option>
+                  {products.map((product) => (
+                    <option key={product._id} value={product._id}>
+                      {product.name} · {product.code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-bold text-slate-700">
+                Store
+                <select
+                  value={adjustment.store}
+                  onChange={(event) =>
+                    setAdjustment({ ...adjustment, store: event.target.value })
+                  }
+                  className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                >
+                  <option value="production">Production Store</option>
+                  <option value="sales">Sales Store</option>
+                </select>
+              </label>
+              {selectedAdjustmentProduct && (
+                <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                  Current balance:{" "}
+                  <strong>
+                    {stockWithPacks(
+                      balanceFor(
+                        selectedAdjustmentProduct._id,
+                        adjustment.store,
+                      ),
+                      selectedAdjustmentProduct,
+                    )}
+                  </strong>
+                </p>
+              )}
+              <div className="rounded-xl border border-red-100 bg-red-50/40 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-bold text-slate-800">
+                    Adjustment quantity
+                  </p>
+                  {selectedAdjustmentProduct?.baseUnit === "pcs" ||
+                  isScaffolding(selectedAdjustmentProduct) ? (
+                    <span className="rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-slate-700">
+                      By piece
+                    </span>
+                  ) : (
+                    <select
+                      value={adjustment.quantityMode}
+                      onChange={(event) =>
+                        setAdjustment({
+                          ...adjustment,
+                          quantityMode: event.target.value as "packs" | "kg",
+                        })
+                      }
+                      className="h-9 rounded-lg border border-red-200 bg-white px-2.5 text-xs font-bold text-slate-700"
+                    >
+                      <option value="packs">By pack</option>
+                      <option value="kg">By kg</option>
+                    </select>
+                  )}
+                </div>
+                <label className="mt-3 block text-sm font-bold text-slate-700">
+                  {adjustment.quantityMode === "packs"
+                    ? `Packs to add or remove${selectedAdjustmentProduct?.packSizeKg ? ` (${selectedAdjustmentProduct.packSizeKg} kg per pack)` : ""}`
+                    : adjustment.quantityMode === "pcs"
+                      ? "Pieces to add or remove"
+                      : "Kilograms to add or remove"}
+                  <input
+                    required
+                    step="any"
+                    type="number"
+                    value={adjustment.quantityChange}
+                    onChange={(event) =>
+                      setAdjustment({
+                        ...adjustment,
+                        quantityChange: event.target.value,
+                      })
+                    }
+                    placeholder={
+                      adjustment.quantityMode === "packs"
+                        ? "Example: 4 or -2"
+                        : "Example: 80 or -20"
+                    }
+                    className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                  />
+                </label>
+                {adjustment.quantityMode === "packs" &&
+                  adjustment.quantityChange &&
+                  selectedAdjustmentProduct?.packSizeKg && (
+                    <p className="mt-2 text-xs font-semibold text-slate-600">
+                      Stock movement:{" "}
+                      {Number(adjustment.quantityChange) *
+                        Number(selectedAdjustmentProduct.packSizeKg)}{" "}
+                      kg
+                    </p>
+                  )}
+              </div>
+              <label className="block text-sm font-bold text-slate-700">
+                Reason for correction
+                <textarea
+                  required
+                  minLength={3}
+                  value={adjustment.reason}
+                  onChange={(event) =>
+                    setAdjustment({ ...adjustment, reason: event.target.value })
+                  }
+                  rows={3}
+                  placeholder="Example: Physical stock count correction"
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm"
+                />
+              </label>
+            </div>
+            <button
+              disabled={busy}
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:bg-slate-300"
+            >
+              <SlidersHorizontal size={16} />
+              {busy ? "Recording…" : "Record adjustment"}
+            </button>
+          </form>
+        </div>
+      )}
+      {showMinimum && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
+          <form
+            onSubmit={saveMinimum}
+            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[.14em] text-red-600">
+                  SuperAdmin control
+                </p>
+                <h2 className="mt-1 text-xl font-extrabold text-slate-950">
+                  Set minimum balance
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  The store is marked low when its balance reaches this
+                  quantity.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMinimum(false)}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="mt-6 space-y-4">
+              <label className="block text-sm font-bold text-slate-700">
+                Finished product
+                <select
+                  required
+                  value={minimumForm.product}
+                  onChange={(event) => {
+                    const product = event.target.value;
+                    const existing = balances.find(
+                      (balance) =>
+                        balance.product?._id === product &&
+                        balance.store === minimumForm.store,
+                    );
+                    setMinimumForm({
+                      ...minimumForm,
+                      product,
+                      minimumQuantity: existing
+                        ? String(existing.minimumQuantity || "")
+                        : "",
+                    });
+                  }}
+                  className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                >
+                  <option value="">Select product</option>
+                  {products.map((product) => (
+                    <option key={product._id} value={product._id}>
+                      {product.name} · {product.code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-bold text-slate-700">
+                Store
+                <select
+                  value={minimumForm.store}
+                  onChange={(event) =>
+                    setMinimumForm({
+                      ...minimumForm,
+                      store: event.target.value,
+                    })
+                  }
+                  className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                >
+                  <option value="sales">Sales Store</option>
+                  <option value="production">Production Store</option>
+                </select>
+              </label>
+              <label className="block text-sm font-bold text-slate-700">
+                Minimum balance
+                <input
+                  required
+                  min="0"
+                  step="any"
+                  type="number"
+                  value={minimumForm.minimumQuantity}
+                  onChange={(event) =>
+                    setMinimumForm({
+                      ...minimumForm,
+                      minimumQuantity: event.target.value,
+                    })
+                  }
+                  placeholder="Example: 100"
+                  className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                />
+              </label>
+            </div>
+            <button
+              disabled={busy}
+              className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:bg-slate-300"
+            >
+              {busy ? "Saving…" : "Save minimum balance"}
+            </button>
+          </form>
+        </div>
+      )}
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
@@ -349,28 +813,42 @@ export default function FinishedGoodsPage() {
           value={number(totalFinishedGoodsValue)}
           unit="RWF"
         />
-        <Metric icon={<PackageCheck size={19} />} label="Low balance alerts" value={String(lowBalances.length)} unit="stores" />
+        <Metric
+          icon={<PackageCheck size={19} />}
+          label="Low balance alerts"
+          value={String(lowBalances.length)}
+          unit="stores"
+        />
       </section>
       {catalogue === "paint" && missingCostProducts.length > 0 && (
         <section className="flex flex-col gap-2 border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between">
           <p>
-            <strong>{missingCostProducts.length} product{missingCostProducts.length === 1 ? "" : "s"}</strong> have stock but no completed costed production batch. Their value is excluded until production cost is available.
+            <strong>
+              {missingCostProducts.length} product
+              {missingCostProducts.length === 1 ? "" : "s"}
+            </strong>{" "}
+            have stock but no completed costed production batch. Their value is
+            excluded until production cost is available.
           </p>
-          <Link to="/management/production/batches" className="shrink-0 font-extrabold text-amber-950 underline">Review batches</Link>
+          <Link
+            to="/management/production/batches"
+            className="shrink-0 font-extrabold text-amber-950 underline"
+          >
+            Review batches
+          </Link>
         </section>
       )}
       <section className="grid gap-4 xl:grid-cols-[.95fr_1.55fr]">
-        <form
-          onSubmit={sendTransfer}
-          className="cana-panel p-5"
-        >
+        <form onSubmit={sendTransfer} className="cana-panel p-5">
           <div className="flex items-center gap-3">
             <span className="rounded-xl bg-red-50 p-2 text-red-700">
               <ArrowRightLeft size={19} />
             </span>
             <div>
               <h2 className="font-bold text-slate-900">
-                {catalogue === "scaffold" ? "Transfer scaffolding equipment" : "Transfer finished goods"}
+                {catalogue === "scaffold"
+                  ? "Transfer scaffolding equipment"
+                  : "Transfer finished goods"}
               </h2>
             </div>
           </div>
@@ -385,7 +863,12 @@ export default function FinishedGoodsPage() {
                 }
                 className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 px-3 text-sm"
               >
-                <option value="">Select {catalogue === "scaffold" ? "scaffolding equipment" : "finished product"}</option>
+                <option value="">
+                  Select{" "}
+                  {catalogue === "scaffold"
+                    ? "scaffolding equipment"
+                    : "finished product"}
+                </option>
                 {products.map((product) => (
                   <option key={product._id} value={product._id}>
                     {product.name} ({product.code})
@@ -439,12 +922,78 @@ export default function FinishedGoodsPage() {
                 </select>
               </label>
             </div>
-            <div className="rounded-2xl border border-red-100 bg-red-50/40 p-3.5"><div className="flex items-center justify-between gap-3"><p className="text-sm font-bold text-slate-900">Transfer quantity</p>{isPieceProduct ? <span className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800">By piece</span> : <select value={form.quantityMode} onChange={(event) => setForm({ ...form, quantityMode: event.target.value as "packs" | "kg", quantityInput: "" })} className="h-10 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-slate-800"><option value="packs">By pack</option><option value="kg">By kg</option></select>}</div><label className="mt-3 block text-sm font-semibold text-gray-700">{isPieceProduct ? "Number of pieces" : form.quantityMode === "packs" ? `Number of packs${selected?.packSizeKg ? ` (${selected.packSizeKg} kg)` : ""}` : "Quantity in kg"}<input required min="0.0001" step="any" type="number" disabled={form.quantityMode === "packs" && !selected?.packSizeKg} value={form.quantityInput} onChange={(event) => setForm({ ...form, quantityMode: isPieceProduct ? "pcs" : form.quantityMode, quantityInput: event.target.value })} placeholder={isPieceProduct ? "10" : form.quantityMode === "packs" ? "12" : "240"} className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm disabled:bg-slate-100"/></label>{selected && form.quantityInput && <p className="mt-2 text-xs font-semibold text-slate-600">{number(transferQuantity)} {isPieceProduct ? "pcs" : "kg"}</p>}</div>
+            <div className="rounded-2xl border border-red-100 bg-red-50/40 p-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-bold text-slate-900">
+                  Transfer quantity
+                </p>
+                {isPieceProduct ? (
+                  <span className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800">
+                    By piece
+                  </span>
+                ) : (
+                  <select
+                    value={form.quantityMode}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        quantityMode: event.target.value as "packs" | "kg",
+                        quantityInput: "",
+                      })
+                    }
+                    className="h-10 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-slate-800"
+                  >
+                    <option value="packs">By pack</option>
+                    <option value="kg">By kg</option>
+                  </select>
+                )}
+              </div>
+              <label className="mt-3 block text-sm font-semibold text-gray-700">
+                {isPieceProduct
+                  ? "Number of pieces"
+                  : form.quantityMode === "packs"
+                    ? `Number of packs${selected?.packSizeKg ? ` (${selected.packSizeKg} kg)` : ""}`
+                    : "Quantity in kg"}
+                <input
+                  required
+                  min="0.0001"
+                  step="any"
+                  type="number"
+                  disabled={
+                    form.quantityMode === "packs" && !selected?.packSizeKg
+                  }
+                  value={form.quantityInput}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      quantityMode: isPieceProduct ? "pcs" : form.quantityMode,
+                      quantityInput: event.target.value,
+                    })
+                  }
+                  placeholder={
+                    isPieceProduct
+                      ? "10"
+                      : form.quantityMode === "packs"
+                        ? "12"
+                        : "240"
+                  }
+                  className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm disabled:bg-slate-100"
+                />
+              </label>
+              {selected && form.quantityInput && (
+                <p className="mt-2 text-xs font-semibold text-slate-600">
+                  {number(transferQuantity)} {isPieceProduct ? "pcs" : "kg"}
+                </p>
+              )}
+            </div>
             {selected && (
               <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                 Available in {storeName(form.fromStore)}:{" "}
                 <strong>
-                  {stockWithPacks(balanceFor(selected._id, form.fromStore), selected)}
+                  {stockWithPacks(
+                    balanceFor(selected._id, form.fromStore),
+                    selected,
+                  )}
                 </strong>
               </p>
             )}
@@ -490,33 +1039,98 @@ export default function FinishedGoodsPage() {
                 {products.map((product) => {
                   const production = balanceFor(product._id, "production"),
                     sales = balanceFor(product._id, "sales");
-                  const productionMinimum = Number(balances.find((balance) => balance.product?._id === product._id && balance.store === "production")?.minimumQuantity || 0);
-                  const salesMinimum = Number(balances.find((balance) => balance.product?._id === product._id && balance.store === "sales")?.minimumQuantity || 0);
-                  const productionLow = productionMinimum > 0 && production <= productionMinimum;
+                  const productionMinimum = Number(
+                    balances.find(
+                      (balance) =>
+                        balance.product?._id === product._id &&
+                        balance.store === "production",
+                    )?.minimumQuantity || 0,
+                  );
+                  const salesMinimum = Number(
+                    balances.find(
+                      (balance) =>
+                        balance.product?._id === product._id &&
+                        balance.store === "sales",
+                    )?.minimumQuantity || 0,
+                  );
+                  const productionLow =
+                    productionMinimum > 0 && production <= productionMinimum;
                   const salesLow = salesMinimum > 0 && sales <= salesMinimum;
                   return (
-                    <tr key={product._id} className={productionLow || salesLow ? "bg-red-50/40" : ""}>
+                    <tr
+                      key={product._id}
+                      className={
+                        productionLow || salesLow ? "bg-red-50/40" : ""
+                      }
+                    >
                       <td className="px-5 py-4">
                         <p className="font-semibold text-gray-900">
                           {product.name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {isScaffolding(product) ? `${product.code} · Equipment · counted in pieces` : `${product.code} · ${product.unit} pack · ${number(product.packSizeKg || 0)} kg per pack`}
+                          {isScaffolding(product)
+                            ? `${product.code} · Equipment · counted in pieces`
+                            : `${product.code} · ${product.unit} pack · ${number(product.packSizeKg || 0)} kg per pack`}
                         </p>
                       </td>
-                      <td className={`px-5 py-4 text-right ${productionLow ? "text-red-700" : ""}`}>
-                        <p className="font-extrabold text-slate-950">{isScaffolding(product) ? `${number(production)} pcs` : packs(production, product) || "Pack size not set"}</p>
-                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-medium text-gray-500">{number(production)} kg</p>}
-                        {productionMinimum > 0 && <p className={`mt-1 text-xs font-bold ${productionLow ? "text-red-700" : "text-slate-500"}`}>Min. {number(productionMinimum)} {isScaffolding(product) ? "pcs" : "kg"}{productionLow ? " · Low" : ""}</p>}
+                      <td
+                        className={`px-5 py-4 text-right ${productionLow ? "text-red-700" : ""}`}
+                      >
+                        <p className="font-extrabold text-slate-950">
+                          {isScaffolding(product)
+                            ? `${number(production)} pcs`
+                            : packs(production, product) || "Pack size not set"}
+                        </p>
+                        {!isScaffolding(product) && (
+                          <p className="mt-0.5 text-xs font-medium text-gray-500">
+                            {number(production)} kg
+                          </p>
+                        )}
+                        {productionMinimum > 0 && (
+                          <p
+                            className={`mt-1 text-xs font-bold ${productionLow ? "text-red-700" : "text-slate-500"}`}
+                          >
+                            Min. {number(productionMinimum)}{" "}
+                            {isScaffolding(product) ? "pcs" : "kg"}
+                            {productionLow ? " · Low" : ""}
+                          </p>
+                        )}
                       </td>
-                      <td className={`px-5 py-4 text-right ${salesLow ? "text-red-700" : ""}`}>
-                        <p className="font-extrabold text-slate-950">{isScaffolding(product) ? `${number(sales)} pcs` : packs(sales, product) || "Pack size not set"}</p>
-                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-medium text-gray-500">{number(sales)} kg</p>}
-                        {salesMinimum > 0 && <p className={`mt-1 text-xs font-bold ${salesLow ? "text-red-700" : "text-slate-500"}`}>Min. {number(salesMinimum)} {isScaffolding(product) ? "pcs" : "kg"}{salesLow ? " · Low" : ""}</p>}
+                      <td
+                        className={`px-5 py-4 text-right ${salesLow ? "text-red-700" : ""}`}
+                      >
+                        <p className="font-extrabold text-slate-950">
+                          {isScaffolding(product)
+                            ? `${number(sales)} pcs`
+                            : packs(sales, product) || "Pack size not set"}
+                        </p>
+                        {!isScaffolding(product) && (
+                          <p className="mt-0.5 text-xs font-medium text-gray-500">
+                            {number(sales)} kg
+                          </p>
+                        )}
+                        {salesMinimum > 0 && (
+                          <p
+                            className={`mt-1 text-xs font-bold ${salesLow ? "text-red-700" : "text-slate-500"}`}
+                          >
+                            Min. {number(salesMinimum)}{" "}
+                            {isScaffolding(product) ? "pcs" : "kg"}
+                            {salesLow ? " · Low" : ""}
+                          </p>
+                        )}
                       </td>
                       <td className="px-5 py-4 text-right text-slate-900">
-                        <p className="font-extrabold">{isScaffolding(product) ? `${number(production + sales)} pcs` : packs(production + sales, product) || "Pack size not set"}</p>
-                        {!isScaffolding(product) && <p className="mt-0.5 text-xs font-medium text-gray-500">{number(production + sales)} kg</p>}
+                        <p className="font-extrabold">
+                          {isScaffolding(product)
+                            ? `${number(production + sales)} pcs`
+                            : packs(production + sales, product) ||
+                              "Pack size not set"}
+                        </p>
+                        {!isScaffolding(product) && (
+                          <p className="mt-0.5 text-xs font-medium text-gray-500">
+                            {number(production + sales)} kg
+                          </p>
+                        )}
                       </td>
                     </tr>
                   );
@@ -524,7 +1138,11 @@ export default function FinishedGoodsPage() {
                 {products.length === 0 && (
                   <tr>
                     <td colSpan={4} className="p-10 text-center text-gray-500">
-                      No {catalogue === "scaffold" ? "scaffolding equipment" : "finished paint products"} are available yet.
+                      No{" "}
+                      {catalogue === "scaffold"
+                        ? "scaffolding equipment"
+                        : "finished paint products"}{" "}
+                      are available yet.
                     </td>
                   </tr>
                 )}
@@ -602,7 +1220,20 @@ function Metric({
 }) {
   return (
     <article className="cana-panel p-4">
-      <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-700">{icon}</span><div><p className="text-[10px] font-bold uppercase tracking-[.1em] text-gray-500">{label}</p><p className="mt-0.5 text-xl font-extrabold tracking-tight text-slate-950">{value}{unit ? ` ${unit}` : ""}</p></div></div>
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-700">
+          {icon}
+        </span>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[.1em] text-gray-500">
+            {label}
+          </p>
+          <p className="mt-0.5 text-xl font-extrabold tracking-tight text-slate-950">
+            {value}
+            {unit ? ` ${unit}` : ""}
+          </p>
+        </div>
+      </div>
     </article>
   );
 }
