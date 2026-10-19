@@ -62,7 +62,7 @@ router.get("/payable-orders", async (_req, res, next) => {
         .sort({ orderDate: -1, createdAt: -1 })
         .lean(),
       RawMaterialLot.aggregate([
-        { $match: { purchaseOrder: { $exists: true, $ne: null } } },
+        { $match: { purchaseOrder: { $exists: true, $ne: null }, excludeFromSupplierPayable: { $ne: true } } },
         { $group: { _id: "$purchaseOrder", receivedTotal: { $sum: { $multiply: ["$receivedQuantity", "$unitCost"] } }, grnCount: { $sum: 1 }, lastReceivedAt: { $max: "$receivedAt" } } },
       ]),
       SupplierPayment.find({ purchaseOrder: { $exists: true } }).select("purchaseOrder amount method chequeStatus").lean(),
@@ -86,7 +86,7 @@ router.get("/supplier-accounts", async (_req, res, next) => {
     const [suppliers, receiptValues, openings, payments] = await Promise.all([
       Supplier.find().select("name code phone status").sort({ name: 1 }).lean(),
       RawMaterialLot.aggregate([
-        { $match: { purchaseOrder: { $exists: true, $ne: null } } },
+        { $match: { purchaseOrder: { $exists: true, $ne: null }, excludeFromSupplierPayable: { $ne: true } } },
         { $group: { _id: { supplier: "$supplier", purchaseOrder: "$purchaseOrder" }, total: { $sum: { $multiply: ["$receivedQuantity", "$unitCost"] } } } },
       ]),
       SupplierOpeningPayable.find({ status: { $ne: "void" } }).select("supplier amount balance").lean(),
