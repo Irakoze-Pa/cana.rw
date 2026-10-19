@@ -704,6 +704,7 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
     if (!value) continue;
     const material = lot.rawMaterial?.name || "Raw material";
     const supplier = lot.supplier?.name || "Supplier";
+    const excludePayable = Boolean(lot.excludeFromSupplierPayable);
     entries.push(
       entry(
         lot._id,
@@ -711,7 +712,17 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
         "Goods received",
         lot.grnNumber || lot.lotNumber,
         `${material} received from ${supplier}`,
-        [line("1200", value, 0, material), line("2000", 0, value, supplier)],
+        [
+          line("1200", value, 0, material),
+          line(
+            excludePayable ? "3010" : "2000",
+            0,
+            value,
+            excludePayable
+              ? lot.payableExclusionReason || "Inventory retained without supplier debt"
+              : supplier,
+          ),
+        ],
       ),
     );
   }
