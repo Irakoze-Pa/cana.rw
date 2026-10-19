@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   CreditCard,
   Plus,
+  Printer,
   RefreshCw,
   X,
   XCircle,
@@ -11,6 +12,7 @@ import {
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
 import { useConfirmation } from "@/context/confirmationContext";
+import { printCanaDocument } from "@/modules/management/utils/printCanaDocument";
 
 type Supplier = { _id: string; name: string; code?: string; phone?: string };
 type PO = {
@@ -19,6 +21,8 @@ type PO = {
   total: number;
   supplier: Supplier | string;
   status: string;
+  orderDate?: string;
+  createdAt?: string;
 };
 type Opening = {
   _id: string;
@@ -108,6 +112,13 @@ export default function SupplierPaymentsPage() {
   const [saving, setSaving] = useState(false);
   const [settlementSearch, setSettlementSearch] = useState("");
   const [settlementStatus, setSettlementStatus] = useState("all");
+  const [workspaceView, setWorkspaceView] = useState<
+    "accounts" | "settlements" | "openings"
+  >("accounts");
+  const [statementFrom, setStatementFrom] = useState("");
+  const [statementTo, setStatementTo] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
   const [form, setForm] = useState(emptyPayment());
   const [openingForm, setOpeningForm] = useState({
     supplier: "",
@@ -211,6 +222,24 @@ export default function SupplierPaymentsPage() {
         );
       }),
     [payments, settlementSearch, settlementStatus],
+  );
+  const concernedAccounts = useMemo(
+    () =>
+      accounts
+        .filter(
+          (account) =>
+            Number(account.purchaseOrderTotal || 0) > 0 ||
+            Number(account.openingTotal || 0) > 0 ||
+            Number(account.amountPaid || 0) > 0 ||
+            Number(account.pendingCheques || 0) > 0 ||
+            Number(account.balance || 0) > 0,
+        )
+        .sort(
+          (left, right) =>
+            Number(right.balance || 0) - Number(left.balance || 0) ||
+            left.supplier.name.localeCompare(right.supplier.name),
+        ),
+    [accounts],
   );
   const balance = selectedOrder
     ? purchaseOrderBalance(selectedOrder)
@@ -346,33 +375,221 @@ export default function SupplierPaymentsPage() {
       setSaving(false);
     }
   };
+  const printSupplierBalances = () =>
+    printCanaDocument({
+      title: "Supplier balance register",
+      reference: `SBR-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`,
+      status: "Official payables report",
+      details: [
+        { label: "Suppliers", value: concernedAccounts.length },
+        {
+          label: "Outstanding payables",
+          value: `${money(concernedAccounts.reduce((sum, item) => sum + item.balance, 0))} RWF`,
+        },
+        {
+          label: "Pending cheques",
+          value: `${money(concernedAccounts.reduce((sum, item) => sum + item.pendingCheques, 0))} RWF`,
+        },
+        {
+          label: "Expected after clearance",
+          value: `${money(concernedAccounts.reduce((sum, item) => sum + item.expectedBalance, 0))} RWF`,
+        },
+      ],
+      table: {
+        headers: [
+          "No.",
+          "Supplier",
+          "Purchase orders",
+          "Opening debt",
+          "Cleared payments",
+          "Pending cheques",
+          "Balance due",
+        ],
+        rows: concernedAccounts.map((account, index) => [
+          index + 1,
+          `${account.supplier.name}${account.supplier.code ? ` · ${account.supplier.code}` : ""}`,
+          money(account.purchaseOrderTotal),
+          money(account.openingTotal),
+          money(account.amountPaid),
+          money(account.pendingCheques),
+          money(account.balance),
+        ]),
+      },
+      notes:
+        "Pending cheques are disclosed separately and reduce the expected balance only after bank clearance.",
+    });
+  const printSupplierStatement = (account: Account) => {
+    const supplierId = account.supplier._id;
+    const entries = [
+      ...orders
+        .filter(
+          (order) =>
+            typeof order.supplier !== "string" &&
+            order.supplier._id === supplierId,
+        )
+        .map((order) => ({
+          date: order.orderDate || order.createdAt || new Date().toISOString(),
+          type: "Purchase order",
+          reference: order.poNumber,
+          description: "Raw materials received",
+          debit: 0,
+          credit: Number(order.total || 0),
+        })),
+      ...openings
+        .filter(
+          (opening) =>
+            opening.status !== "void" && opening.supplier?._id === supplierId,
+        )
+        .map((opening) => ({
+          date: opening.openingDate,
+          type: "Opening payable",
+          reference: opening.openingNumber,
+          description: opening.description || "Opening supplier balance",
+          debit: 0,
+          credit: Number(opening.amount || 0),
+        })),
+      ...payments
+        .filter(
+          (payment) =>
+            payment.supplier?._id === supplierId &&
+            (!payment.chequeStatus || payment.chequeStatus === "cleared"),
+        )
+        .map((payment) => ({
+          date: payment.paidAt,
+          type: "Payment",
+          reference: payment.paymentNumber,
+          description: `${payment.method.replaceAll("_", " ")}${payment.chequeNumber ? ` · ${payment.chequeNumber}` : ""}`,
+          debit: Number(payment.amount || 0),
+          credit: 0,
+        })),
+    ].sort(
+      (left, right) =>
+        new Date(left.date).getTime() - new Date(right.date).getTime() ||
+        left.reference.localeCompare(right.reference),
+    );
+    const from = statementFrom || "0000-01-01";
+    const to = statementTo || new Date().toISOString().slice(0, 10);
+    const openingBalance = entries
+      .filter((entry) => entry.date.slice(0, 10) < from)
+      .reduce(
+        (balance, entry) => balance + entry.credit - entry.debit,
+        0,
+      );
+    const periodEntries = entries.filter((entry) => {
+      const date = entry.date.slice(0, 10);
+      return date >= from && date <= to;
+    });
+    let runningBalance = openingBalance;
+    const rows: Array<Array<string | number>> = [];
+    if (statementFrom) {
+      rows.push([
+        new Date(statementFrom).toLocaleDateString("en-RW"),
+        "Balance brought forward",
+        "—",
+        "Activity before this period",
+        "—",
+        "—",
+        money(openingBalance),
+      ]);
+    }
+    periodEntries.forEach((entry) => {
+      runningBalance += entry.credit - entry.debit;
+      rows.push([
+        new Date(entry.date).toLocaleDateString("en-RW"),
+        entry.type,
+        entry.reference,
+        entry.description,
+        entry.debit ? money(entry.debit) : "—",
+        entry.credit ? money(entry.credit) : "—",
+        money(runningBalance),
+      ]);
+    });
+    const charges = periodEntries.reduce(
+      (sum, entry) => sum + entry.credit,
+      0,
+    );
+    const paid = periodEntries.reduce((sum, entry) => sum + entry.debit, 0);
+    const pendingCheques = payments
+      .filter(
+        (payment) =>
+          payment.supplier?._id === supplierId &&
+          payment.method === "bank_cheque" &&
+          ["issued", "due", "deposited"].includes(
+            payment.chequeStatus || "",
+          ),
+      )
+      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+
+    printCanaDocument({
+      title: "Supplier account statement",
+      reference: `SUP-${supplierId.slice(-6).toUpperCase()}-${to.replaceAll("-", "")}`,
+      status: runningBalance > 0 ? "Balance payable" : "Account settled",
+      recipient: {
+        label: "Statement for",
+        name: account.supplier.name,
+        lines: [account.supplier.code || null, account.supplier.phone || null],
+      },
+      details: [
+        {
+          label: "Statement period",
+          value: `${statementFrom || "Account opening"} to ${to}`,
+        },
+        { label: "Opening balance", value: `${money(openingBalance)} RWF` },
+        { label: "Purchases / charges", value: `${money(charges)} RWF` },
+        { label: "Cleared payments", value: `${money(paid)} RWF` },
+        { label: "Closing balance payable", value: `${money(runningBalance)} RWF` },
+        { label: "Pending cheques", value: `${money(pendingCheques)} RWF` },
+      ],
+      table: {
+        headers: [
+          "Date",
+          "Transaction",
+          "Reference",
+          "Description",
+          "Payment (RWF)",
+          "Charge (RWF)",
+          "Balance (RWF)",
+        ],
+        rows,
+      },
+      notes:
+        "Charges increase the amount payable. Cleared payments reduce it. Issued, due or deposited cheques are shown separately and do not reduce the statement balance until cleared.",
+    });
+  };
   return (
-    <div className="mx-auto max-w-[1500px] space-y-4 pb-8">
-      <header className="flex flex-col justify-between gap-3 border-b-2 border-slate-950 pb-4 sm:flex-row sm:items-end">
+    <div className="mx-auto max-w-[1450px] space-y-3 pb-6">
+      <header className="flex flex-col justify-between gap-3 border-b-2 border-slate-950 pb-3 sm:flex-row sm:items-center">
         <div>
           <p className="cana-section-kicker">Procurement finance</p>
-          <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
+          <h1 className="mt-0.5 text-2xl font-black tracking-tight text-slate-950">
             Supplier finance
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => void load()}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700"
+            title="Refresh supplier finance"
+            aria-label="Refresh supplier finance"
+            className="inline-flex items-center justify-center rounded-md border border-slate-300 bg-white p-2 text-slate-700"
           >
             <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
-            Refresh
           </button>
           <button
-            onClick={() => setOpeningOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800"
+            onClick={() => {
+              setWorkspaceView("openings");
+              setOpeningOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800"
           >
             <Plus size={15} />
             Opening payable
           </button>
           <button
-            onClick={() => setPaymentOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-sm font-bold text-white"
+            onClick={() => {
+              setWorkspaceView("settlements");
+              setPaymentOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md bg-red-700 px-3 py-2 text-xs font-bold text-white hover:bg-red-800"
           >
             <CreditCard size={15} />
             New settlement
@@ -384,15 +601,17 @@ export default function SupplierPaymentsPage() {
           {error}
         </p>
       )}
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           label="Outstanding payables"
-          value={money(accounts.reduce((sum, item) => sum + item.balance, 0))}
+          value={money(
+            concernedAccounts.reduce((sum, item) => sum + item.balance, 0),
+          )}
         />
         <Metric
           label="Pending cheques"
           value={money(
-            accounts.reduce(
+            concernedAccounts.reduce(
               (sum, item) => sum + Number(item.pendingCheques || 0),
               0,
             ),
@@ -401,7 +620,7 @@ export default function SupplierPaymentsPage() {
         <Metric
           label="Expected after clearance"
           value={money(
-            accounts.reduce(
+            concernedAccounts.reduce(
               (sum, item) => sum + Number(item.expectedBalance ?? item.balance),
               0,
             ),
@@ -410,61 +629,173 @@ export default function SupplierPaymentsPage() {
         <Metric
           label="Cleared payments"
           value={money(
-            accounts.reduce((sum, item) => sum + item.amountPaid, 0),
+            concernedAccounts.reduce((sum, item) => sum + item.amountPaid, 0),
           )}
         />
       </section>
-      <section className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm sm:flex-row">
-        <input
-          aria-label="Search supplier settlements"
-          placeholder="Search supplier, cheque or reference"
-          value={settlementSearch}
-          onChange={(event) => setSettlementSearch(event.target.value)}
-          className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-slate-500"
-        />
-        <select
-          aria-label="Filter settlement status"
-          value={settlementStatus}
-          onChange={(event) => setSettlementStatus(event.target.value)}
-          className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
-        >
-          <option value="all">All settlements</option>
-          <option value="issued">Issued cheques</option>
-          <option value="due">Due cheques</option>
-          <option value="deposited">Deposited</option>
-          <option value="cleared">Cleared payments</option>
-          <option value="bounced">Bounced</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-      </section>
-      <section className="flex flex-wrap gap-2 border border-slate-200 bg-white px-3 py-2 text-[10px] font-extrabold uppercase tracking-wide text-slate-600">
-        {[["Issued", "bg-slate-400"], ["Due", "bg-amber-500"], ["Deposited", "bg-slate-800"], ["Cleared", "bg-emerald-700"]].map(([label, color]) => (
-          <span key={label} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1"><i className={`h-2 w-2 rounded-full ${color}`} />{label}</span>
-        ))}
-      </section>
-      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,.85fr)]">
-        <section className="cana-panel overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Settlement control
-              </p>
-              <h2 className="mt-1 font-extrabold text-slate-950">
-                Payments & cheque register
-              </h2>
-            </div>
-            <span className="text-sm text-slate-500">
-              {filteredPayments.length} of {payments.length}
+      <nav
+        className="flex overflow-x-auto border border-slate-200 bg-white p-1"
+        aria-label="Supplier finance views"
+      >
+        {(
+          [
+            ["accounts", "Supplier accounts", concernedAccounts.length],
+            ["settlements", "Payments & cheques", payments.length],
+            ["openings", "Opening payables", openings.length],
+          ] as const
+        ).map(([value, label, count]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setWorkspaceView(value)}
+            className={`shrink-0 rounded-md px-3 py-2 text-xs font-extrabold transition ${workspaceView === value ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+          >
+            {label}
+            <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] ${workspaceView === value ? "bg-white/15" : "bg-slate-100"}`}>
+              {count}
             </span>
+          </button>
+        ))}
+      </nav>
+      <section className={workspaceView === "accounts" ? "overflow-hidden border border-slate-200 bg-white" : "hidden"}>
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-3 py-3 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-slate-500">
+              Supplier accounts
+            </p>
+            <h2 className="mt-0.5 text-sm font-extrabold text-slate-950">
+              Payables & statements
+            </h2>
           </div>
-          <div className="max-h-[420px] overflow-y-auto overflow-x-hidden">
-            <table className="w-full table-fixed text-left text-xs sm:text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-950 text-[11px] uppercase tracking-wide text-white">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-[9px] font-extrabold uppercase text-slate-500">
+              Statement from
+              <input
+                type="date"
+                value={statementFrom}
+                max={statementTo || undefined}
+                onChange={(event) => setStatementFrom(event.target.value)}
+                className="mt-1 block rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-800"
+              />
+            </label>
+            <label className="text-[9px] font-extrabold uppercase text-slate-500">
+              Statement to
+              <input
+                type="date"
+                value={statementTo}
+                min={statementFrom || undefined}
+                onChange={(event) => setStatementTo(event.target.value)}
+                className="mt-1 block rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-800"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={printSupplierBalances}
+              disabled={!concernedAccounts.length}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-slate-950 px-2.5 text-[11px] font-bold text-white disabled:opacity-40"
+            >
+              <Printer size={13} /> Print supplier list
+            </button>
+          </div>
+        </div>
+        <div className="max-h-[340px] overflow-y-auto overflow-x-hidden">
+          <table className="w-full table-fixed text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-slate-950 uppercase tracking-wide text-white">
+              <tr>
+                <th className="w-[30%] px-3 py-2">Supplier</th>
+                <th className="w-[19%] px-3 py-2 text-right">Purchases</th>
+                <th className="w-[17%] px-3 py-2 text-right">Paid</th>
+                <th className="w-[17%] px-3 py-2 text-right">Balance</th>
+                <th className="w-[17%] px-3 py-2 text-center">Statement</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {concernedAccounts.map((account) => (
+                <tr key={account.supplier._id} className="hover:bg-slate-50">
+                  <td className="px-3 py-2">
+                    <p className="truncate font-bold text-slate-950">
+                      {account.supplier.name}
+                    </p>
+                    <p className="truncate text-[10px] text-slate-500">
+                      {account.supplier.code || account.supplier.phone || "—"}
+                    </p>
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold">
+                    {money(account.purchaseOrderTotal + account.openingTotal)}
+                  </td>
+                  <td className="px-3 py-2 text-right text-emerald-700">
+                    {money(account.amountPaid)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-extrabold">
+                    {money(account.balance)}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => printSupplierStatement(account)}
+                      title={`Print statement for ${account.supplier.name}`}
+                      aria-label={`Print statement for ${account.supplier.name}`}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+                    >
+                      <Printer size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!loading && !concernedAccounts.length && (
                 <tr>
-                  <th className="w-[27%] px-2 py-2.5 sm:px-3">Reference</th>
-                  <th className="w-[27%] px-2 py-2.5 sm:px-3">Supplier</th>
-                  <th className="w-[22%] px-2 py-2.5 sm:px-3">Method</th>
-                  <th className="w-[24%] px-2 py-2.5 text-right sm:px-3">Amount</th>
+                  <td colSpan={5} className="px-3 py-8 text-center text-slate-500">
+                    No suppliers with financial activity are available.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section>
+        <section className={workspaceView === "settlements" ? "overflow-hidden border border-slate-200 bg-white" : "hidden"}>
+          <div className="flex flex-col gap-2 border-b border-slate-200 p-2.5 lg:flex-row lg:items-center">
+            <div>
+              <h2 className="text-sm font-extrabold text-slate-950">
+                Payments & cheques
+              </h2>
+              <p className="text-[10px] font-semibold text-slate-500">
+                {filteredPayments.length} of {payments.length} records
+              </p>
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row lg:ml-auto lg:max-w-2xl">
+              <input
+                aria-label="Search supplier settlements"
+                placeholder="Search supplier, cheque or reference"
+                value={settlementSearch}
+                onChange={(event) => setSettlementSearch(event.target.value)}
+                className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 text-xs outline-none focus:border-slate-950"
+              />
+              <select
+                aria-label="Filter settlement status"
+                value={settlementStatus}
+                onChange={(event) => setSettlementStatus(event.target.value)}
+                className="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700"
+              >
+                <option value="all">All statuses</option>
+                <option value="issued">Issued</option>
+                <option value="due">Due</option>
+                <option value="deposited">Deposited</option>
+                <option value="cleared">Cleared</option>
+                <option value="bounced">Bounced</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div className="max-h-[360px] overflow-y-auto overflow-x-hidden">
+            <table className="w-full table-fixed text-left text-[11px] sm:text-xs">
+              <thead className="sticky top-0 z-10 bg-slate-950 text-[9px] uppercase tracking-wide text-white">
+                <tr>
+                  <th className="w-[25%] px-2 py-2">Reference</th>
+                  <th className="w-[29%] px-2 py-2">Supplier</th>
+                  <th className="w-[24%] px-2 py-2">Method / status</th>
+                  <th className="w-[22%] px-2 py-2 text-right">Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -485,50 +816,50 @@ export default function SupplierPaymentsPage() {
                           : "transition hover:bg-slate-50"
                       }
                     >
-                      <td className="px-2 py-2.5 align-top sm:px-3">
+                      <td className="px-2 py-2 align-top">
                         <p className="truncate font-bold text-slate-950">
                           {item.paymentNumber}
                         </p>
-                        <p className="mt-0.5 truncate text-[10px] text-slate-500 sm:text-xs">
+                        <p className="truncate text-[9px] text-slate-500 sm:text-[10px]">
                           {item.chequeDate
                             ? `Matures ${new Date(item.chequeDate).toLocaleDateString("en-RW")}`
                             : new Date(item.paidAt).toLocaleDateString("en-RW")}
                         </p>
                       </td>
-                      <td className="px-2 py-2.5 align-top sm:px-3">
+                      <td className="px-2 py-2 align-top">
                         <p className="truncate font-semibold text-slate-800">
                           {item.supplier?.name || "Supplier"}
                         </p>
-                        <p className="mt-0.5 truncate text-[10px] text-slate-500 sm:text-xs">
+                        <p className="truncate text-[9px] text-slate-500 sm:text-[10px]">
                           {item.purchaseOrder?.poNumber ||
                             item.openingPayable?.openingNumber ||
                             "Opening payable"}
                         </p>
                       </td>
-                      <td className="px-2 py-2.5 align-top sm:px-3">
-                        <p className="truncate capitalize text-[10px] text-slate-600 sm:text-xs">
+                      <td className="px-2 py-2 align-top">
+                        <p className="truncate capitalize text-[9px] text-slate-600 sm:text-[10px]">
                           {item.method.replaceAll("_", " ")}
                           {item.chequeNumber ? ` · ${item.chequeNumber}` : ""}
                         </p>
                         <span
-                          className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${statusStyle(chequeStatus)}`}
+                          className={`mt-0.5 inline-flex rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase ${statusStyle(chequeStatus)}`}
                         >
                           {chequeStatus}
                         </span>
                       </td>
-                      <td className="px-2 py-2.5 text-right align-top sm:px-3">
+                      <td className="px-2 py-2 text-right align-top">
                         <p className="whitespace-nowrap font-bold text-slate-950">
                           {money(item.amount)} <span className="hidden text-[9px] text-slate-500 sm:inline">RWF</span>
                         </p>
                         {actionable && (
-                          <div className="mt-2 flex justify-end gap-1">
+                          <div className="mt-1 flex justify-end gap-1">
                             {chequeStatus !== "deposited" && (
                               <button
                                 title="Mark deposited"
                                 onClick={() =>
                                   void updateCheque(item, "deposited")
                                 }
-                                className="rounded border border-slate-200 p-1.5 text-slate-600"
+                                className="rounded border border-slate-200 p-1 text-slate-600 hover:bg-slate-50"
                               >
                                 <Banknote size={13} />
                               </button>
@@ -536,14 +867,14 @@ export default function SupplierPaymentsPage() {
                             <button
                               title="Mark cleared"
                               onClick={() => void updateCheque(item, "cleared")}
-                              className="rounded bg-emerald-700 p-1.5 text-white"
+                              className="rounded bg-emerald-700 p-1 text-white hover:bg-emerald-800"
                             >
                               <CheckCircle2 size={13} />
                             </button>
                             <button
                               title="Mark bounced"
                               onClick={() => void updateCheque(item, "bounced")}
-                              className="rounded border border-red-200 p-1.5 text-red-700"
+                              className="rounded border border-red-200 p-1 text-red-700 hover:bg-red-50"
                             >
                               <XCircle size={13} />
                             </button>
@@ -567,42 +898,39 @@ export default function SupplierPaymentsPage() {
             </table>
           </div>
         </section>
-        <section className="cana-panel overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <section className={workspaceView === "openings" ? "overflow-hidden border border-slate-200 bg-white" : "hidden"}>
+          <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Brought forward
-              </p>
-              <h2 className="mt-1 font-extrabold text-slate-950">
-                Opening supplier payables
+              <h2 className="text-sm font-extrabold text-slate-950">
+                Opening payables
               </h2>
             </div>
-            <span className="text-sm text-slate-500">
+            <span className="text-xs font-semibold text-slate-500">
               {openings.length} records
             </span>
           </div>
-          <div className="max-h-[420px] overflow-y-auto overflow-x-hidden">
-            <table className="w-full table-fixed text-left text-xs sm:text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-950 text-[11px] uppercase tracking-wide text-white">
+          <div className="max-h-[360px] overflow-y-auto overflow-x-hidden">
+            <table className="w-full table-fixed text-left text-[11px] sm:text-xs">
+              <thead className="sticky top-0 z-10 bg-slate-950 text-[9px] uppercase tracking-wide text-white">
                 <tr>
-                  <th className="w-[24%] px-2 py-3 sm:px-3">Reference</th>
-                  <th className="w-[30%] px-2 py-3 sm:px-3">Supplier</th>
-                  <th className="w-[27%] px-2 py-3 text-right sm:px-3">Balance</th>
-                  <th className="w-[19%] px-2 py-3 sm:px-3">Status</th>
+                  <th className="w-[24%] px-2 py-2 sm:px-3">Reference</th>
+                  <th className="w-[30%] px-2 py-2 sm:px-3">Supplier</th>
+                  <th className="w-[27%] px-2 py-2 text-right sm:px-3">Balance</th>
+                  <th className="w-[19%] px-2 py-2 sm:px-3">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {openings.map((item) => (
                   <tr key={item._id} className="transition hover:bg-slate-50">
-                    <td className="px-2 py-3 align-top sm:px-3">
+                    <td className="px-2 py-2 align-top sm:px-3">
                       <p className="truncate font-bold text-slate-950">
                         {item.openingNumber}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <p className="text-[9px] text-slate-500 sm:text-[10px]">
                         {new Date(item.openingDate).toLocaleDateString("en-RW")}
                       </p>
                     </td>
-                    <td className="px-2 py-3 align-top sm:px-3">
+                    <td className="px-2 py-2 align-top sm:px-3">
                       <p className="truncate font-semibold text-slate-800">
                         {item.supplier?.name || "Supplier"}
                       </p>
@@ -610,17 +938,17 @@ export default function SupplierPaymentsPage() {
                         {item.description}
                       </p>
                     </td>
-                    <td className="px-2 py-3 text-right align-top sm:px-3">
+                    <td className="px-2 py-2 text-right align-top sm:px-3">
                       <p className="whitespace-nowrap font-bold text-slate-950">
                         {money(item.balance)} <span className="hidden text-[9px] text-slate-500 sm:inline">RWF</span>
                       </p>
-                      <p className="mt-0.5 text-xs text-emerald-700">
+                      <p className="text-[9px] text-emerald-700 sm:text-[10px]">
                         Paid {money(item.amountPaid)}
                       </p>
                     </td>
-                    <td className="px-2 py-3 align-top sm:px-3">
+                    <td className="px-2 py-2 align-top sm:px-3">
                       <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(item.status)}`}
+                        className={`rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase ${statusStyle(item.status)}`}
                       >
                         {item.status.replaceAll("_", " ")}
                       </span>
@@ -975,11 +1303,11 @@ export default function SupplierPaymentsPage() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-slate-200 bg-white px-3 py-3 shadow-sm">
-      <p className="text-[11px] font-bold uppercase tracking-[.08em] text-slate-500">
+    <div className="min-w-0 bg-white px-3 py-2.5">
+      <p className="truncate text-[10px] font-extrabold uppercase tracking-[.08em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 text-lg font-extrabold tabular-nums text-slate-950 sm:text-xl">
+      <p className="mt-1 truncate text-lg font-black tabular-nums text-slate-950" title={`${value} RWF`}>
         {value} <span className="text-xs font-bold text-slate-500">RWF</span>
       </p>
     </div>

@@ -6,7 +6,6 @@ import {
   Eye,
   Plus,
   Printer,
-  ReceiptText,
   RefreshCw,
   RotateCcw,
   X,
@@ -55,7 +54,7 @@ type Payment = {
   chequeStatus?:
     "received" | "due" | "deposited" | "cleared" | "bounced" | "cancelled";
   voidReason?: string;
-  customer?: { fullName?: string };
+  customer?: { _id?: string; fullName?: string };
   invoice?: { invoiceNumber?: string };
   openingBalance?: { openingNumber?: string; description?: string };
 };
@@ -145,8 +144,11 @@ export default function BillingPage() {
   );
   const [receiptFrom, setReceiptFrom] = useState("");
   const [receiptTo, setReceiptTo] = useState("");
+  const [statementFrom, setStatementFrom] = useState("");
+  const [statementTo, setStatementTo] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
   const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState("");
   const [openingOpen, setOpeningOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -209,7 +211,6 @@ export default function BillingPage() {
           (item) => item.status === "active",
         ),
       );
-      setLastUpdated(new Date());
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Unable to load billing data.",
@@ -677,6 +678,145 @@ export default function BillingPage() {
         "This register includes customers with an outstanding invoice or opening balance. Reversed receipts and uncleared customer cheques are excluded from payments received.",
     });
   };
+  const printCustomerStatement = (account: CustomerAccount) => {
+    const customerId = account.customer._id;
+    const entries = [
+      ...openingBalances
+        .filter(
+          (opening) =>
+            opening.status !== "void" && opening.customer?._id === customerId,
+        )
+        .map((opening) => ({
+          date: opening.openingDate,
+          type: "Opening debt",
+          reference: opening.openingNumber,
+          description: opening.description || "Opening customer balance",
+          debit: Number(opening.amount || 0),
+          credit: 0,
+        })),
+      ...invoices
+        .filter(
+          (invoice) =>
+            invoice.status !== "void" && invoice.customer?._id === customerId,
+        )
+        .map((invoice) => ({
+          date: invoice.issueDate,
+          type: "Invoice",
+          reference: invoice.invoiceNumber,
+          description: invoice.salesOrder?.orderNumber
+            ? `Sales order ${invoice.salesOrder.orderNumber}`
+            : "Sales invoice",
+          debit: Number(invoice.total || 0),
+          credit: 0,
+        })),
+      ...payments
+        .filter(
+          (payment) =>
+            isCompletedPayment(payment) && payment.customer?._id === customerId,
+        )
+        .map((payment) => ({
+          date: payment.receivedAt,
+          type: "Payment",
+          reference: payment.receiptNumber,
+          description: `Payment by ${payment.method.replaceAll("_", " ")}`,
+          debit: 0,
+          credit: Number(payment.amount || 0),
+        })),
+    ].sort(
+      (left, right) =>
+        new Date(left.date).getTime() - new Date(right.date).getTime() ||
+        left.reference.localeCompare(right.reference),
+    );
+
+    const from = statementFrom || "0000-01-01";
+    const to = statementTo || new Date().toISOString().slice(0, 10);
+    const openingBalance = entries
+      .filter((entry) => entry.date.slice(0, 10) < from)
+      .reduce(
+        (balance, entry) => balance + entry.debit - entry.credit,
+        0,
+      );
+    const periodEntries = entries.filter((entry) => {
+      const date = entry.date.slice(0, 10);
+      return date >= from && date <= to;
+    });
+    let runningBalance = openingBalance;
+    const rows: Array<Array<string | number>> = [];
+    if (statementFrom) {
+      rows.push([
+        new Date(statementFrom).toLocaleDateString("en-RW"),
+        "Balance brought forward",
+        "—",
+        "Activity before this period",
+        "—",
+        "—",
+        money(openingBalance),
+      ]);
+    }
+    periodEntries.forEach((entry) => {
+      runningBalance += entry.debit - entry.credit;
+      rows.push([
+        new Date(entry.date).toLocaleDateString("en-RW"),
+        entry.type,
+        entry.reference,
+        entry.description,
+        entry.debit ? money(entry.debit) : "—",
+        entry.credit ? money(entry.credit) : "—",
+        money(runningBalance),
+      ]);
+    });
+    const charges = periodEntries.reduce(
+      (sum, entry) => sum + entry.debit,
+      0,
+    );
+    const receipts = periodEntries.reduce(
+      (sum, entry) => sum + entry.credit,
+      0,
+    );
+    const customerName =
+      account.customer.businessName || account.customer.fullName || "Customer";
+
+    printCanaDocument({
+      title: "Customer account statement",
+      reference: `STAT-${customerId.slice(-6).toUpperCase()}-${to.replaceAll("-", "")}`,
+      status: runningBalance > 0 ? "Balance outstanding" : "Account settled",
+      recipient: {
+        label: "Statement for",
+        name: customerName,
+        lines: [
+          account.customer.businessName ? account.customer.fullName : null,
+          account.customer.phone || null,
+        ],
+      },
+      details: [
+        {
+          label: "Statement period",
+          value: `${statementFrom || "Account opening"} to ${to}`,
+        },
+        {
+          label: "Opening balance",
+          value: `${money(openingBalance)} RWF`,
+        },
+        { label: "Charges", value: `${money(charges)} RWF` },
+        { label: "Payments received", value: `${money(receipts)} RWF` },
+        { label: "Closing balance due", value: `${money(runningBalance)} RWF` },
+      ],
+      table: {
+        headers: [
+          "Date",
+          "Transaction",
+          "Reference",
+          "Description",
+          "Debit (RWF)",
+          "Credit (RWF)",
+          "Balance (RWF)",
+        ],
+        rows,
+      },
+      notes:
+        "Debit entries increase the customer balance. Credit entries are cleared payments that reduce the balance. Reversed receipts and uncleared cheques are excluded.",
+    });
+  };
   const visibleCustomerAccounts = useMemo(() => {
     const term = accountSearch.trim().toLowerCase();
     return receivableAccounts.filter((account) => {
@@ -737,25 +877,14 @@ export default function BillingPage() {
   };
   return (
     <div className="mx-auto max-w-[1440px] space-y-3 pb-5">
-      <header className="flex flex-col justify-between gap-3 border-b border-slate-300 pb-3 sm:flex-row sm:items-center">
-        <div className="flex gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm">
-            <ReceiptText size={21} />
-          </div>
-          <div>
+      <header className="flex flex-col justify-between gap-3 border-b-2 border-slate-950 pb-3 sm:flex-row sm:items-center">
+        <div>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
               Sales & finance
             </p>
-            <h1 className="mt-0.5 text-xl font-black tracking-tight text-slate-950">
+            <h1 className="mt-0.5 text-2xl font-black tracking-tight text-slate-950">
               Invoices & payments
             </h1>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Automatic sales invoices, receipts and customer balances
-              {lastUpdated
-                ? ` · updated ${lastUpdated.toLocaleTimeString("en-RW", { hour: "2-digit", minute: "2-digit" })}`
-                : ""}
-            </p>
-          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -763,7 +892,7 @@ export default function BillingPage() {
               setWorkspaceView("invoices");
               setPaymentOpen(true);
             }}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-800"
+            className="inline-flex items-center gap-1.5 rounded-md bg-red-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-800"
           >
             <CreditCard size={16} />
             Record payment
@@ -773,7 +902,7 @@ export default function BillingPage() {
               setWorkspaceView("openings");
               setOpeningOpen(true);
             }}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 transition hover:bg-slate-50"
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 transition hover:bg-slate-50"
           >
             <Plus size={16} />
             Opening balance
@@ -782,13 +911,13 @@ export default function BillingPage() {
             onClick={() => void load()}
             aria-label="Refresh billing data"
             title="Refresh billing data"
-            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-50"
+            className="rounded-md border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-50"
           >
             <RefreshCw size={17} />
           </button>
         </div>
       </header>
-      <section className="grid gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
             label: "Customer debt due",
@@ -815,19 +944,19 @@ export default function BillingPage() {
             currency: false,
           },
         ].map(({ label, value, helper, currency }) => (
-          <div key={label} className="bg-white px-4 py-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+          <div key={label} className="min-w-0 bg-white px-3 py-2.5">
+            <p className="truncate text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
               {label}
             </p>
-            <p className="mt-1 text-lg font-extrabold tracking-tight text-slate-950">
+            <p className="mt-1 truncate text-lg font-black tracking-tight text-slate-950" title={currency ? `${money(Number(value))} RWF` : String(value)}>
               {currency ? `${money(Number(value))} RWF` : value}
             </p>
-            <p className="mt-1 text-[11px] text-slate-500">{helper}</p>
+            <span className="sr-only">{helper}</span>
           </div>
         ))}
       </section>
       <nav
-        className="flex overflow-x-auto rounded-t-xl border border-slate-200 bg-white"
+        className="flex overflow-x-auto border border-slate-200 bg-white p-1"
         aria-label="Billing workspace views"
       >
         {(
@@ -842,17 +971,14 @@ export default function BillingPage() {
             type="button"
             onClick={() => setWorkspaceView(value)}
             aria-pressed={workspaceView === value}
-            className={`relative shrink-0 px-4 py-3 text-xs font-extrabold transition ${workspaceView === value ? "text-slate-950" : "text-slate-500 hover:text-slate-800"}`}
+            className={`shrink-0 rounded-md px-3 py-2 text-xs font-extrabold transition ${workspaceView === value ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100"}`}
           >
             {label}{" "}
             <span
-              className={`ml-1 rounded-full px-2 py-0.5 text-[10px] ${workspaceView === value ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600"}`}
+              className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] ${workspaceView === value ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"}`}
             >
               {count}
             </span>
-            {workspaceView === value && (
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-red-700" />
-            )}
           </button>
         ))}
       </nav>
@@ -888,7 +1014,7 @@ export default function BillingPage() {
             </button>
           </div>
         </div>
-        <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 p-2.5 sm:flex-row sm:items-center">
+        <div className="grid gap-2 border-b border-slate-200 bg-slate-50 p-2.5 lg:grid-cols-[minmax(220px,1fr)_auto_auto] lg:items-end">
           <input
             value={accountSearch}
             onChange={(event) => setAccountSearch(event.target.value)}
@@ -896,6 +1022,28 @@ export default function BillingPage() {
             aria-label="Search customer accounts"
             className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-slate-950"
           />
+          <div className="grid grid-cols-2 gap-1.5">
+            <label className="text-[9px] font-extrabold uppercase tracking-wide text-slate-500">
+              Statement from
+              <input
+                type="date"
+                value={statementFrom}
+                max={statementTo || undefined}
+                onChange={(event) => setStatementFrom(event.target.value)}
+                className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-800"
+              />
+            </label>
+            <label className="text-[9px] font-extrabold uppercase tracking-wide text-slate-500">
+              Statement to
+              <input
+                type="date"
+                value={statementTo}
+                min={statementFrom || undefined}
+                onChange={(event) => setStatementTo(event.target.value)}
+                className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-800"
+              />
+            </label>
+          </div>
           <div className="flex gap-1">
             {(
               [
@@ -918,16 +1066,17 @@ export default function BillingPage() {
             ))}
           </div>
         </div>
-        <div className="h-[340px] overflow-auto overscroll-contain sm:h-[380px]">
-          <table className="min-w-[900px] text-left text-xs">
+        <div className="max-h-[360px] overflow-y-auto overflow-x-hidden overscroll-contain">
+          <table className="w-full table-fixed text-left text-[11px] sm:text-xs">
             <thead className="sticky top-0 z-10 bg-slate-950 uppercase tracking-wide text-white">
               <tr>
-                <th className="px-3 py-2.5">Customer</th>
-                <th className="px-3 py-2.5 text-right">Sales invoices</th>
-                <th className="px-3 py-2.5 text-right">Opening debt</th>
-                <th className="px-3 py-2.5 text-right">Payments</th>
-                <th className="px-3 py-2.5 text-right">Balance due</th>
-                <th className="px-3 py-2.5">Status</th>
+                <th className="w-[24%] px-2 py-2">Customer</th>
+                <th className="w-[15%] px-2 py-2 text-right">Invoiced</th>
+                <th className="hidden w-[14%] px-2 py-2 text-right md:table-cell">Opening</th>
+                <th className="w-[15%] px-2 py-2 text-right">Paid</th>
+                <th className="w-[16%] px-2 py-2 text-right">Balance</th>
+                <th className="w-[10%] px-2 py-2">Status</th>
+                <th className="w-[10%] px-2 py-2 text-center">Print</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -936,32 +1085,32 @@ export default function BillingPage() {
                   key={`summary-${account.customer._id}`}
                   className="hover:bg-slate-50"
                 >
-                  <td className="px-3 py-2.5">
+                  <td className="px-2 py-2">
                     <p className="font-bold text-slate-950">
                       {account.customer.businessName ||
                         account.customer.fullName}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
+                    <p className="truncate text-[9px] text-slate-500 sm:text-[10px]">
                       {account.customer.businessName
                         ? account.customer.fullName
                         : account.customer.phone || "—"}
                     </p>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-slate-700">
+                  <td className="truncate px-2 py-2 text-right text-slate-700">
                     {money(account.invoiceTotal)} RWF
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right text-slate-700">
+                  <td className="hidden truncate px-2 py-2 text-right text-slate-700 md:table-cell">
                     {money(account.openingTotal)} RWF
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-emerald-700">
+                  <td className="truncate px-2 py-2 text-right font-semibold text-emerald-700">
                     {money(account.amountPaid)} RWF
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-extrabold text-slate-950">
+                  <td className="truncate px-2 py-2 text-right font-extrabold text-slate-950">
                     {money(account.balance)} RWF
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5">
+                  <td className="px-2 py-2">
                     <span
-                      className={`inline-flex rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide ${Number(account.balance) <= 0 ? "bg-emerald-50 text-emerald-700" : Number(account.amountPaid) > 0 ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"}`}
+                      className={`inline-flex rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase ${Number(account.balance) <= 0 ? "bg-emerald-50 text-emerald-700" : Number(account.amountPaid) > 0 ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"}`}
                     >
                       {Number(account.balance) <= 0
                         ? "Settled"
@@ -970,12 +1119,23 @@ export default function BillingPage() {
                           : "Unpaid"}
                     </span>
                   </td>
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => printCustomerStatement(account)}
+                      title={`Print statement for ${account.customer.businessName || account.customer.fullName}`}
+                      aria-label={`Print statement for ${account.customer.businessName || account.customer.fullName}`}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+                    >
+                      <Printer size={14} />
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!loading && !visibleCustomerAccounts.length && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-3 py-8 text-center text-sm text-slate-500"
                   >
                     No customer accounts match this view.
@@ -986,36 +1146,6 @@ export default function BillingPage() {
           </table>
         </div>
       </section>
-      <div
-        className={`${workspaceView === "invoices" ? "flex" : "hidden"} flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500`}
-      >
-        <span>
-          Issued invoice value:{" "}
-          <strong className="text-slate-800">
-            {money(liveFigures.invoiceValue)} RWF
-          </strong>
-        </span>
-        <span>
-          Invoice balance:{" "}
-          <strong className="text-slate-800">
-            {money(liveFigures.invoiceOutstanding)} RWF
-          </strong>
-        </span>
-        <span>
-          Opening debt:{" "}
-          <strong className="text-slate-800">
-            {money(liveFigures.openingOutstanding)} RWF
-          </strong>
-        </span>
-        <span>
-          Paid invoices:{" "}
-          <strong className="text-emerald-700">{paidInvoices.length}</strong>
-        </span>
-        <span>
-          Invoices with balance:{" "}
-          <strong className="text-slate-800">{unpaidInvoices.length}</strong>
-        </span>
-      </div>
       {error && (
         <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
       )}
@@ -1163,14 +1293,14 @@ export default function BillingPage() {
         </div>
       )}
       <div
-        className={`${workspaceView === "invoices" ? "flex" : "hidden"} flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2.5 lg:flex-row lg:items-center`}
+        className={`${workspaceView === "invoices" ? "flex" : "hidden"} flex-col gap-1.5 border border-slate-200 bg-white p-2 lg:flex-row lg:items-center`}
       >
         <input
           aria-label="Search invoices"
           placeholder="Search invoice or customer"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-slate-50 px-3 py-2 text-sm"
+          className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2.5 text-xs outline-none focus:border-slate-950"
         />
         <div className="flex flex-wrap gap-1.5">
           {(
@@ -1188,7 +1318,7 @@ export default function BillingPage() {
               key={value}
               type="button"
               onClick={() => setInvoiceFilter(value)}
-              className={`rounded-md px-2.5 py-1.5 text-xs font-bold transition ${invoiceFilter === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+              className={`rounded-md px-2 py-1.5 text-[10px] font-bold transition ${invoiceFilter === value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
             >
               {label}
             </button>
@@ -2048,66 +2178,63 @@ export default function BillingPage() {
             : "hidden"
         }
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Brought forward
-            </p>
-            <h2 className="mt-1 font-extrabold text-slate-950">
-              Opening customer debts
+            <h2 className="text-sm font-extrabold text-slate-950">
+              Opening debts
             </h2>
           </div>
-          <span className="text-sm text-slate-500">
+          <span className="text-xs font-semibold text-slate-500">
             {openingBalances.length} record
             {openingBalances.length === 1 ? "" : "s"}
           </span>
         </div>
-        <div className="h-[460px] overflow-auto overscroll-contain">
-          <table className="min-w-[960px] text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-wide text-white">
+        <div className="max-h-[360px] overflow-y-auto overflow-x-hidden overscroll-contain">
+          <table className="w-full table-fixed text-left text-[11px] sm:text-xs">
+            <thead className="sticky top-0 z-10 bg-slate-950 text-[9px] uppercase tracking-wide text-white">
               <tr>
-                <th className="px-4 py-3">Reference</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3 text-right">Original</th>
-                <th className="px-4 py-3 text-right">Paid</th>
-                <th className="px-4 py-3 text-right">Balance</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="w-[15%] px-2 py-2">Reference</th>
+                <th className="w-[20%] px-2 py-2">Customer</th>
+                <th className="hidden w-[18%] px-2 py-2 md:table-cell">Description</th>
+                <th className="w-[13%] px-2 py-2 text-right">Original</th>
+                <th className="w-[12%] px-2 py-2 text-right">Paid</th>
+                <th className="w-[13%] px-2 py-2 text-right">Balance</th>
+                <th className="w-[9%] px-2 py-2">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {openingBalances.map((opening) => (
                 <tr key={opening._id}>
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-2">
                     <p className="font-bold text-slate-950">
                       {opening.openingNumber}
                     </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
+                    <p className="text-[9px] text-slate-500 sm:text-[10px]">
                       {new Date(opening.openingDate).toLocaleDateString(
                         "en-RW",
                       )}
                     </p>
                   </td>
-                  <td className="px-4 py-3 font-semibold text-slate-800">
+                  <td className="truncate px-2 py-2 font-semibold text-slate-800">
                     {opening.customer?.businessName ||
                       opening.customer?.fullName ||
                       "Customer"}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">
+                  <td className="hidden truncate px-2 py-2 text-slate-600 md:table-cell">
                     {opening.description}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-700">
+                  <td className="truncate px-2 py-2 text-right text-slate-700">
                     {money(opening.amount)} RWF
                   </td>
-                  <td className="px-4 py-3 text-right text-emerald-700">
+                  <td className="truncate px-2 py-2 text-right text-emerald-700">
                     {money(opening.amountPaid)} RWF
                   </td>
-                  <td className="px-4 py-3 text-right font-bold text-slate-950">
+                  <td className="truncate px-2 py-2 text-right font-bold text-slate-950">
                     {money(opening.balance)} RWF
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-2">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(opening.status)}`}
+                      className={`rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase ${statusStyle(opening.status)}`}
                     >
                       {opening.status.replaceAll("_", " ")}
                     </span>
