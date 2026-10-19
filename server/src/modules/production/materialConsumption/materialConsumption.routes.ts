@@ -13,8 +13,10 @@ import {
   returnMaterialConsumptionController,
   completeMaterialConsumptionController,
 } from "./materialConsumption.controller";
+import { authorizeArea, protect } from "../../../middleware/auth.middleware";
 
 const router = Router();
+router.use(protect, authorizeArea("production", "inventory"));
 
 // =========================================================
 // SPECIFIC GET ROUTES

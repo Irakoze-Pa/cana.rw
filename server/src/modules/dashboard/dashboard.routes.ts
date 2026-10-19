@@ -9,10 +9,11 @@ import { Invoice } from "../billing/billing.model";
 import { ComplianceEquipment, ComplianceRecord } from "../compliance/compliance.model";
 import FinishedGoodsStoreBalance from "../finishedGoods/storeBalance.model";
 import { accountingSummary, buildLedger, filterLedger, treasuryWorkspace } from "../accounting/accounting.service";
-import type { AuthRequest } from "../../middleware/auth.middleware";
+import { authorizeRoles, protect, type AuthRequest } from "../../middleware/auth.middleware";
 import User from "../../models/users";
 
 const router = Router();
+router.use(protect, authorizeRoles("admin", "staff"));
 
 router.get("/summary", async (req: AuthRequest, res, next) => {
   try {

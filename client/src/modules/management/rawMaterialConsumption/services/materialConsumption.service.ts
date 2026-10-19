@@ -4,6 +4,7 @@ import type {
   MaterialConsumptionItem,
   MaterialConsumptionStats,
 } from "../types/materialConsumption.types";
+import { authenticatedFetch } from "@/services/api";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || import.meta.env.VITE_API_URL || "/api/v1";
@@ -18,7 +19,7 @@ interface ApiResponse<T> {
 }
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, {
+  const response = await authenticatedFetch(url, {
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { CalendarDays, ChevronDown, Loader2, X } from "lucide-react";
-import { apiBaseUrl } from "@/services/api";
+import { apiBaseUrl, authenticatedFetch } from "@/services/api";
 
 import type {
   ProductionOrder,
@@ -178,8 +178,8 @@ export default function ProductionOrderModal({
       setError("");
 
       const [productsResponse, formulasResponse] = await Promise.all([
-        fetch(`${apiBaseUrl}/products`),
-        fetch(`${apiBaseUrl}/formulas`),
+        authenticatedFetch(`${apiBaseUrl}/products`),
+        authenticatedFetch(`${apiBaseUrl}/formulas`),
       ]);
 
       if (!productsResponse.ok) {

@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { authorizeRoles, protect } from "../../middleware/auth.middleware";
+import { authorizeArea, authorizeRoles, protect } from "../../middleware/auth.middleware";
 import * as controller from "./billing.controller";
 const router = Router();
 router.use(protect);
 router.get("/my", authorizeRoles("customer"), controller.mine);
-router.use(authorizeRoles("admin", "staff"));
+router.use(authorizeArea("finance", "sales"));
 router.get("/invoices", controller.invoices);
 router.post("/invoices", controller.create);
 router.post("/invoices/create-missing", controller.createMissing);

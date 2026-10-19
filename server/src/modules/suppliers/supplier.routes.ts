@@ -7,17 +7,19 @@ import {
   updateSupplierController,
   deleteSupplierController,
 } from "./supplier.controller";
+import { authorizeArea, protect } from "../../middleware/auth.middleware";
 
 const router = Router();
+router.use(protect);
 
-router.post("/", createSupplierController);
+router.post("/", authorizeArea("procurement"), createSupplierController);
 
-router.get("/", getSuppliersController);
+router.get("/", authorizeArea("procurement", "finance"), getSuppliersController);
 
-router.get("/:id", getSupplierByIdController);
+router.get("/:id", authorizeArea("procurement", "finance"), getSupplierByIdController);
 
-router.put("/:id", updateSupplierController);
+router.put("/:id", authorizeArea("procurement"), updateSupplierController);
 
-router.delete("/:id", deleteSupplierController);
+router.delete("/:id", authorizeArea("procurement"), deleteSupplierController);
 
 export default router;

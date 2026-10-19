@@ -3,6 +3,16 @@ import axios, { AxiosError } from "axios";
 export const apiBaseUrl =
   import.meta.env.VITE_API_URL || "/api/v1";
 
+export const authenticatedFetch = (
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+) => {
+  const headers = new Headers(init.headers);
+  const token = localStorage.getItem("token");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(input, { ...init, headers });
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,

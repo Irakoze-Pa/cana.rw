@@ -17,9 +17,6 @@ export const createProductController = async (
   res: Response
 ) => {
   try {
-    console.log("CREATE PRODUCT BODY:", req.body);
-    console.log("CREATE PRODUCT FILE:", req.file);
-
     const product = await createProduct(
       req.body,
       req.file
@@ -122,16 +119,6 @@ export const updateProductController = async (
 ) => {
   try {
     const id = req.params.id as string;
-
-    console.log(
-      "UPDATE PRODUCT BODY:",
-      req.body
-    );
-
-    console.log(
-      "UPDATE PRODUCT FILE:",
-      req.file
-    );
 
     const product = await updateProduct(
       id,

@@ -4,7 +4,7 @@ import Site, { siteStatuses, siteWorkTypes } from "./site.model";
 import User, { UserRole, UserStatus } from "../../models/users";
 import { hashPassword } from "../../utils/password";
 import { randomBytes } from "node:crypto";
-import { authorizeRoles, protect, type AuthRequest } from "../../middleware/auth.middleware";
+import { authorizeArea, protect, type AuthRequest } from "../../middleware/auth.middleware";
 import upload from "../product/product.upload";
 import cloudinary from "../../config/cloudinary";
 
@@ -60,7 +60,7 @@ router.get("/public", async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.use(protect, authorizeRoles(UserRole.ADMIN, UserRole.STAFF));
+router.use(protect, authorizeArea("sites"));
 
 router.get("/staff-options", async (_req, res, next) => {
   try { res.json({ data: await User.find({ role: { $in: [UserRole.STAFF, UserRole.ADMIN, UserRole.SUPERADMIN] }, status: UserStatus.ACTIVE }).select("fullName phone role department company").sort({ fullName: 1 }).lean() }); }

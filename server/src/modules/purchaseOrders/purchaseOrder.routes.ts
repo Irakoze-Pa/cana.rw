@@ -8,8 +8,10 @@ import {
   updatePurchaseOrderStatusController,
   deletePurchaseOrderController,
 } from "./purchaseOrder.controller";
+import { authorizeArea, protect } from "../../middleware/auth.middleware";
 
 const router = Router();
+router.use(protect);
 
 // =====================================================
 // CREATE PURCHASE ORDER
@@ -17,6 +19,7 @@ const router = Router();
 
 router.post(
   "/",
+  authorizeArea("procurement"),
   createPurchaseOrderController
 );
 
@@ -26,6 +29,7 @@ router.post(
 
 router.get(
   "/",
+  authorizeArea("procurement", "finance"),
   getPurchaseOrdersController
 );
 
@@ -35,6 +39,7 @@ router.get(
 
 router.get(
   "/:id",
+  authorizeArea("procurement", "finance"),
   getPurchaseOrderByIdController
 );
 
@@ -44,11 +49,13 @@ router.get(
 
 router.patch(
   "/:id/status",
+  authorizeArea("procurement"),
   updatePurchaseOrderStatusController
 );
 
 router.patch(
   "/:id",
+  authorizeArea("procurement"),
   updatePurchaseOrderController
 );
 
@@ -58,6 +65,7 @@ router.patch(
 
 router.delete(
   "/:id",
+  authorizeArea("procurement"),
   deletePurchaseOrderController
 );
 

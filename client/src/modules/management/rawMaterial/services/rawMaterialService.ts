@@ -3,6 +3,7 @@ import type {
   UpdateRawMaterialData,
   RawMaterial,
 } from "../types/rawMaterial.types";
+import { authenticatedFetch } from "@/services/api";
 
 // =========================================================
 // API CONFIG
@@ -65,7 +66,7 @@ const getErrorMessage = (
 
 export const getRawMaterials =
   async (): Promise<RawMaterial[]> => {
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_URL}/raw-materials`,
       {
         method: "GET",
@@ -114,7 +115,7 @@ export const getRawMaterialById =
       );
     }
 
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_URL}/raw-materials/${id}`,
       {
         method: "GET",
@@ -163,7 +164,7 @@ export const createRawMaterial =
   async (
     payload: CreateRawMaterialData
   ): Promise<RawMaterial> => {
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_URL}/raw-materials`,
       {
         method: "POST",
@@ -222,7 +223,7 @@ export const updateRawMaterial =
       );
     }
 
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_URL}/raw-materials/${id}`,
       {
         method: "PUT",
@@ -281,7 +282,7 @@ export const deleteRawMaterial =
       );
     }
 
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_URL}/raw-materials/${id}${purgeTestData ? "?purge=true" : ""}`,
       {
         method: "DELETE",

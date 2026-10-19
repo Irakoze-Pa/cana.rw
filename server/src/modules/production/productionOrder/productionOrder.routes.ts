@@ -8,12 +8,14 @@ import {
   updateProductionOrderController,
   deleteProductionOrderController,
 } from "./productionOrder.controller";
+import { authorizeArea, protect } from "../../../middleware/auth.middleware";
 
 // =====================================================
 // ROUTER
 // =====================================================
 
 const router = Router();
+router.use(protect, authorizeArea("production"));
 
 // =====================================================
 // PRODUCTION ORDER ROUTES

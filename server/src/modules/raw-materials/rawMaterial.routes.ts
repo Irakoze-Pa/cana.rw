@@ -10,8 +10,10 @@ import {
   deleteRawMaterialController,
 } from "./rawMaterial.controller";
 import * as lotController from "./rawMaterialLot.controller";
+import { authorizeArea, protect } from "../../middleware/auth.middleware";
 
 const router = Router();
+router.use(protect, authorizeArea("inventory", "procurement", "production"));
 
 router.post(
   "/",

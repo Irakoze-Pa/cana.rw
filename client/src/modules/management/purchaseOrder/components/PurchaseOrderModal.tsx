@@ -15,6 +15,7 @@ import {
   FileText,
   Loader2,
 } from "lucide-react";
+import { authenticatedFetch } from "@/services/api";
 
 // =====================================================
 // API
@@ -163,7 +164,7 @@ function PurchaseOrderModal({
     try {
       setLoadingSuppliers(true);
 
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${API_URL}/suppliers`
       );
 
@@ -200,7 +201,7 @@ function PurchaseOrderModal({
     try {
       setLoadingRawMaterials(true);
 
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${API_URL}/raw-materials`
       );
 
@@ -231,7 +232,7 @@ function PurchaseOrderModal({
 
   const fetchOffers = async () => {
     try {
-      const response = await fetch(`${API_URL}/supplier-materials`);
+      const response = await authenticatedFetch(`${API_URL}/supplier-materials`);
       const result = await response.json();
       setOffers(Array.isArray(result?.data) ? result.data : []);
     } catch { setOffers([]); }

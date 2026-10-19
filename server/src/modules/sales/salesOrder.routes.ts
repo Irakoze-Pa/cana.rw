@@ -1,11 +1,11 @@
 import { Router } from "express";
 import * as controller from "./salesOrder.controller";
-import { authorizeRoles, protect } from "../../middleware/auth.middleware";
+import { authorizeArea, authorizeRoles, protect } from "../../middleware/auth.middleware";
 const router = Router();
 router.use(protect);
 router.get("/my", authorizeRoles("customer"), controller.listMine);
 router.post("/my", authorizeRoles("customer"), controller.createMine);
-router.use(authorizeRoles("admin", "staff"));
+router.use(authorizeArea("sales"));
 router.get("/", controller.list);
 router.post("/", controller.create);
 router.patch("/:id/prices", controller.updatePrices);

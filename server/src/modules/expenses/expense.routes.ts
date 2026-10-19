@@ -3,8 +3,10 @@ import mongoose from "mongoose";
 import { TreasuryAccount } from "../accounting/accounting.model";
 import { treasuryWorkspace } from "../accounting/accounting.service";
 import Expense from "./expense.model";
+import { authorizeArea, protect } from "../../middleware/auth.middleware";
 
 const router = Router();
+router.use(protect, authorizeArea("finance"));
 const activeChequeStatuses = ["issued", "due", "deposited"];
 
 async function refreshDueCheques() {

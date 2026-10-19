@@ -13,9 +13,11 @@ import {
   deactivateFormulaController,
   deleteFormulaController,
 } from "./formula.controller";
+import { authorizeArea, protect } from "../../middleware/auth.middleware";
 
 const router =
   Router();
+router.use(protect, authorizeArea("production"));
 
 // =====================================================
 // CREATE

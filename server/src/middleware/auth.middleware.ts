@@ -14,10 +14,10 @@ interface JwtPayload {
   role?: string;
 }
 
-export const protect = (
+export const protect = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const authHeader =
@@ -49,18 +49,18 @@ export const protect = (
         process.env.JWT_SECRET as string
       ) as JwtPayload;
 
-    req.user = {
-      id: decoded.id,
-      role: decoded.role,
-    };
+    const user = await User.findById(decoded.id).select("role status").lean();
+    if (!user || user.status !== "active") {
+      return res.status(401).json({
+        success: false,
+        message: "This account is no longer active.",
+      });
+    }
+
+    req.user = { id: String(user._id), role: user.role };
 
     next();
   } catch (error) {
-    console.error(
-      "Authentication error:",
-      error
-    );
-
     return res.status(401).json({
       success: false,
       message: "Invalid or expired token.",

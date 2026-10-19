@@ -4,6 +4,7 @@ import type {
   ProductionBatchStats,
   UpdateProductionBatchData,
 } from "../types/productionBatch.types";
+import { authenticatedFetch } from "@/services/api";
 
 // =====================================================
 // API URL
@@ -87,7 +88,7 @@ async function parseResponse<T>(
 export async function getProductionBatches(): Promise<
   ProductionBatch[]
 > {
-  const response = await fetch(API_URL);
+  const response = await authenticatedFetch(API_URL);
 
   const result = await parseResponse<{
     success: boolean;
@@ -112,7 +113,7 @@ export async function getProductionBatchById(
     );
   }
 
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${API_URL}/${id}`,
   );
 
@@ -131,7 +132,7 @@ export async function getProductionBatchById(
 export async function getProductionBatchStats(): Promise<
   ProductionBatchStats
 > {
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${API_URL}/stats`,
   );
 
@@ -160,7 +161,7 @@ export async function getProductionBatchStats(): Promise<
 export async function createProductionBatch(
   data: CreateProductionBatchData,
 ): Promise<ProductionBatch> {
-  const response = await fetch(API_URL, {
+  const response = await authenticatedFetch(API_URL, {
     method: "POST",
 
     headers: {
@@ -192,7 +193,7 @@ export async function updateProductionBatch(
     );
   }
 
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${API_URL}/${id}`,
     {
       method: "PATCH",
@@ -226,7 +227,7 @@ export async function deleteProductionBatch(
     );
   }
 
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${API_URL}/${id}`,
     {
       method: "DELETE",

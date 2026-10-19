@@ -13,12 +13,6 @@ class AuthController {
 
     try {
 
-      console.log(
-        "REGISTER BODY:",
-        req.body
-      );
-
-
       const input = registerSchema.parse(req.body);
       const result = await authService.register(input);
 

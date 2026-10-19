@@ -5,8 +5,10 @@ import Supplier from "../suppliers/supplier.model";
 import SupplierPayment, { SupplierOpeningPayable } from "./supplierPayment.model";
 import { TreasuryAccount } from "../accounting/accounting.model";
 import { treasuryWorkspace } from "../accounting/accounting.service";
+import { authorizeArea, protect } from "../../middleware/auth.middleware";
 
 const router = Router();
+router.use(protect, authorizeArea("finance", "procurement"));
 const paymentMethods = ["cash", "bank_transfer", "bank_cheque", "mobile_money", "other"];
 const activeChequeStatuses = ["issued", "due", "deposited"];
 const amountOf = (value: unknown) => Number(Number(value).toFixed(2));

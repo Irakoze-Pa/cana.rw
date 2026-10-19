@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
   ArrowRightLeft,
   BookOpen,
   CheckCircle2,
@@ -792,21 +790,23 @@ export default function AccountingPage() {
     }
   };
 
-  const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
+  const workspaceTabs: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: "overview", label: "Overview", icon: CircleDollarSign },
-    { key: "treasury", label: "Money accounts", icon: Landmark },
-    { key: "loans", label: "Loans & borrowings", icon: WalletCards },
+    { key: "treasury", label: "Cash & bank", icon: Landmark },
+    { key: "loans", label: "Loans", icon: WalletCards },
     { key: "taxes", label: "Taxes", icon: ClipboardList },
-    { key: "assets", label: "Equipment assets", icon: Factory },
+    { key: "assets", label: "Assets", icon: Factory },
+  ];
+  const reportTabs: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: "balance", label: "Balance sheet", icon: Scale },
     { key: "ledger", label: "Ledger", icon: BookOpen },
     { key: "trial", label: "Trial balance", icon: Scale },
-    { key: "journals", label: "Adjustments", icon: WalletCards },
+    { key: "journals", label: "Journals", icon: WalletCards },
   ];
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-3 pb-6">
-      <header className="flex flex-col justify-between gap-3 border-b border-slate-300 pb-3 lg:flex-row lg:items-center">
+      <header className="flex flex-col justify-between gap-3 border-b-2 border-slate-950 pb-3 lg:flex-row lg:items-end">
         <div>
           <p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-red-700">
             Finance control
@@ -814,6 +814,9 @@ export default function AccountingPage() {
           <h1 className="mt-0.5 text-2xl font-black tracking-tight text-slate-950">
             Finance & accounting
           </h1>
+          <p className="mt-1 text-xs font-medium text-slate-500">
+            {displayDate(from)} — {displayDate(to)}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canPostJournal && (
@@ -823,7 +826,7 @@ export default function AccountingPage() {
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 hover:border-slate-950"
             >
               <RefreshCw size={16} />
-              {configuration ? "Restart accounting" : "Start accounting"}
+              {configuration ? "Accounting setup" : "Start accounting"}
             </button>
           )}
           {tab === "treasury" && canJournal && (
@@ -925,31 +928,20 @@ export default function AccountingPage() {
         </section>
       )}
 
-      <section className="flex flex-col gap-2 border border-slate-200 bg-white p-2 lg:flex-row lg:items-center lg:justify-between">
-        <nav className="flex flex-wrap gap-1" aria-label="Accounting sections">
-          {tabs.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => selectTab(item.key)}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold transition ${tab === item.key ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100"}`}
-              >
-                <Icon size={15} />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-        <div className="flex items-center gap-2">
+      <section className="flex flex-col gap-2 border border-slate-200 bg-white p-2 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex min-w-0 flex-col gap-1.5 lg:flex-row lg:items-center">
+          <AccountingTabs items={workspaceTabs} active={tab} select={selectTab} />
+          <span className="hidden h-5 w-px bg-slate-200 lg:block" />
+          <AccountingTabs items={reportTabs} active={tab} select={selectTab} />
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
           <label className="text-[10px] font-extrabold uppercase text-slate-500">
             From
             <input
               type="date"
               value={from}
               onChange={(event) => setFrom(event.target.value)}
-              className="ml-2 rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-semibold text-slate-800"
+              className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs font-semibold text-slate-800 sm:ml-2 sm:mt-0 sm:inline-block sm:w-auto"
             />
           </label>
           <label className="text-[10px] font-extrabold uppercase text-slate-500">
@@ -958,7 +950,7 @@ export default function AccountingPage() {
               type="date"
               value={to}
               onChange={(event) => setTo(event.target.value)}
-              className="ml-2 rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-semibold text-slate-800"
+              className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs font-semibold text-slate-800 sm:ml-2 sm:mt-0 sm:inline-block sm:w-auto"
             />
           </label>
         </div>
@@ -1111,6 +1103,38 @@ export default function AccountingPage() {
   );
 }
 
+function AccountingTabs({
+  items,
+  active,
+  select,
+}: {
+  items: { key: Tab; label: string; icon: React.ElementType }[];
+  active: Tab;
+  select: (tab: Tab) => void;
+}) {
+  return (
+    <nav
+      className="flex min-w-0 gap-1 overflow-x-auto pb-1 lg:pb-0"
+      aria-label="Accounting sections"
+    >
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => select(item.key)}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold transition ${active === item.key ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+          >
+            <Icon size={14} />
+            {item.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 function Overview({
   summary,
   loading,
@@ -1126,39 +1150,41 @@ function Overview({
   canSetup: boolean;
   onAddAccount: () => void;
 }) {
-  const metrics = [
-    { label: "Revenue", value: summary.revenue, icon: ArrowUpRight },
-    { label: "Operating costs", value: summary.expenses, icon: ArrowDownLeft },
-    { label: "Net result", value: summary.netProfit, icon: CircleDollarSign },
-    { label: "Cash & bank", value: summary.cashAndBank, icon: Landmark },
-    { label: "Equipment assets", value: summary.fixedAssets, icon: Factory },
+  const primaryMetrics = [
+    { label: "Available funds", value: summary.cashAndBank, icon: Landmark },
     {
-      label: "Customer receivables",
+      label: "Customers owe",
       value: summary.receivables,
       icon: WalletCards,
     },
-    { label: "Supplier payables", value: summary.payables, icon: BookOpen },
-    { label: "Owner loans", value: summary.ownerLoans, icon: WalletCards },
-    { label: "Tax payable", value: summary.taxPayable, icon: ClipboardList },
+    { label: "Owed to suppliers", value: summary.payables, icon: BookOpen },
+    { label: "Period result", value: summary.netProfit, icon: CircleDollarSign },
+  ];
+  const supportingMetrics = [
+    { label: "Sales revenue", value: summary.revenue },
+    { label: "Operating costs", value: summary.expenses },
+    { label: "Equipment value", value: summary.fixedAssets },
+    { label: "Outstanding loans", value: summary.ownerLoans },
+    { label: "Tax payable", value: summary.taxPayable },
   ];
   return (
     <>
-      <section className="grid grid-cols-2 gap-px overflow-hidden border border-slate-200 bg-slate-200 md:grid-cols-3 xl:grid-cols-5">
-        {metrics.map((metric) => {
+      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        {primaryMetrics.map((metric, index) => {
           const Icon = metric.icon;
           return (
             <article
               key={metric.label}
-              className="min-w-0 bg-white px-3 py-2.5"
+              className={`min-w-0 border px-4 py-3.5 ${index === 0 ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white"}`}
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[9px] font-extrabold uppercase tracking-wide text-slate-500 sm:text-[10px]">
+                <p className={`text-[10px] font-extrabold uppercase tracking-wide ${index === 0 ? "text-slate-300" : "text-slate-500"}`}>
                   {metric.label}
                 </p>
-                <Icon size={14} className="text-slate-400" />
+                <Icon size={15} className={index === 0 ? "text-white" : "text-slate-400"} />
               </div>
               <p
-                className={`mt-1 truncate text-base font-black tracking-tight sm:text-lg ${metric.label === "Net result" && metric.value < 0 ? "text-red-700" : "text-slate-950"}`}
+                className={`mt-2 truncate text-xl font-black tracking-tight ${metric.label === "Period result" && metric.value < 0 ? "text-red-600" : index === 0 ? "text-white" : "text-slate-950"}`}
                 title={money(metric.value)}
               >
                 {loading ? "—" : compactMoney(metric.value)}
@@ -1166,6 +1192,18 @@ function Overview({
             </article>
           );
         })}
+      </section>
+      <section className="grid grid-cols-2 gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-5">
+        {supportingMetrics.map((metric) => (
+          <article key={metric.label} className="min-w-0 bg-white px-3 py-2.5">
+            <p className="truncate text-[9px] font-extrabold uppercase tracking-wide text-slate-500 sm:text-[10px]">
+              {metric.label}
+            </p>
+            <p className="mt-1 truncate text-sm font-black text-slate-950" title={money(metric.value)}>
+              {loading ? "—" : compactMoney(metric.value)}
+            </p>
+          </article>
+        ))}
       </section>
       {!loading && treasuryAccounts.length === 0 && (
         <section className="flex flex-col gap-4 border border-slate-950 bg-slate-950 p-4 text-white sm:flex-row sm:items-center sm:justify-between">
@@ -1232,7 +1270,7 @@ function Overview({
               title="Income statement"
               rows={[
                 ["Sales revenue", summary.revenue],
-                ["Operating and direct costs", -summary.expenses],
+                ["Operating and direct costs", summary.expenses],
                 ["Net profit / (loss)", summary.netProfit],
               ]}
             />
@@ -1240,7 +1278,7 @@ function Overview({
               title="Financial position"
               rows={[
                 ["Total assets", summary.assets],
-                ["Total liabilities", -summary.liabilities],
+                ["Total liabilities", summary.liabilities],
                 ["Equity & current result", summary.equity],
               ]}
             />
@@ -1324,8 +1362,7 @@ function Statement({
           >
             <span>{label}</span>
             <span className={value < 0 ? "text-red-700" : ""}>
-              {money(Math.abs(value))}
-              {value < 0 ? " DR" : ""}
+              {money(value)}
             </span>
           </div>
         ))}
@@ -2624,7 +2661,7 @@ function TrialBalance({
             Total debit
           </p>
           <p className="mt-1 text-base font-black text-slate-950">
-            {money(debit)} RWF
+            {money(debit)}
           </p>
         </div>
         <div className="bg-white px-4 py-3">
@@ -2632,7 +2669,7 @@ function TrialBalance({
             Total credit
           </p>
           <p className="mt-1 text-base font-black text-slate-950">
-            {money(credit)} RWF
+            {money(credit)}
           </p>
         </div>
         <div className="bg-white px-4 py-3">
@@ -2642,7 +2679,7 @@ function TrialBalance({
           <p
             className={`mt-1 text-base font-black ${balanced ? "text-emerald-700" : "text-red-700"}`}
           >
-            {money(Math.abs(debit - credit))} RWF
+            {money(Math.abs(debit - credit))}
           </p>
         </div>
       </div>

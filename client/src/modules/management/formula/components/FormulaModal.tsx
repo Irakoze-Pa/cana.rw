@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { authenticatedFetch } from "@/services/api";
 import {
   X,
   Plus,
@@ -86,7 +87,7 @@ export default function FormulaModal({
   // =====================================================
 
   const loadProducts = async (): Promise<Product[]> => {
-    const response = await fetch(`${API_BASE_URL}/products`);
+    const response = await authenticatedFetch(`${API_BASE_URL}/products`);
 
     if (!response.ok) {
       const text = await response.text();
@@ -118,7 +119,7 @@ export default function FormulaModal({
   // =====================================================
 
   const loadRawMaterials = async (): Promise<RawMaterial[]> => {
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_BASE_URL}/raw-materials`
     );
 

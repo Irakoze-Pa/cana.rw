@@ -8,8 +8,10 @@ import {
   updateProductionBatchController,
   deleteProductionBatchController,
 } from "./productionBatch.controller";
+import { authorizeArea, protect } from "../../../middleware/auth.middleware";
 
 const router = Router();
+router.use(protect, authorizeArea("production"));
 
 // =====================================================
 // STATS

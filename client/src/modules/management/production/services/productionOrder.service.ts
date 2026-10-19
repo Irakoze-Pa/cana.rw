@@ -4,7 +4,7 @@ import type {
   ProductionOrderStats,
   UpdateProductionOrderData,
 } from "../types/productionOrder.types";
-import { apiBaseUrl } from "@/services/api";
+import { apiBaseUrl, authenticatedFetch } from "@/services/api";
 
 // =====================================================
 // API URL
@@ -83,7 +83,7 @@ export async function getProductionOrders(): Promise<
   ProductionOrder[]
 > {
   const response =
-    await fetch(API_URL);
+    await authenticatedFetch(API_URL);
 
   const result = await parseResponse<{
     success: boolean;
@@ -111,7 +111,7 @@ export async function getProductionOrderById(
   }
 
   const response =
-    await fetch(
+    await authenticatedFetch(
       `${API_URL}/${id}`
     );
 
@@ -132,7 +132,7 @@ export async function getProductionOrderStats(): Promise<
   ProductionOrderStats
 > {
   const response =
-    await fetch(
+    await authenticatedFetch(
       `${API_URL}/stats`
     );
 
@@ -164,7 +164,7 @@ export async function createProductionOrder(
   data: CreateProductionOrderData
 ): Promise<ProductionOrder> {
   const response =
-    await fetch(API_URL, {
+    await authenticatedFetch(API_URL, {
       method: "POST",
 
       headers: {
@@ -199,7 +199,7 @@ export async function updateProductionOrder(
   }
 
   const response =
-    await fetch(
+    await authenticatedFetch(
       `${API_URL}/${id}`,
       {
         method: "PATCH",
@@ -236,7 +236,7 @@ export async function deleteProductionOrder(
   }
 
   const response =
-    await fetch(
+    await authenticatedFetch(
       `${API_URL}/${id}`,
       {
         method: "DELETE",
