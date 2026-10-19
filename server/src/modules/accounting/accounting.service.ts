@@ -898,9 +898,71 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
   const startDate = configuration?.startDate
     ? new Date(configuration.startDate).toISOString().slice(0, 10)
     : "";
-  return entries
-    .filter((item) => !startDate || item.date.slice(0, 10) >= startDate)
-    .sort((left, right) => right.date.localeCompare(left.date));
+  if (!startDate)
+    return entries.sort((left, right) => right.date.localeCompare(left.date));
+
+  const currentEntries = entries.filter(
+    (item) => item.date.slice(0, 10) >= startDate,
+  );
+  const priorEntries = entries.filter(
+    (item) => item.date.slice(0, 10) < startDate,
+  );
+  const carriedCodes = new Set(
+    accounts
+      .filter(
+        (item) =>
+          ["asset", "liability"].includes(item.type) &&
+          !["1000", "1010"].includes(item.code),
+      )
+      .map((item) => item.code),
+  );
+  const openingLines = trialBalance(priorEntries).flatMap((item) => {
+    if (!carriedCodes.has(item.code)) return [];
+    if (item.debitBalance > 0.005)
+      return [
+        line(
+          item.code,
+          Number(item.debitBalance.toFixed(2)),
+          0,
+          `${item.name} carried forward at accounting start`,
+        ),
+      ];
+    if (item.creditBalance > 0.005)
+      return [
+        line(
+          item.code,
+          0,
+          Number(item.creditBalance.toFixed(2)),
+          `${item.name} carried forward at accounting start`,
+        ),
+      ];
+    return [];
+  });
+  const openingDebit = openingLines.reduce((sum, item) => sum + item.debit, 0);
+  const openingCredit = openingLines.reduce((sum, item) => sum + item.credit, 0);
+  const difference = Number((openingDebit - openingCredit).toFixed(2));
+  if (difference > 0)
+    openingLines.push(
+      line("3010", 0, difference, "Opening position balancing equity"),
+    );
+  else if (difference < 0)
+    openingLines.push(
+      line("3010", Math.abs(difference), 0, "Opening position balancing equity"),
+    );
+  if (openingLines.length)
+    currentEntries.push(
+      entry(
+        "accounting-opening-position",
+        configuration!.startDate,
+        "Accounting opening position",
+        `OPEN-${startDate.replace(/-/g, "")}`,
+        "Operational balances carried into accounting on the opening date",
+        openingLines,
+      ),
+    );
+  return currentEntries.sort((left, right) =>
+    right.date.localeCompare(left.date),
+  );
 }
 
 export async function accountingConfiguration() {
