@@ -86,8 +86,20 @@ export const accounts: Account[] = [
     group: "Payables",
   },
   {
+    code: "2050",
+    name: "Accrued expenses payable",
+    type: "liability",
+    group: "Payables",
+  },
+  {
     code: "2100",
     name: "Tax payable",
+    type: "liability",
+    group: "Statutory liabilities",
+  },
+  {
+    code: "2150",
+    name: "Payroll deductions payable",
     type: "liability",
     group: "Statutory liabilities",
   },
@@ -229,6 +241,10 @@ const entry = (
 
 const treasuryCode = (type: unknown) =>
   String(type) === "cash" ? "1000" : "1010";
+const postingTreasuryCode = (record: any) =>
+  record?.treasuryAccount?.type
+    ? treasuryCode(record.treasuryAccount.type)
+    : paymentAccount(record?.method);
 
 export async function treasuryWorkspace() {
   const [treasuryAccounts, transactions, customerReceipts, supplierSettlements, operatingExpenses, paidPayrolls, paidAdvances, loans, taxes] = await Promise.all([
@@ -249,7 +265,7 @@ export async function treasuryWorkspace() {
         { status: null },
       ],
     })
-      .select("treasuryAccount amount receivedAt receiptNumber method")
+      .select("treasuryAccount amount receivedAt clearedAt receiptNumber method")
       .lean(),
     SupplierPayment.find({ treasuryAccount: { $exists: true }, includedInOpeningBalance: { $ne: true }, $or: [{ chequeStatus: "cleared" }, { chequeStatus: { $exists: false } }] })
       .select("treasuryAccount amount paidAt paymentNumber method")
@@ -289,7 +305,7 @@ export async function treasuryWorkspace() {
         return sum;
       }, 0);
     const receipts = (customerReceipts as any[])
-      .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.receivedAt))
+      .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.method === "bank_cheque" ? item.clearedAt || item.receivedAt : item.receivedAt))
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const settlements = (supplierSettlements as any[])
       .filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.paidAt))
@@ -318,7 +334,7 @@ export async function treasuryWorkspace() {
     ...(customerReceipts as any[]).map((item) => ({
       _id: `receipt-${item._id}`,
       transactionNumber: item.receiptNumber,
-      date: item.receivedAt,
+      date: item.method === "bank_cheque" ? item.clearedAt || item.receivedAt : item.receivedAt,
       type: "deposit",
       amount: item.amount,
       description: "Customer receipt",
@@ -370,6 +386,32 @@ export async function treasuryWorkspace() {
       account: accountById.get(String(item.treasuryAccount)),
       source: "staff_advance",
     })),
+    ...(loans as any[]).flatMap((loan) =>
+      (loan.repayments || []).map((repayment: any) => ({
+        _id: `loan-${repayment._id}`,
+        transactionNumber: repayment.paymentNumber,
+        date: repayment.paymentDate,
+        type: "withdrawal",
+        amount: Number(repayment.principal || 0) + Number(repayment.interest || 0),
+        description: `${loan.lenderName} loan repayment`,
+        reference: loan.loanNumber,
+        account: accountById.get(String(repayment.treasuryAccount)),
+        source: "loan_repayment",
+      })),
+    ),
+    ...(taxes as any[]).flatMap((tax) =>
+      (tax.payments || []).map((payment: any) => ({
+        _id: `tax-${payment._id}`,
+        transactionNumber: payment.paymentNumber,
+        date: payment.paymentDate,
+        type: "withdrawal",
+        amount: payment.amount,
+        description: `${String(tax.taxType).replace(/_/g, " ")} payment`,
+        reference: tax.taxNumber,
+        account: accountById.get(String(payment.treasuryAccount)),
+        source: "tax_payment",
+      })),
+    ),
   ];
   return {
     accounts: balances,
@@ -410,6 +452,7 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
       ],
     })
       .populate("customer", "fullName businessName")
+      .populate("treasuryAccount", "name type")
       .lean(),
     CustomerOpeningBalance.find({ status: { $ne: "void" } })
       .populate("customer", "fullName businessName")
@@ -422,19 +465,21 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
       $or: [{ chequeStatus: "cleared" }, { chequeStatus: { $exists: false } }],
     })
       .populate("supplier", "name code")
+      .populate("treasuryAccount", "name type")
       .lean(),
     SupplierOpeningPayable.find({ status: { $ne: "void" } })
       .populate("supplier", "name code")
       .lean(),
-    Expense.find().lean(),
+    Expense.find().populate("treasuryAccount", "name type").lean(),
     SalesOrder.find({ status: "delivered" }).lean(),
     StaffPayment.find({
       kind: "advance",
       status: { $in: ["paid", "deducted"] },
     })
       .populate("staff", "fullName")
+      .populate("treasuryAccount", "name type")
       .lean(),
-    PayrollRun.find({ status: "paid" }).lean(),
+    PayrollRun.find({ status: "paid" }).populate("treasuryAccount", "name type").lean(),
     ProductionBatch.find({
       status: "Completed",
       totalActualCost: { $gt: 0 },
@@ -618,13 +663,15 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
     entries.push(
       entry(
         payment._id,
-        payment.receivedAt || payment.createdAt,
+        payment.method === "bank_cheque"
+          ? payment.clearedAt || payment.receivedAt || payment.createdAt
+          : payment.receivedAt || payment.createdAt,
         "Customer receipt",
         payment.receiptNumber,
         `${customer} payment`,
         [
           line(
-            paymentAccount(payment.method),
+            postingTreasuryCode(payment),
             paid,
             0,
             text(payment.method, "Payment"),
@@ -682,7 +729,7 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
         [
           line("2000", paid, 0, supplier),
           line(
-            paymentAccount(payment.method),
+            postingTreasuryCode(payment),
             0,
             paid,
             text(payment.method, "Payment"),
@@ -710,6 +757,7 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
     const value = amount(expense.amount);
     if (!value) continue;
     const code = expenseAccount[String(expense.category)] || "5290";
+    const isCheque = expense.method === "bank_cheque";
     entries.push(
       entry(
         expense._id,
@@ -717,9 +765,27 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
         "Expense",
         expense.expenseNumber,
         text(expense.description, "Operating expense"),
-        [line(code, value, 0), line(expense.method === "bank_cheque" && !["cleared", undefined].includes(expense.chequeStatus) ? "2000" : paymentAccount(expense.method), 0, value)],
+        [
+          line(code, value, 0),
+          line(isCheque ? "2050" : postingTreasuryCode(expense), 0, value),
+        ],
       ),
     );
+    if (isCheque && expense.chequeStatus === "cleared") {
+      entries.push(
+        entry(
+          `expense-clear-${expense._id}`,
+          expense.clearedAt || expense.date || expense.updatedAt,
+          "Expense cheque cleared",
+          expense.chequeNumber || expense.expenseNumber,
+          `${text(expense.description, "Operating expense")} cheque cleared`,
+          [
+            line("2050", value, 0, "Expense payable settled"),
+            line(postingTreasuryCode(expense), 0, value),
+          ],
+        ),
+      );
+    }
   }
   for (const advance of advances as any[]) {
     const value = amount(advance.amount);
@@ -731,7 +797,7 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
         "Staff advance",
         `ADV-${String(advance._id).slice(-6).toUpperCase()}`,
         `${advance.staff?.fullName || "Staff"} advance`,
-        [line("1150", value, 0), line("1010", 0, value)],
+        [line("1150", value, 0), line(postingTreasuryCode(advance), 0, value)],
       ),
     );
   }
@@ -748,6 +814,17 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
       (sum: number, item: any) => sum + amount(item.netPay),
       0,
     );
+    const advanceRecovery = (payroll.lines || []).reduce(
+      (sum: number, item: any) =>
+        sum +
+        (item.advanceAllocations || []).reduce(
+          (allocationSum: number, allocation: any) =>
+            allocationSum + amount(allocation.amount),
+          0,
+        ),
+      0,
+    );
+    const otherDeductions = Math.max(0, deductions - advanceRecovery);
     if (!gross) continue;
     entries.push(
       entry(
@@ -758,8 +835,9 @@ export async function buildLedger(): Promise<LedgerEntry[]> {
         `Payroll for ${payroll.period}`,
         [
           line("5100", gross, 0),
-          ...(deductions ? [line("1150", 0, deductions)] : []),
-          ...(net ? [line("1010", 0, net)] : []),
+          ...(advanceRecovery ? [line("1150", 0, advanceRecovery, "Staff advances recovered")] : []),
+          ...(otherDeductions ? [line("2150", 0, otherDeductions, "Payroll deductions withheld")] : []),
+          ...(net ? [line(postingTreasuryCode(payroll), 0, net)] : []),
         ],
       ),
     );

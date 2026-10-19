@@ -1,6 +1,7 @@
 import { Router } from "express";
 import mongoose from "mongoose";
 import PurchaseOrder from "../purchaseOrders/purchaseOrder.model";
+import RawMaterialLot from "../raw-materials/rawMaterialLot.model";
 import Supplier from "../suppliers/supplier.model";
 import SupplierPayment, { SupplierOpeningPayable } from "./supplierPayment.model";
 import { TreasuryAccount } from "../accounting/accounting.model";
@@ -32,6 +33,15 @@ async function applyOpeningPayment(openingPayable: unknown, amount: number) {
   opening.amountPaid = amountOf(Number(opening.amountPaid || 0) + amount); opening.balance = amountOf(Number(opening.amount) - Number(opening.amountPaid)); opening.status = opening.balance <= 0 ? "paid" : "partially_paid"; await opening.save();
 }
 
+async function receivedValueForPurchaseOrder(purchaseOrder: unknown) {
+  if (!purchaseOrder || !mongoose.Types.ObjectId.isValid(String(purchaseOrder))) return 0;
+  const rows = await RawMaterialLot.aggregate([
+    { $match: { purchaseOrder: new mongoose.Types.ObjectId(String(purchaseOrder)) } },
+    { $group: { _id: null, total: { $sum: { $multiply: ["$receivedQuantity", "$unitCost"] } } } },
+  ]);
+  return amountOf(rows[0]?.total || 0);
+}
+
 router.get("/", async (_req, res, next) => {
   try { await refreshDueCheques(); res.json({ data: await SupplierPayment.find().populate("supplier", "name code").populate("purchaseOrder", "poNumber total").populate("openingPayable", "openingNumber amount balance status description").populate("treasuryAccount", "name type institution accountNumber").sort({ createdAt: -1 }).lean() }); }
   catch (error) { next(error); }
@@ -42,24 +52,55 @@ router.get("/opening-payables", async (_req, res, next) => {
   catch (error) { next(error); }
 });
 
+router.get("/payable-orders", async (_req, res, next) => {
+  try {
+    await refreshDueCheques();
+    const [orders, receiptValues, payments] = await Promise.all([
+      PurchaseOrder.find({ status: { $in: ["received", "partially_received"] } })
+        .populate("supplier", "name code phone")
+        .select("poNumber supplier status orderDate total")
+        .sort({ orderDate: -1, createdAt: -1 })
+        .lean(),
+      RawMaterialLot.aggregate([
+        { $match: { purchaseOrder: { $exists: true, $ne: null } } },
+        { $group: { _id: "$purchaseOrder", receivedTotal: { $sum: { $multiply: ["$receivedQuantity", "$unitCost"] } }, grnCount: { $sum: 1 }, lastReceivedAt: { $max: "$receivedAt" } } },
+      ]),
+      SupplierPayment.find({ purchaseOrder: { $exists: true } }).select("purchaseOrder amount method chequeStatus").lean(),
+    ]);
+    const receiptMap = new Map(receiptValues.map((row: any) => [String(row._id), row]));
+    const data = orders.map((order: any) => {
+      const receipt = receiptMap.get(String(order._id));
+      const orderPayments = payments.filter((payment: any) => String(payment.purchaseOrder) === String(order._id));
+      const cleared = orderPayments.filter((payment: any) => !payment.chequeStatus || payment.chequeStatus === "cleared").reduce((sum, payment: any) => sum + Number(payment.amount || 0), 0);
+      const pendingCheques = orderPayments.filter((payment: any) => payment.method === "bank_cheque" && activeChequeStatuses.includes(payment.chequeStatus)).reduce((sum, payment: any) => sum + Number(payment.amount || 0), 0);
+      const receivedTotal = amountOf(receipt?.receivedTotal || 0);
+      return { ...order, orderedTotal: Number(order.total || 0), total: receivedTotal, receivedTotal, grnCount: Number(receipt?.grnCount || 0), lastReceivedAt: receipt?.lastReceivedAt, amountPaid: amountOf(cleared), pendingCheques: amountOf(pendingCheques), balance: amountOf(Math.max(0, receivedTotal - cleared)), availableToSettle: amountOf(Math.max(0, receivedTotal - cleared - pendingCheques)) };
+    });
+    res.json({ data: data.filter((order: any) => order.receivedTotal > 0) });
+  } catch (error) { next(error); }
+});
+
 router.get("/supplier-accounts", async (_req, res, next) => {
   try {
     await refreshDueCheques();
-    const [suppliers, orders, openings, payments] = await Promise.all([
+    const [suppliers, receiptValues, openings, payments] = await Promise.all([
       Supplier.find().select("name code phone status").sort({ name: 1 }).lean(),
-      PurchaseOrder.find({ status: { $in: ["received", "partially_received"] } }).select("supplier total").lean(),
+      RawMaterialLot.aggregate([
+        { $match: { purchaseOrder: { $exists: true, $ne: null } } },
+        { $group: { _id: { supplier: "$supplier", purchaseOrder: "$purchaseOrder" }, total: { $sum: { $multiply: ["$receivedQuantity", "$unitCost"] } } } },
+      ]),
       SupplierOpeningPayable.find({ status: { $ne: "void" } }).select("supplier amount balance").lean(),
       SupplierPayment.find().select("supplier purchaseOrder openingPayable amount method chequeStatus").lean(),
     ]);
     res.json({ data: suppliers.map((supplier) => {
       const id = String(supplier._id);
-      const supplierOrders = orders.filter((order) => String(order.supplier) === id);
+      const supplierReceipts = receiptValues.filter((row: any) => String(row._id.supplier) === id);
       const supplierOpenings = openings.filter((opening) => String(opening.supplier) === id);
       const supplierPayments = payments.filter((payment) => String(payment.supplier) === id);
       const cleared = supplierPayments.filter((payment: any) => !payment.chequeStatus || payment.chequeStatus === "cleared");
       const pending = supplierPayments.filter((payment: any) => payment.method === "bank_cheque" && activeChequeStatuses.includes(payment.chequeStatus));
       const poPaid = cleared.filter((payment) => payment.purchaseOrder).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-      const purchaseOrderTotal = supplierOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+      const purchaseOrderTotal = supplierReceipts.reduce((sum, row: any) => sum + Number(row.total || 0), 0);
       const balance = Math.max(0, purchaseOrderTotal - poPaid) + supplierOpenings.reduce((sum, opening) => sum + Number(opening.balance || 0), 0);
       const pendingCheques = pending.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
       return { supplier, purchaseOrderTotal, openingTotal: supplierOpenings.reduce((sum, opening) => sum + Number(opening.amount || 0), 0), amountPaid: cleared.reduce((sum, payment) => sum + Number(payment.amount || 0), 0), pendingCheques, balance, expectedBalance: Math.max(0, balance - pendingCheques) };
@@ -111,7 +152,9 @@ router.post("/", async (req, res, next) => {
       if (!po || String(po.supplier) !== String(supplier)) throw new Error("The selected purchase order does not belong to this supplier.");
       if (!["received", "partially_received"].includes(po.status)) throw new Error("Receive the raw materials before recording supplier settlement.");
       const committed = await SupplierPayment.aggregate([{ $match: { purchaseOrder: new mongoose.Types.ObjectId(purchaseOrder), $or: [{ chequeStatus: { $in: ["issued", "due", "deposited", "cleared"] } }, { chequeStatus: { $exists: false } }] } }, { $group: { _id: null, total: { $sum: "$amount" } } }]);
-      const remaining = amountOf(Math.max(0, Number(po.total || 0) - Number(committed[0]?.total || 0)));
+      const receivedValue = await receivedValueForPurchaseOrder(purchaseOrder);
+      const remaining = amountOf(Math.max(0, receivedValue - Number(committed[0]?.total || 0)));
+      if (receivedValue <= 0) throw new Error("This purchase order has no valued goods receipt to settle.");
       if (remaining <= 0) throw new Error("This purchase order is already fully settled or covered by pending cheques.");
       if (paidAmount > remaining + 0.0001) throw new Error("Amount exceeds the purchase-order balance not already paid or covered by a pending cheque.");
     } else {
@@ -164,7 +207,8 @@ router.patch("/:id/cheque-status", async (req, res, next) => {
       if (payment.purchaseOrder) {
         const order = await PurchaseOrder.findById(payment.purchaseOrder).lean();
         const paid = await SupplierPayment.aggregate([{ $match: { purchaseOrder: payment.purchaseOrder, _id: { $ne: payment._id }, ...clearedFilter } }, { $group: { _id: null, total: { $sum: "$amount" } } }]);
-        if (!order || Number(payment.amount) > Number(order.total || 0) - Number(paid[0]?.total || 0) + 0.0001) throw new Error("The purchase-order balance is now lower than this cheque amount.");
+        const receivedValue = await receivedValueForPurchaseOrder(payment.purchaseOrder);
+        if (!order || Number(payment.amount) > receivedValue - Number(paid[0]?.total || 0) + 0.0001) throw new Error("The received-goods balance is now lower than this cheque amount.");
       } else await applyOpeningPayment(payment.openingPayable, Number(payment.amount));
       payment.clearedAt = new Date(); payment.paidAt = payment.clearedAt;
     }

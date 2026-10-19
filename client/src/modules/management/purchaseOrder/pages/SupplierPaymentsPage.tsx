@@ -19,6 +19,14 @@ type PO = {
   _id: string;
   poNumber: string;
   total: number;
+  orderedTotal?: number;
+  receivedTotal?: number;
+  grnCount?: number;
+  lastReceivedAt?: string;
+  amountPaid?: number;
+  pendingCheques?: number;
+  balance?: number;
+  availableToSettle?: number;
   supplier: Supplier | string;
   status: string;
   orderDate?: string;
@@ -134,18 +142,14 @@ export default function SupplierPaymentsPage() {
     try {
       const [pay, po, supplier, opening, account, treasury] = await Promise.all([
         api.get<{ data: Payment[] }>("/supplier-payments"),
-        api.get<{ data: PO[] }>("/purchase-orders"),
+        api.get<{ data: PO[] }>("/supplier-payments/payable-orders"),
         api.get<{ data: Supplier[] }>("/suppliers"),
         api.get<{ data: Opening[] }>("/supplier-payments/opening-payables"),
         api.get<{ data: Account[] }>("/supplier-payments/supplier-accounts"),
         api.get<{ data: { accounts: TreasuryAccount[] } }>("/accounting/treasury-accounts").catch(() => ({ data: { data: { accounts: [] } } })),
       ]);
       setPayments(pay.data.data || []);
-      setOrders(
-        (po.data.data || []).filter((item) =>
-          ["received", "partially_received"].includes(item.status),
-        ),
-      );
+      setOrders(po.data.data || []);
       setSuppliers((supplier.data.data || []).filter((item) => item));
       setOpenings(opening.data.data || []);
       setAccounts(account.data.data || []);
@@ -175,7 +179,7 @@ export default function SupplierPaymentsPage() {
             item.purchaseOrder?.poNumber === order.poNumber),
       )
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    return Math.max(0, Number(order.total || 0) - committed);
+    return Math.max(0, Number(order.receivedTotal ?? order.total ?? 0) - committed);
   };
   const openingBalance = (opening: Opening) => {
     const pendingCheques = payments
@@ -431,9 +435,9 @@ export default function SupplierPaymentsPage() {
           date: order.orderDate || order.createdAt || new Date().toISOString(),
           type: "Purchase order",
           reference: order.poNumber,
-          description: "Raw materials received",
+          description: `${order.grnCount || 0} goods receipt note(s)`,
           debit: 0,
-          credit: Number(order.total || 0),
+          credit: Number(order.receivedTotal ?? order.total ?? 0),
         })),
       ...openings
         .filter(
