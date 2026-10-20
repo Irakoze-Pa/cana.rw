@@ -800,7 +800,19 @@ const ProductionBatchesPage = () => {
               ) : (
                 filteredBatches.map((batch) => {
                   return (
-                    <tr key={batch._id} className="transition hover:bg-gray-50">
+                    <tr
+                      key={batch._id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => void handleView(batch)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          void handleView(batch);
+                        }
+                      }}
+                      className="cursor-pointer transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+                    >
                       <td className="px-5 py-4">
                         <p className="font-bold text-gray-900">
                           {batch.batchNo}
@@ -896,7 +908,7 @@ const ProductionBatchesPage = () => {
                       </td>
 
                       <td className="px-5 py-4">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-2" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
                           {/* VIEW */}
 
                           <button

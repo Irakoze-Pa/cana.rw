@@ -1,419 +1,52 @@
-import {
-  CalendarDays,
-  CheckCircle2,
-  ClipboardList,
-  Factory,
-  FileText,
-  Hash,
-  Package,
-  Printer,
-  User,
-  X,
-} from "lucide-react";
+import { ArrowRight, CalendarDays, CheckCircle2, ClipboardList, FileText, Package, Printer, X } from "lucide-react";
 import { Link } from "react-router-dom";
-
 import type { ProductionBatch } from "../types/productionBatch.types";
 
-interface ProductionBatchDetailsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  batch: ProductionBatch | null;
-  onPrint?: () => void | Promise<void>;
-}
+interface Props { isOpen: boolean; onClose: () => void; batch: ProductionBatch | null; onPrint?: () => void | Promise<void> }
+const date = (value?: string, time = false) => { if (!value) return "—"; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? "—" : time ? parsed.toLocaleString("en-RW") : parsed.toLocaleDateString("en-RW", { day: "2-digit", month: "short", year: "numeric" }); };
+const number = (value?: number) => Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 });
+const money = (value?: number) => `${number(value)} RWF`;
+const statusClass = (status: ProductionBatch["status"]) => status === "Completed" ? "bg-emerald-50 text-emerald-700" : status === "In Progress" ? "bg-amber-50 text-amber-800" : status === "Cancelled" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-700";
 
-function formatDate(value?: string) {
-  if (!value) {
-    return "—";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-
-  return date.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatDateTime(value?: string) {
-  if (!value) {
-    return "—";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "—";
-  }
-
-  return date.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-const money = (value?: number) =>
-  `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 })} RWF`;
-
-const PRODUCTION_PACK_WEIGHT_KG = 30;
-
-function packBreakdown(quantityKg?: number) {
-  const kilograms = Math.max(0, Number(quantityKg || 0));
-  const fullPacks = Math.floor(kilograms / PRODUCTION_PACK_WEIGHT_KG);
-  const remainderKg = kilograms - fullPacks * PRODUCTION_PACK_WEIGHT_KG;
-
-  return { fullPacks, remainderKg };
-}
-
-function getStatusClass(status: ProductionBatch["status"]) {
-  switch (status) {
-    case "Completed":
-      return "bg-green-50 text-green-700";
-
-    case "In Progress":
-      return "bg-amber-50 text-amber-800";
-
-    case "Paused":
-      return "bg-amber-50 text-amber-700";
-
-    case "Ready":
-      return "bg-slate-100 text-slate-700";
-
-    case "Cancelled":
-      return "bg-red-50 text-red-700";
-
-    default:
-      return "bg-gray-100 text-gray-700";
-  }
-}
-
-export default function ProductionBatchDetailsModal({
-  isOpen,
-  onClose,
-  batch,
-  onPrint,
-}: ProductionBatchDetailsModalProps) {
-  if (!isOpen || !batch) {
-    return null;
-  }
-
-  const progress =
-    batch.plannedQuantity > 0
-      ? Math.min(100, (batch.actualQuantity / batch.plannedQuantity) * 100)
-      : 0;
-  const producedPacks = packBreakdown(batch.actualQuantity);
-  const completeProductionCost =
-    Number(batch.actualMaterialCost || 0) +
-    Number(batch.allocatedLaborCost || 0) +
-    Number(batch.allocatedEnergyCost || 0) +
-    Number(batch.allocatedOtherCost || 0);
-  const completeCostPerKg =
-    Number(batch.actualQuantity || 0) > 0
-      ? completeProductionCost / Number(batch.actualQuantity)
-      : 0;
-  const actualCostPerPack =
-    completeCostPerKg * PRODUCTION_PACK_WEIGHT_KG;
-
+export default function ProductionBatchDetailsModal({ isOpen, onClose, batch, onPrint }: Props) {
+  if (!isOpen || !batch) return null;
+  const planned = Number(batch.plannedQuantity || 0), actual = Number(batch.actualQuantity || 0);
+  const yieldPercent = planned > 0 ? actual / planned * 100 : 0;
+  const fullPacks = Math.floor(actual / 30), remainderKg = actual - fullPacks * 30;
+  const totalCost = Number(batch.actualMaterialCost || 0) + Number(batch.allocatedLaborCost || 0) + Number(batch.allocatedEnergyCost || 0) + Number(batch.allocatedOtherCost || 0);
+  const costPerKg = actual > 0 ? totalCost / actual : Number(batch.costPerKg || 0);
+  const costPerPack = costPerKg * 30 || Number(batch.costPerPack || 0);
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      onMouseDown={(event) => {
-        if (event.currentTarget === event.target) {
-          onClose();
-        }
-      }}
-    >
-      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-        <div className="flex items-start justify-between border-b border-gray-200 px-6 py-5">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-600 text-white">
-              <Factory size={23} />
+    <div className="fixed inset-0 z-[120] grid place-items-center bg-slate-950/55 p-3 backdrop-blur-sm" onMouseDown={(event) => event.currentTarget === event.target && onClose()}>
+      <section role="dialog" aria-modal="true" aria-label={`Production batch ${batch.batchNo}`} className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-[10px] font-black uppercase tracking-[.15em] text-red-700">Production batch</p><span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase ${statusClass(batch.status)}`}>{batch.status}</span></div><h2 className="mt-1 truncate text-xl font-black tracking-tight text-slate-950">{batch.batchNo}</h2><p className="truncate text-xs text-slate-500">{batch.productName} · {batch.productCode || "No product code"}</p></div>
+          <div className="flex shrink-0 gap-1.5">{onPrint && <button type="button" onClick={() => void onPrint()} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-slate-950 px-3 text-xs font-bold text-white hover:bg-black"><Printer size={14}/><span className="hidden sm:inline">Print record</span></button>}<button type="button" onClick={onClose} aria-label="Close batch details" className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100"><X size={16}/></button></div>
+        </header>
+        <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 border-b border-slate-200 bg-slate-50 sm:grid-cols-4 sm:divide-y-0"><Metric label="Planned output" value={`${number(planned)} ${batch.unit}`}/><Metric label="Actual output" value={`${number(actual)} ${batch.unit}`}/><Metric label="Pack output" value={`${number(fullPacks)} packs${remainderKg ? ` + ${number(remainderKg)} kg` : ""}`}/><Metric label="Production yield" value={`${number(yieldPercent)}%`}/></div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+          <div className="grid gap-3 lg:grid-cols-[1.15fr_.85fr]">
+            <div className="space-y-3">
+              <Section title="Production identity" icon={<Package size={15}/>}><div className="grid gap-x-5 gap-y-3 sm:grid-cols-2"><Detail label="Product" value={batch.productName} subvalue={batch.productCode}/><Detail label="Formula snapshot" value={batch.formulaName} subvalue={`${batch.formulaCode} · Version ${batch.formulaVersion}`}/><Detail label="Production lot" value={batch.lotNumber || "—"}/><Detail label="Supervisor" value={batch.supervisorName || "Not assigned"}/></div></Section>
+              <Section title="Production schedule" icon={<CalendarDays size={15}/>}><div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-4"><Detail label="Start date" value={date(batch.startDate)}/><Detail label="End date" value={date(batch.endDate)}/><Detail label="Created" value={date(batch.createdAt, true)}/><Detail label="Updated" value={date(batch.updatedAt, true)}/></div></Section>
+              <Section title="Notes" icon={<FileText size={15}/>}><p className="text-xs leading-5 text-slate-600">{batch.notes?.trim() || "No notes recorded for this batch."}</p></Section>
             </div>
-
-            {batch.costedAt && (
-              <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[.14em] text-red-700">
-                      Completed batch cost
-                    </p>
-                    <h3 className="mt-1 text-lg font-extrabold text-slate-950">
-                      {money(completeProductionCost)}
-                    </h3>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Frozen {formatDateTime(batch.costedAt)}
-                  </p>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <CostItem
-                    label="Issued materials"
-                    value={money(batch.actualMaterialCost)}
-                  />
-                  <CostItem
-                    label="Labour"
-                    value={money(batch.allocatedLaborCost)}
-                  />
-                  <CostItem
-                    label="Energy"
-                    value={money(batch.allocatedEnergyCost)}
-                  />
-                  <CostItem
-                    label="Overhead & other expenses"
-                    value={money(batch.allocatedOtherCost)}
-                  />
-                </div>
-                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-200 pt-3 text-sm">
-                  <span>
-                    <strong>{money(completeCostPerKg)}</strong> / kg
-                  </span>
-                  {actualCostPerPack > 0 && (
-                    <span>
-                      <strong>{money(actualCostPerPack)}</strong> / 30 kg pack
-                    </span>
-                  )}
-                </div>
-              </section>
-            )}
-
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {batch.batchNo}
-                </h2>
-
-                <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClass(
-                    batch.status,
-                  )}`}
-                >
-                  {batch.status}
-                </span>
-              </div>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Production batch details.
-              </p>
+            <div className="space-y-3">
+              <Section title="Production cost" icon={<ClipboardList size={15}/>}>
+                {batch.costedAt || totalCost > 0 ? <><div className="grid grid-cols-2 gap-2"><Cost label="Issued materials" value={batch.actualMaterialCost}/><Cost label="Labour" value={batch.allocatedLaborCost}/><Cost label="Energy" value={batch.allocatedEnergyCost}/><Cost label="Other overhead" value={batch.allocatedOtherCost}/></div><div className="mt-3 border-t border-slate-200 pt-3"><CostLine label="Total production cost" value={money(totalCost)} strong/><CostLine label="Cost per kg" value={money(costPerKg)}/><CostLine label="Cost per 30 kg pack" value={money(costPerPack)}/>{batch.costedAt && <p className="mt-2 text-[9px] text-slate-500">Cost frozen {date(batch.costedAt, true)}</p>}</div></> : <p className="py-4 text-center text-xs text-slate-500">Cost becomes available after materials are issued and the batch is completed.</p>}
+              </Section>
+              <Link to={`/management/production/consumption?batch=${batch._id}`} onClick={onClose} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-extrabold text-slate-800 hover:border-slate-400"><span className="inline-flex items-center gap-2"><ClipboardList size={15} className="text-red-700"/>Material consumption</span><ArrowRight size={14}/></Link>
+              {batch.status === "Completed" && <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs text-emerald-800"><CheckCircle2 size={16} className="mt-0.5 shrink-0"/><span><strong>Stock posted.</strong> Completed output is in the Production Store.</span></div>}
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            {onPrint && (
-              <button
-                type="button"
-                onClick={() => void onPrint()}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
-                <Printer size={16} />
-                Print record
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl p-2 text-gray-500 hover:bg-gray-100"
-            >
-              <X size={21} />
-            </button>
-          </div>
         </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-6">
-          <div className="space-y-6">
-            <Link
-              to={`/management/production/consumption?batch=${batch._id}`}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-            >
-              <ClipboardList size={16} />
-              View material consumption
-            </Link>
-
-            {/* PROGRESS */}
-            <div className="rounded-2xl border border-gray-200 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">
-                    Production Progress
-                  </p>
-
-                  <p className="mt-1 text-sm text-gray-500">
-                    {Number(batch.actualQuantity).toLocaleString()} /{" "}
-                    {Number(batch.plannedQuantity).toLocaleString()}{" "}
-                    {batch.unit}
-                  </p>
-                  <p className="mt-1 text-sm font-extrabold text-slate-950">
-                    {producedPacks.fullPacks.toLocaleString()} full packs
-                    {producedPacks.remainderKg > 0
-                      ? ` + ${producedPacks.remainderKg.toLocaleString()} kg`
-                      : ""}{" "}
-                    · 30 kg each
-                  </p>
-                </div>
-
-                <p className="text-2xl font-bold text-gray-900">
-                  {progress.toFixed(0)}%
-                </p>
-              </div>
-
-              <div className="mt-4 h-3 overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className="h-full rounded-full bg-red-600"
-                  style={{
-                    width: `${progress}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* MAIN INFO */}
-            <div className="grid gap-5 md:grid-cols-3">
-              <div className="rounded-2xl border border-gray-200 p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <Package className="text-red-600" />
-
-                  <h3 className="font-semibold">Product</h3>
-                </div>
-
-                <p className="font-semibold text-gray-900">
-                  {batch.productName}
-                </p>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  Code: {batch.productCode || "—"}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <Hash className="text-red-600" />
-
-                  <h3 className="font-semibold">Formula</h3>
-                </div>
-
-                <p className="font-semibold text-gray-900">
-                  {batch.formulaName}
-                </p>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  {batch.formulaCode} · v{batch.formulaVersion}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <User className="text-red-600" />
-
-                  <h3 className="font-semibold">Supervisor</h3>
-                </div>
-
-                <p className="font-semibold text-gray-900">
-                  {batch.supervisorName || "Not assigned"}
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-gray-200 p-5">
-              <p className="text-xs text-gray-500">Production Lot</p>
-
-              <p className="mt-1 font-semibold text-gray-900">
-                {batch.lotNumber || "—"}
-              </p>
-            </div>
-
-            {/* DATES */}
-            <div className="rounded-2xl border border-gray-200 p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <CalendarDays className="text-red-600" />
-
-                <h3 className="font-semibold">Production Dates</h3>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <p className="text-xs text-gray-500">Start Date</p>
-
-                  <p className="mt-1 text-sm font-medium">
-                    {formatDate(batch.startDate)}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs text-gray-500">End Date</p>
-
-                  <p className="mt-1 text-sm font-medium">
-                    {formatDate(batch.endDate)}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs text-gray-500">Created</p>
-
-                  <p className="mt-1 text-sm font-medium">
-                    {formatDateTime(batch.createdAt)}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs text-gray-500">Updated</p>
-
-                  <p className="mt-1 text-sm font-medium">
-                    {formatDateTime(batch.updatedAt)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* NOTES */}
-            <div className="rounded-2xl border border-gray-200 p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <FileText className="text-red-600" />
-
-                <h3 className="font-semibold">Notes</h3>
-              </div>
-
-              <p className="text-sm leading-6 text-gray-600">
-                {batch.notes?.trim() || "No notes available."}
-              </p>
-            </div>
-
-            {batch.status === "Completed" && (
-              <div className="flex items-center gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-green-700">
-                <CheckCircle2 size={20} />
-
-                <p className="text-sm font-medium">
-                  This production batch has been completed.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex justify-end border-t border-gray-200 px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-gray-200 px-5 py-2.5 text-sm font-semibold hover:bg-gray-50"
-          >
-            Close
-          </button>
-        </div>
-      </div>
+      </section>
     </div>
   );
 }
 
-function CostItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
-      <p className="text-xs font-semibold text-slate-500">{label}</p>
-      <p className="mt-1 font-extrabold text-slate-900">{value}</p>
-    </div>
-  );
-}
+function Metric({ label, value }: { label: string; value: string }) { return <div className="min-w-0 px-3 py-2.5"><p className="text-[9px] font-extrabold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-0.5 truncate text-sm font-black text-slate-950" title={value}>{value}</p></div>; }
+function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) { return <section className="overflow-hidden rounded-xl border border-slate-200 bg-white"><header className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-extrabold text-slate-950">{icon}{title}</header><div className="p-3">{children}</div></section>; }
+function Detail({ label, value, subvalue }: { label: string; value: string; subvalue?: string }) { return <div className="min-w-0"><p className="text-[9px] font-extrabold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-0.5 truncate text-xs font-extrabold text-slate-950" title={value}>{value}</p>{subvalue && <p className="mt-0.5 truncate text-[10px] text-slate-500">{subvalue}</p>}</div>; }
+function Cost({ label, value }: { label: string; value?: number }) { return <div className="rounded-md bg-slate-50 px-2.5 py-2"><p className="text-[9px] font-bold text-slate-500">{label}</p><p className="mt-0.5 truncate text-xs font-black text-slate-950">{money(value)}</p></div>; }
+function CostLine({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) { return <div className="mt-1 flex items-center justify-between gap-3 first:mt-0"><span className={`${strong ? "font-bold text-slate-700" : "text-slate-500"} text-xs`}>{label}</span><strong className={`${strong ? "text-sm" : "text-xs"} text-slate-950`}>{value}</strong></div>; }

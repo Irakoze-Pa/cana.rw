@@ -713,7 +713,7 @@ export default function AccountingPage() {
       status: "Management accounts",
       details: [
         { label: "Period", value: `${from} to ${to}` },
-        { label: "Revenue", value: money(summary.revenue) },
+        { label: "Turnover (excluding tax)", value: money(summary.revenue) },
         { label: "Expenses", value: money(summary.expenses) },
         { label: "Net result", value: money(summary.netProfit) },
       ],
@@ -960,6 +960,8 @@ export default function AccountingPage() {
         <Overview
           summary={summary}
           loading={loading}
+          from={from}
+          to={to}
           groupedAccounts={groupedAccounts}
           treasuryAccounts={treasury.accounts}
           canSetup={canPostJournal}
@@ -1138,6 +1140,8 @@ function AccountingTabs({
 function Overview({
   summary,
   loading,
+  from,
+  to,
   groupedAccounts,
   treasuryAccounts,
   canSetup,
@@ -1145,24 +1149,29 @@ function Overview({
 }: {
   summary: Summary;
   loading: boolean;
+  from: string;
+  to: string;
   groupedAccounts: [string, Account[]][];
   treasuryAccounts: TreasuryAccount[];
   canSetup: boolean;
   onAddAccount: () => void;
 }) {
+  const turnover = Number(summary.revenue || 0);
+  const netMargin = turnover > 0 ? (summary.netProfit / turnover) * 100 : 0;
+  const costRatio = turnover > 0 ? (summary.expenses / turnover) * 100 : 0;
   const primaryMetrics = [
+    { label: "Turnover", value: turnover, icon: CircleDollarSign },
     { label: "Available funds", value: summary.cashAndBank, icon: Landmark },
     {
       label: "Customers owe",
       value: summary.receivables,
       icon: WalletCards,
     },
-    { label: "Owed to suppliers", value: summary.payables, icon: BookOpen },
     { label: "Period result", value: summary.netProfit, icon: CircleDollarSign },
   ];
   const supportingMetrics = [
-    { label: "Sales revenue", value: summary.revenue },
     { label: "Operating costs", value: summary.expenses },
+    { label: "Owed to suppliers", value: summary.payables },
     { label: "Equipment value", value: summary.fixedAssets },
     { label: "Outstanding loans", value: summary.ownerLoans },
     { label: "Tax payable", value: summary.taxPayable },
@@ -1192,6 +1201,28 @@ function Overview({
             </article>
           );
         })}
+      </section>
+      <section className="grid overflow-hidden border border-slate-200 bg-white lg:grid-cols-[1.15fr_.85fr]">
+        <div className="border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[.14em] text-red-700">Commercial performance</p>
+              <h2 className="mt-1 text-sm font-extrabold text-slate-950">Turnover for the selected period</h2>
+            </div>
+            <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">{displayDate(from)} – {displayDate(to)}</span>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden border border-slate-200 bg-slate-200">
+            <PerformanceValue label="Turnover" value={loading ? "—" : money(turnover)} />
+            <PerformanceValue label="Recognised costs" value={loading ? "—" : money(summary.expenses)} />
+            <PerformanceValue label="Net result" value={loading ? "—" : money(summary.netProfit)} negative={summary.netProfit < 0} />
+          </div>
+          <p className="mt-3 text-[10px] leading-4 text-slate-500">Turnover is recognised from issued customer invoices in this period, excluding output tax. It is not the same as cash collected.</p>
+        </div>
+        <div className="p-4">
+          <p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-500">Performance ratios</p>
+          <Ratio label="Net margin" value={netMargin} tone={netMargin < 0 ? "negative" : "positive"} />
+          <Ratio label="Cost to turnover" value={costRatio} tone={costRatio > 100 ? "negative" : "neutral"} />
+        </div>
       </section>
       <section className="grid grid-cols-2 gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-5">
         {supportingMetrics.map((metric) => (
@@ -1269,7 +1300,7 @@ function Overview({
             <Statement
               title="Income statement"
               rows={[
-                ["Sales revenue", summary.revenue],
+                ["Turnover (excluding tax)", summary.revenue],
                 ["Operating and direct costs", summary.expenses],
                 ["Net profit / (loss)", summary.netProfit],
               ]}
@@ -1339,6 +1370,61 @@ function FinanceLink({
       </span>
       <ChevronRight size={16} className="ml-auto shrink-0 text-slate-400" />
     </Link>
+  );
+}
+
+function PerformanceValue({
+  label,
+  value,
+  negative = false,
+}: {
+  label: string;
+  value: string;
+  negative?: boolean;
+}) {
+  return (
+    <div className="min-w-0 bg-white px-3 py-2.5">
+      <p className="truncate text-[9px] font-extrabold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p
+        className={`mt-1 truncate text-sm font-black ${negative ? "text-red-700" : "text-slate-950"}`}
+        title={value}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function Ratio({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "positive" | "negative" | "neutral";
+}) {
+  const width = Math.min(100, Math.max(0, Math.abs(value)));
+  const bar =
+    tone === "negative"
+      ? "bg-red-700"
+      : tone === "positive"
+        ? "bg-emerald-600"
+        : "bg-slate-700";
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span className="font-semibold text-slate-600">{label}</span>
+        <strong className={tone === "negative" ? "text-red-700" : "text-slate-950"}>
+          {Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 1 })}%
+        </strong>
+      </div>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <div className={`h-full rounded-full ${bar}`} style={{ width: `${width}%` }} />
+      </div>
+    </div>
   );
 }
 

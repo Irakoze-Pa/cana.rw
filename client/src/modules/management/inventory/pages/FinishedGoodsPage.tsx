@@ -17,6 +17,7 @@ import { Link } from "react-router-dom";
 import api from "@/services/api";
 import { useToast } from "@/context/toastContext";
 import { useAuth } from "@/context/authContext";
+import { useConfirmation } from "@/context/confirmationContext";
 import { printCanaDocument } from "@/modules/management/utils/printCanaDocument";
 
 type Product = {
@@ -87,6 +88,7 @@ const isScaffolding = (product?: Product | null) =>
 export default function FinishedGoodsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { confirm } = useConfirmation();
   const [balances, setBalances] = useState<Balance[]>([]);
   const [catalogue, setCatalogue] = useState<"paint" | "scaffold">("paint");
   const [transfers, setTransfers] = useState<Transfer[]>([]);
@@ -115,6 +117,9 @@ export default function FinishedGoodsPage() {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [stockSearch, setStockSearch] = useState("");
+  const [transferSearch, setTransferSearch] = useState("");
+  const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null);
   const isSuperAdmin = user?.role === "superadmin";
   const canManageMinimums =
     user?.role === "superadmin" || user?.role === "admin";
@@ -189,6 +194,10 @@ export default function FinishedGoodsPage() {
   const transferQuantity =
     Number(form.quantityInput) *
     (form.quantityMode === "packs" ? Number(selected?.packSizeKg || 0) : 1);
+  const sourceQuantity = selected
+    ? balanceFor(selected._id, form.fromStore)
+    : 0;
+  const projectedSourceQuantity = sourceQuantity - transferQuantity;
   const sendTransfer = async (event: React.FormEvent) => {
     event.preventDefault();
     if (form.fromStore === form.toStore)
@@ -200,6 +209,17 @@ export default function FinishedGoodsPage() {
           ? "Enter a valid number of packs. This product must have a pack size before packs can be transferred."
           : `Enter a valid quantity in ${isPieceProduct ? "pieces" : "kg"}.`,
       );
+    if (transferQuantity > sourceQuantity)
+      return setError(
+        `Only ${stockWithPacks(sourceQuantity, selected)} is available in ${storeName(form.fromStore)}.`,
+      );
+    const approved = await confirm({
+      title: "Confirm store transfer",
+      description: `Transfer ${stockWithPacks(transferQuantity, selected)} of ${selected.name} from ${storeName(form.fromStore)} to ${storeName(form.toStore)}? The source balance will become ${stockWithPacks(projectedSourceQuantity, selected)}.`,
+      confirmLabel: "Post transfer",
+      tone: "warning",
+    });
+    if (!approved) return;
     try {
       setBusy(true);
       setError("");
@@ -327,6 +347,27 @@ export default function FinishedGoodsPage() {
         ? isScaffolding(transfer.product)
         : !isScaffolding(transfer.product)),
   );
+  const visibleProducts = products.filter((product) => {
+    const query = stockSearch.trim().toLowerCase();
+    return !query || `${product.name} ${product.code}`.toLowerCase().includes(query);
+  });
+  const visibleTransfers = scopedTransfers.filter((transfer) => {
+    const query = transferSearch.trim().toLowerCase();
+    return (
+      !query ||
+      `${transfer.reference} ${transfer.product?.name || ""} ${transfer.product?.code || ""} ${transfer.performedBy?.fullName || ""}`
+        .toLowerCase()
+        .includes(query)
+    );
+  });
+  const productionPacks = products.reduce((sum, product) => {
+    const packSize = Number(product.packSizeKg || 0);
+    return sum + (packSize > 0 ? balanceFor(product._id, "production") / packSize : 0);
+  }, 0);
+  const salesPacks = products.reduce((sum, product) => {
+    const packSize = Number(product.packSizeKg || 0);
+    return sum + (packSize > 0 ? balanceFor(product._id, "sales") / packSize : 0);
+  }, 0);
   const totalProduction = scopedBalances
     .filter((balance) => balance.store === "production")
     .reduce((sum, balance) => sum + balance.quantity, 0);
@@ -420,26 +461,23 @@ export default function FinishedGoodsPage() {
       Number(balance.quantity || 0) <= Number(balance.minimumQuantity || 0),
   );
   return (
-    <div className="mx-auto max-w-7xl space-y-4 pb-6">
-      <header className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
-        <div className="flex gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600">
-            <PackageCheck size={21} />
-          </span>
+    <div className="mx-auto max-w-[1480px] space-y-3 pb-5">
+      <header className="border border-slate-200 bg-white">
+        <div className="flex flex-col justify-between gap-3 border-b border-slate-200 px-4 py-4 lg:flex-row lg:items-center">
           <div>
-            <p className="cana-section-kicker">Inventory & stores</p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
+            <p className="text-[10px] font-black uppercase tracking-[.16em] text-red-700">Inventory & stores</p>
+            <h1 className="mt-1 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
               {catalogue === "scaffold"
                 ? "Scaffolding equipment stores"
                 : "Finished-goods stores"}
             </h1>
+            <p className="mt-1 text-xs font-medium text-slate-500">Production stock, sales stock, valuation and internal transfers.</p>
           </div>
-        </div>
-        <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
           {canManageMinimums && (
             <button
               onClick={() => setShowMinimum(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:border-slate-400"
             >
               <SlidersHorizontal size={16} />
               Minimum balances
@@ -448,7 +486,7 @@ export default function FinishedGoodsPage() {
           {isSuperAdmin && (
             <button
               onClick={() => setShowAdjustment(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:border-slate-400"
             >
               <SlidersHorizontal size={16} />
               Adjust stock
@@ -456,7 +494,7 @@ export default function FinishedGoodsPage() {
           )}
           <Link
             to="/management/products"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:border-slate-400"
           >
             <PencilLine size={16} />
             Product catalogue
@@ -464,21 +502,21 @@ export default function FinishedGoodsPage() {
           <button
             onClick={printFinishedGoodsValuation}
             disabled={!products.length}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-black disabled:opacity-40"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-slate-950 px-3 text-xs font-bold text-white hover:bg-black disabled:opacity-40"
           >
             <Printer size={16} />
             Print valuation
           </button>
           <button
             onClick={() => void load()}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:border-slate-400"
           >
             <RefreshCw size={16} />
             Refresh
           </button>
+          </div>
         </div>
-      </header>
-      <div className="flex flex-wrap gap-2">
+        <div className="flex gap-1 p-1.5">
         <button
           type="button"
           onClick={() => {
@@ -490,7 +528,7 @@ export default function FinishedGoodsPage() {
               quantityMode: "packs",
             }));
           }}
-          className={`rounded-lg px-4 py-2 text-sm font-bold transition ${catalogue === "paint" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+          className={`rounded-md px-3 py-2 text-xs font-extrabold transition ${catalogue === "paint" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100"}`}
         >
           Paint finished goods
         </button>
@@ -505,11 +543,12 @@ export default function FinishedGoodsPage() {
               quantityMode: "pcs",
             }));
           }}
-          className={`rounded-lg px-4 py-2 text-sm font-bold transition ${catalogue === "scaffold" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+          className={`rounded-md px-3 py-2 text-xs font-extrabold transition ${catalogue === "scaffold" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100"}`}
         >
           Scaffolding equipment
         </button>
-      </div>
+        </div>
+      </header>
       {showAdjustment && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4">
           <form
@@ -788,18 +827,20 @@ export default function FinishedGoodsPage() {
           {error}
         </p>
       )}
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid overflow-hidden border border-slate-200 bg-white sm:grid-cols-2 xl:grid-cols-5 xl:divide-x xl:divide-slate-200">
         <Metric
           icon={<Factory size={19} />}
           label="Production Store"
-          value={number(totalProduction)}
-          unit={catalogue === "scaffold" ? "pcs" : "kg"}
+          value={number(catalogue === "scaffold" ? totalProduction : productionPacks)}
+          unit={catalogue === "scaffold" ? "pcs" : "packs"}
+          helper={catalogue === "paint" ? `${number(totalProduction)} kg` : undefined}
         />
         <Metric
           icon={<Store size={19} />}
           label="Sales Store"
-          value={number(totalSales)}
-          unit={catalogue === "scaffold" ? "pcs" : "kg"}
+          value={number(catalogue === "scaffold" ? totalSales : salesPacks)}
+          unit={catalogue === "scaffold" ? "pcs" : "packs"}
+          helper={catalogue === "paint" ? `${number(totalSales)} kg` : undefined}
         />
         <Metric
           icon={<ArrowRightLeft size={19} />}
@@ -839,11 +880,9 @@ export default function FinishedGoodsPage() {
         </section>
       )}
       <section className="grid gap-4 xl:grid-cols-[.95fr_1.55fr]">
-        <form onSubmit={sendTransfer} className="cana-panel p-5">
-          <div className="flex items-center gap-3">
-            <span className="rounded-xl bg-red-50 p-2 text-red-700">
-              <ArrowRightLeft size={19} />
-            </span>
+        <form onSubmit={sendTransfer} className="border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+            <ArrowRightLeft size={17} className="text-red-700" />
             <div>
               <h2 className="font-bold text-slate-900">
                 {catalogue === "scaffold"
@@ -852,7 +891,7 @@ export default function FinishedGoodsPage() {
               </h2>
             </div>
           </div>
-          <div className="mt-5 space-y-4">
+          <div className="mt-4 space-y-3">
             <label className="block text-sm font-semibold text-gray-700">
               Product
               <select
@@ -861,7 +900,7 @@ export default function FinishedGoodsPage() {
                 onChange={(event) =>
                   setForm({ ...form, product: event.target.value })
                 }
-                className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 px-3 text-sm"
+                className="mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-950"
               >
                 <option value="">
                   Select{" "}
@@ -893,7 +932,7 @@ export default function FinishedGoodsPage() {
                           : form.toStore,
                     })
                   }
-                  className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 px-3 text-sm"
+                  className="mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-950"
                 >
                   <option value="production">Production Store</option>
                   <option value="sales">Sales Store</option>
@@ -915,20 +954,20 @@ export default function FinishedGoodsPage() {
                           : form.fromStore,
                     })
                   }
-                  className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 px-3 text-sm"
+                  className="mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-950"
                 >
                   <option value="sales">Sales Store</option>
                   <option value="production">Production Store</option>
                 </select>
               </label>
             </div>
-            <div className="rounded-2xl border border-red-100 bg-red-50/40 p-3.5">
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-bold text-slate-900">
                   Transfer quantity
                 </p>
                 {isPieceProduct ? (
-                  <span className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800">
+                  <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700">
                     By piece
                   </span>
                 ) : (
@@ -941,7 +980,7 @@ export default function FinishedGoodsPage() {
                         quantityInput: "",
                       })
                     }
-                    className="h-10 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-slate-800"
+                    className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700"
                   >
                     <option value="packs">By pack</option>
                     <option value="kg">By kg</option>
@@ -977,7 +1016,7 @@ export default function FinishedGoodsPage() {
                         ? "12"
                         : "240"
                   }
-                  className="mt-1.5 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm disabled:bg-slate-100"
+                  className="mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-950 disabled:bg-slate-100"
                 />
               </label>
               {selected && form.quantityInput && (
@@ -987,7 +1026,7 @@ export default function FinishedGoodsPage() {
               )}
             </div>
             {selected && (
-              <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+              <p className="border-l-2 border-red-700 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 Available in {storeName(form.fromStore)}:{" "}
                 <strong>
                   {stockWithPacks(
@@ -1006,37 +1045,45 @@ export default function FinishedGoodsPage() {
                   setForm({ ...form, notes: event.target.value })
                 }
                 rows={2}
-                className="mt-1.5 w-full rounded-xl border border-gray-300 p-3 text-sm"
+                className="mt-1 w-full rounded-md border border-slate-200 p-2.5 text-sm outline-none focus:border-slate-950"
                 placeholder="Example: Replenishment for Kigali sales outlet"
               />
             </label>
             <button
               disabled={busy}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white disabled:bg-gray-300"
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-red-700 px-4 text-sm font-extrabold text-white hover:bg-red-800 disabled:bg-slate-300"
             >
               <Send size={16} />
               {busy ? "Recording…" : "Record transfer"}
             </button>
           </div>
         </form>
-        <div className="cana-panel overflow-hidden">
-          <div className="border-b border-gray-100 p-5">
-            <h2 className="font-bold text-slate-900">
-              Store balances by product
-            </h2>
+        <div className="overflow-hidden border border-slate-200 bg-white">
+          <div className="flex flex-col gap-2 border-b border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-bold text-slate-900">Store balances by product</h2>
+              <p className="text-[10px] font-semibold text-slate-500">{visibleProducts.length} of {products.length} products</p>
+            </div>
+            <input
+              value={stockSearch}
+              onChange={(event) => setStockSearch(event.target.value)}
+              placeholder="Search product or code"
+              aria-label="Search finished goods"
+              className="h-9 w-full rounded-md border border-slate-200 px-3 text-xs outline-none focus:border-slate-950 sm:w-56"
+            />
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <div className="max-h-[520px] overflow-auto">
+            <table className="min-w-full text-left text-xs">
+              <thead className="sticky top-0 z-10 bg-slate-950 text-[9px] uppercase tracking-wide text-white">
                 <tr>
-                  <th className="px-5 py-3">Product</th>
-                  <th className="px-5 py-3 text-right">Production Store</th>
-                  <th className="px-5 py-3 text-right">Sales Store</th>
-                  <th className="px-5 py-3 text-right">Total</th>
+                  <th className="px-3 py-2.5">Product</th>
+                  <th className="px-3 py-2.5 text-right">Production</th>
+                  <th className="px-3 py-2.5 text-right">Sales</th>
+                  <th className="px-3 py-2.5 text-right">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {products.map((product) => {
+                {visibleProducts.map((product) => {
                   const production = balanceFor(product._id, "production"),
                     sales = balanceFor(product._id, "sales");
                   const productionMinimum = Number(
@@ -1063,18 +1110,18 @@ export default function FinishedGoodsPage() {
                         productionLow || salesLow ? "bg-red-50/40" : ""
                       }
                     >
-                      <td className="px-5 py-4">
-                        <p className="font-semibold text-gray-900">
+                      <td className="px-3 py-2.5">
+                        <p className="font-extrabold text-slate-950">
                           {product.name}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-[10px] text-slate-500">
                           {isScaffolding(product)
                             ? `${product.code} · Equipment · counted in pieces`
                             : `${product.code} · ${product.unit} pack · ${number(product.packSizeKg || 0)} kg per pack`}
                         </p>
                       </td>
                       <td
-                        className={`px-5 py-4 text-right ${productionLow ? "text-red-700" : ""}`}
+                        className={`px-3 py-2.5 text-right ${productionLow ? "text-red-700" : ""}`}
                       >
                         <p className="font-extrabold text-slate-950">
                           {isScaffolding(product)
@@ -1082,13 +1129,13 @@ export default function FinishedGoodsPage() {
                             : packs(production, product) || "Pack size not set"}
                         </p>
                         {!isScaffolding(product) && (
-                          <p className="mt-0.5 text-xs font-medium text-gray-500">
+                          <p className="mt-0.5 text-[10px] font-medium text-slate-500">
                             {number(production)} kg
                           </p>
                         )}
                         {productionMinimum > 0 && (
                           <p
-                            className={`mt-1 text-xs font-bold ${productionLow ? "text-red-700" : "text-slate-500"}`}
+                            className={`mt-1 text-[9px] font-bold ${productionLow ? "text-red-700" : "text-slate-500"}`}
                           >
                             Min. {number(productionMinimum)}{" "}
                             {isScaffolding(product) ? "pcs" : "kg"}
@@ -1097,7 +1144,7 @@ export default function FinishedGoodsPage() {
                         )}
                       </td>
                       <td
-                        className={`px-5 py-4 text-right ${salesLow ? "text-red-700" : ""}`}
+                        className={`px-3 py-2.5 text-right ${salesLow ? "text-red-700" : ""}`}
                       >
                         <p className="font-extrabold text-slate-950">
                           {isScaffolding(product)
@@ -1105,13 +1152,13 @@ export default function FinishedGoodsPage() {
                             : packs(sales, product) || "Pack size not set"}
                         </p>
                         {!isScaffolding(product) && (
-                          <p className="mt-0.5 text-xs font-medium text-gray-500">
+                          <p className="mt-0.5 text-[10px] font-medium text-slate-500">
                             {number(sales)} kg
                           </p>
                         )}
                         {salesMinimum > 0 && (
                           <p
-                            className={`mt-1 text-xs font-bold ${salesLow ? "text-red-700" : "text-slate-500"}`}
+                            className={`mt-1 text-[9px] font-bold ${salesLow ? "text-red-700" : "text-slate-500"}`}
                           >
                             Min. {number(salesMinimum)}{" "}
                             {isScaffolding(product) ? "pcs" : "kg"}
@@ -1119,7 +1166,7 @@ export default function FinishedGoodsPage() {
                           </p>
                         )}
                       </td>
-                      <td className="px-5 py-4 text-right text-slate-900">
+                      <td className="px-3 py-2.5 text-right text-slate-900">
                         <p className="font-extrabold">
                           {isScaffolding(product)
                             ? `${number(production + sales)} pcs`
@@ -1127,7 +1174,7 @@ export default function FinishedGoodsPage() {
                               "Pack size not set"}
                         </p>
                         {!isScaffolding(product) && (
-                          <p className="mt-0.5 text-xs font-medium text-gray-500">
+                          <p className="mt-0.5 text-[10px] font-medium text-slate-500">
                             {number(production + sales)} kg
                           </p>
                         )}
@@ -1135,7 +1182,7 @@ export default function FinishedGoodsPage() {
                     </tr>
                   );
                 })}
-                {products.length === 0 && (
+                {visibleProducts.length === 0 && (
                   <tr>
                     <td colSpan={4} className="p-10 text-center text-gray-500">
                       No{" "}
@@ -1151,49 +1198,56 @@ export default function FinishedGoodsPage() {
           </div>
         </div>
       </section>
-      <section className="cana-panel overflow-hidden">
-        <div className="flex items-center gap-3 border-b border-gray-100 p-5">
-          <Truck size={19} className="text-slate-600" />
-          <div>
-            <h2 className="font-bold text-slate-900">Transfer history</h2>
+      <section className="overflow-hidden border border-slate-200 bg-white">
+        <div className="flex flex-col gap-2 border-b border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Truck size={18} className="text-slate-600" />
+            <div><h2 className="font-bold text-slate-900">Transfer history</h2><p className="text-[10px] font-semibold text-slate-500">Click a transfer to view its details</p></div>
           </div>
+          <input
+            value={transferSearch}
+            onChange={(event) => setTransferSearch(event.target.value)}
+            placeholder="Search transfer or product"
+            aria-label="Search store transfers"
+            className="h-9 w-full rounded-md border border-slate-200 px-3 text-xs outline-none focus:border-slate-950 sm:w-64"
+          />
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+        <div className="max-h-[390px] overflow-auto">
+          <table className="min-w-full text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-slate-950 text-[9px] uppercase tracking-wide text-white">
               <tr>
-                <th className="px-5 py-3">Reference</th>
-                <th className="px-5 py-3">Product</th>
-                <th className="px-5 py-3">Movement</th>
-                <th className="px-5 py-3 text-right">Quantity</th>
-                <th className="px-5 py-3">Recorded by</th>
+                <th className="px-3 py-2.5">Reference</th>
+                <th className="px-3 py-2.5">Product</th>
+                <th className="px-3 py-2.5">Movement</th>
+                <th className="px-3 py-2.5 text-right">Quantity</th>
+                <th className="px-3 py-2.5">Recorded by</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {scopedTransfers.map((transfer) => (
-                <tr key={transfer._id}>
-                  <td className="px-5 py-4 font-semibold">
+              {visibleTransfers.map((transfer) => (
+                <tr key={transfer._id} onClick={() => setSelectedTransfer(transfer)} className="cursor-pointer transition hover:bg-slate-50">
+                  <td className="px-3 py-2.5 font-extrabold text-slate-950">
                     {transfer.reference}
-                    <p className="mt-0.5 text-xs font-normal text-gray-500">
+                    <p className="mt-0.5 text-[9px] font-normal text-slate-500">
                       {new Date(transfer.createdAt).toLocaleString()}
                     </p>
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-3 py-2.5 font-semibold">
                     {transfer.product?.name || "Deleted product"}
                   </td>
-                  <td className="px-5 py-4 text-gray-600">
+                  <td className="px-3 py-2.5 text-slate-600">
                     {storeName(transfer.fromStore)} →{" "}
                     {storeName(transfer.toStore)}
                   </td>
-                  <td className="px-5 py-4 text-right font-bold">
+                  <td className="px-3 py-2.5 text-right font-extrabold">
                     {stockWithPacks(transfer.quantity, transfer.product)}
                   </td>
-                  <td className="px-5 py-4 text-gray-600">
+                  <td className="px-3 py-2.5 text-slate-600">
                     {transfer.performedBy?.fullName || "—"}
                   </td>
                 </tr>
               ))}
-              {scopedTransfers.length === 0 && (
+              {visibleTransfers.length === 0 && (
                 <tr>
                   <td colSpan={5} className="p-10 text-center text-gray-500">
                     No store transfers recorded yet.
@@ -1204,6 +1258,29 @@ export default function FinishedGoodsPage() {
           </table>
         </div>
       </section>
+      {selectedTransfer && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-3 backdrop-blur-sm" onMouseDown={() => setSelectedTransfer(null)}>
+          <section role="dialog" aria-modal="true" aria-label="Store transfer details" onMouseDown={(event) => event.stopPropagation()} className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <header className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+              <div><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-red-700">Store transfer</p><h2 className="mt-0.5 text-lg font-black text-slate-950">{selectedTransfer.reference}</h2><p className="text-xs text-slate-500">{new Date(selectedTransfer.createdAt).toLocaleString("en-RW")}</p></div>
+              <button type="button" onClick={() => setSelectedTransfer(null)} aria-label="Close transfer details" className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100"><X size={16} /></button>
+            </header>
+            <div className="space-y-4 p-5">
+              <div><p className="text-[9px] font-extrabold uppercase tracking-wide text-slate-500">Product</p><p className="mt-1 font-extrabold text-slate-950">{selectedTransfer.product?.name || "Deleted product"}</p><p className="text-xs text-slate-500">{selectedTransfer.product?.code || "—"}</p></div>
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+                <div><p className="text-[9px] font-extrabold uppercase text-slate-500">From</p><p className="mt-1 text-xs font-black text-slate-950">{storeName(selectedTransfer.fromStore)}</p></div>
+                <ArrowRightLeft size={17} className="text-red-700" />
+                <div><p className="text-[9px] font-extrabold uppercase text-slate-500">To</p><p className="mt-1 text-xs font-black text-slate-950">{storeName(selectedTransfer.toStore)}</p></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 p-3"><p className="text-[9px] font-extrabold uppercase text-slate-500">Quantity moved</p><p className="mt-1 text-sm font-black text-slate-950">{stockWithPacks(selectedTransfer.quantity, selectedTransfer.product)}</p></div>
+                <div className="rounded-xl border border-slate-200 p-3"><p className="text-[9px] font-extrabold uppercase text-slate-500">Recorded by</p><p className="mt-1 truncate text-sm font-black text-slate-950">{selectedTransfer.performedBy?.fullName || "—"}</p></div>
+              </div>
+              {selectedTransfer.notes && <div className="rounded-xl border border-slate-200 p-3"><p className="text-[9px] font-extrabold uppercase text-slate-500">Notes</p><p className="mt-1 text-sm text-slate-700">{selectedTransfer.notes}</p></div>}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -1212,26 +1289,29 @@ function Metric({
   label,
   value,
   unit = "kg",
+  helper,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   unit?: string;
+  helper?: string;
 }) {
   return (
-    <article className="cana-panel p-4">
-      <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-700">
+    <article className="min-w-0 border-b border-slate-200 px-3 py-3 last:border-b-0 sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:[&:nth-child(odd)]:border-r-0">
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-700">
           {icon}
         </span>
-        <div>
+        <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[.1em] text-gray-500">
             {label}
           </p>
-          <p className="mt-0.5 text-xl font-extrabold tracking-tight text-slate-950">
+          <p className="mt-0.5 truncate text-lg font-black tracking-tight text-slate-950">
             {value}
             {unit ? ` ${unit}` : ""}
           </p>
+          {helper && <p className="mt-0.5 text-[10px] font-semibold text-slate-500">{helper}</p>}
         </div>
       </div>
     </article>

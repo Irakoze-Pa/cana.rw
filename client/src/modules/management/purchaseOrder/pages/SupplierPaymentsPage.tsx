@@ -3,6 +3,7 @@ import {
   Banknote,
   CheckCircle2,
   CreditCard,
+  Eye,
   Plus,
   Printer,
   RefreshCw,
@@ -115,6 +116,8 @@ export default function SupplierPaymentsPage() {
   const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [openingOpen, setOpeningOpen] = useState(false);
+  const [selectedSupplierAccount, setSelectedSupplierAccount] =
+    useState<Account | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -710,12 +713,24 @@ export default function SupplierPaymentsPage() {
                 <th className="w-[19%] px-3 py-2 text-right">Purchases</th>
                 <th className="w-[17%] px-3 py-2 text-right">Paid</th>
                 <th className="w-[17%] px-3 py-2 text-right">Balance</th>
-                <th className="w-[17%] px-3 py-2 text-center">Statement</th>
+                <th className="w-[17%] px-3 py-2 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {concernedAccounts.map((account) => (
-                <tr key={account.supplier._id} className="hover:bg-slate-50">
+                <tr
+                  key={account.supplier._id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedSupplierAccount(account)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedSupplierAccount(account);
+                    }
+                  }}
+                  className="cursor-pointer transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+                >
                   <td className="px-3 py-2">
                     <p className="truncate font-bold text-slate-950">
                       {account.supplier.name}
@@ -734,15 +749,32 @@ export default function SupplierPaymentsPage() {
                     {money(account.balance)}
                   </td>
                   <td className="px-3 py-2 text-center">
-                    <button
-                      type="button"
-                      onClick={() => printSupplierStatement(account)}
-                      title={`Print statement for ${account.supplier.name}`}
-                      aria-label={`Print statement for ${account.supplier.name}`}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
-                    >
-                      <Printer size={14} />
-                    </button>
+                    <div className="flex justify-center gap-1">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedSupplierAccount(account);
+                        }}
+                        title="View supplier account"
+                        aria-label={`View account details for ${account.supplier.name}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+                      >
+                        <Eye size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          printSupplierStatement(account);
+                        }}
+                        title={`Print statement for ${account.supplier.name}`}
+                        aria-label={`Print statement for ${account.supplier.name}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+                      >
+                        <Printer size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1301,7 +1333,134 @@ export default function SupplierPaymentsPage() {
           </form>
         </div>
       )}
+      {selectedSupplierAccount && (
+        <SupplierAccountDetails
+          account={selectedSupplierAccount}
+          orders={orders}
+          payments={payments}
+          openings={openings}
+          onClose={() => setSelectedSupplierAccount(null)}
+          onPrint={() => printSupplierStatement(selectedSupplierAccount)}
+        />
+      )}
     </div>
+  );
+}
+
+function SupplierAccountDetails({
+  account,
+  orders,
+  payments,
+  openings,
+  onClose,
+  onPrint,
+}: {
+  account: Account;
+  orders: PO[];
+  payments: Payment[];
+  openings: Opening[];
+  onClose: () => void;
+  onPrint: () => void;
+}) {
+  const supplierId = account.supplier._id;
+  const accountOrders = orders.filter(
+    (item) =>
+      typeof item.supplier !== "string" && item.supplier._id === supplierId,
+  );
+  const accountPayments = payments.filter(
+    (item) => item.supplier?._id === supplierId,
+  );
+  const accountOpenings = openings.filter(
+    (item) => item.supplier?._id === supplierId && item.status !== "void",
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-3 backdrop-blur-sm" onMouseDown={onClose}>
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${account.supplier.name} account details`}
+        onMouseDown={(event) => event.stopPropagation()}
+        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-red-700">Supplier account</p>
+            <h2 className="truncate text-lg font-black text-slate-950">{account.supplier.name}</h2>
+            <p className="truncate text-xs text-slate-500">{[account.supplier.code, account.supplier.phone].filter(Boolean).join(" · ") || "Account activity"}</p>
+          </div>
+          <div className="flex shrink-0 gap-1.5">
+            <button type="button" onClick={onPrint} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-slate-950 px-3 text-xs font-bold text-white">
+              <Printer size={14} /> <span className="hidden sm:inline">Statement</span>
+            </button>
+            <button type="button" onClick={onClose} aria-label="Close account details" className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100">
+              <X size={16} />
+            </button>
+          </div>
+        </header>
+        <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 border-b border-slate-200 bg-slate-50 sm:grid-cols-4 sm:divide-y-0">
+          {[
+            ["Purchases & openings", account.purchaseOrderTotal + account.openingTotal],
+            ["Cleared payments", account.amountPaid],
+            ["Pending cheques", account.pendingCheques],
+            ["Outstanding balance", account.balance],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="px-3 py-2.5">
+              <p className="text-[9px] font-extrabold uppercase tracking-wide text-slate-500">{label}</p>
+              <p className="mt-0.5 truncate text-sm font-black text-slate-950">{money(Number(value))} RWF</p>
+            </div>
+          ))}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <SupplierActivity title="Purchase orders" count={accountOrders.length} empty="No purchase orders for this supplier.">
+              {accountOrders.map((order) => {
+                const value = Number(order.receivedTotal ?? order.total ?? 0);
+                const balance = Number(order.balance ?? Math.max(0, value - Number(order.amountPaid || 0)));
+                return (
+                  <div key={order._id} className="grid grid-cols-[1fr_auto] gap-3 border-t border-slate-100 px-3 py-2 first:border-t-0">
+                    <span className="min-w-0"><span className="block truncate text-xs font-extrabold text-slate-950">{order.poNumber}</span><span className="block text-[10px] text-slate-500">{new Date(order.orderDate || order.createdAt || "").toLocaleDateString("en-RW")} · {order.status.replaceAll("_", " ")}</span></span>
+                    <span className="text-right text-xs font-black text-slate-950">{money(balance)} RWF<span className="block text-[9px] font-medium text-slate-500">of {money(value)}</span></span>
+                  </div>
+                );
+              })}
+            </SupplierActivity>
+            <SupplierActivity title="Payments & cheques" count={accountPayments.length} empty="No settlements recorded for this supplier.">
+              {accountPayments.map((payment) => {
+                const state = payment.method === "bank_cheque" ? payment.chequeStatus || "issued" : "cleared";
+                return (
+                  <div key={payment._id} className="grid grid-cols-[1fr_auto] gap-3 border-t border-slate-100 px-3 py-2 first:border-t-0">
+                    <span className="min-w-0"><span className="block truncate text-xs font-extrabold text-slate-950">{payment.paymentNumber}</span><span className="block truncate text-[10px] text-slate-500">{new Date(payment.paidAt).toLocaleDateString("en-RW")} · {payment.method.replaceAll("_", " ")}{payment.purchaseOrder?.poNumber ? ` · ${payment.purchaseOrder.poNumber}` : ""}</span></span>
+                    <span className={`text-right text-xs font-black ${state === "cleared" ? "text-emerald-700" : "text-amber-700"}`}>{money(payment.amount)} RWF<span className="block text-[9px] font-medium uppercase">{state}</span></span>
+                  </div>
+                );
+              })}
+            </SupplierActivity>
+            {accountOpenings.length > 0 && (
+              <div className="lg:col-span-2">
+                <SupplierActivity title="Opening payables" count={accountOpenings.length} empty="">
+                  {accountOpenings.map((opening) => (
+                    <div key={opening._id} className="grid grid-cols-[1fr_auto] gap-3 border-t border-slate-100 px-3 py-2 first:border-t-0">
+                      <span className="min-w-0"><span className="block text-xs font-extrabold text-slate-950">{opening.openingNumber}</span><span className="block truncate text-[10px] text-slate-500">{opening.description} · {new Date(opening.openingDate).toLocaleDateString("en-RW")}</span></span>
+                      <span className="text-right text-xs font-black text-slate-950">{money(opening.balance)} RWF<span className="block text-[9px] font-medium text-slate-500">of {money(opening.amount)}</span></span>
+                    </div>
+                  ))}
+                </SupplierActivity>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SupplierActivity({ title, count, empty, children }: { title: string; count: number; empty: string; children: React.ReactNode }) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <header className="flex items-center justify-between bg-slate-50 px-3 py-2"><h3 className="text-xs font-extrabold text-slate-950">{title}</h3><span className="rounded-full bg-white px-2 py-0.5 text-[9px] font-bold text-slate-600">{count}</span></header>
+      {count ? children : <p className="px-3 py-6 text-center text-xs text-slate-500">{empty}</p>}
+    </section>
   );
 }
 

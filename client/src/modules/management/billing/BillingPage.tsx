@@ -158,6 +158,8 @@ export default function BillingPage() {
   const [reversalReason, setReversalReason] = useState("");
   const canReversePayments = user?.role === "superadmin";
   const [invoiceDetails, setInvoiceDetails] = useState<Invoice | null>(null);
+  const [selectedCustomerAccount, setSelectedCustomerAccount] =
+    useState<CustomerAccount | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     invoice: "",
     openingBalance: "",
@@ -1076,14 +1078,23 @@ export default function BillingPage() {
                 <th className="w-[15%] px-2 py-2 text-right">Paid</th>
                 <th className="w-[16%] px-2 py-2 text-right">Balance</th>
                 <th className="w-[10%] px-2 py-2">Status</th>
-                <th className="w-[10%] px-2 py-2 text-center">Print</th>
+                <th className="w-[10%] px-2 py-2 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visibleCustomerAccounts.map((account) => (
                 <tr
                   key={`summary-${account.customer._id}`}
-                  className="hover:bg-slate-50"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedCustomerAccount(account)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedCustomerAccount(account);
+                    }
+                  }}
+                  className="cursor-pointer transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
                 >
                   <td className="px-2 py-2">
                     <p className="font-bold text-slate-950">
@@ -1120,15 +1131,32 @@ export default function BillingPage() {
                     </span>
                   </td>
                   <td className="px-2 py-2 text-center">
-                    <button
-                      type="button"
-                      onClick={() => printCustomerStatement(account)}
-                      title={`Print statement for ${account.customer.businessName || account.customer.fullName}`}
-                      aria-label={`Print statement for ${account.customer.businessName || account.customer.fullName}`}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
-                    >
-                      <Printer size={14} />
-                    </button>
+                    <div className="flex justify-center gap-1">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedCustomerAccount(account);
+                        }}
+                        title="View account details"
+                        aria-label={`View account details for ${account.customer.businessName || account.customer.fullName}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+                      >
+                        <Eye size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          printCustomerStatement(account);
+                        }}
+                        title={`Print statement for ${account.customer.businessName || account.customer.fullName}`}
+                        aria-label={`Print statement for ${account.customer.businessName || account.customer.fullName}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+                      >
+                        <Printer size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -2255,6 +2283,145 @@ export default function BillingPage() {
           </table>
         </div>
       </section>
+      {selectedCustomerAccount && (
+        <CustomerAccountDetails
+          account={selectedCustomerAccount}
+          invoices={invoices}
+          payments={payments}
+          openings={openingBalances}
+          onClose={() => setSelectedCustomerAccount(null)}
+          onPrint={() => printCustomerStatement(selectedCustomerAccount)}
+          onOpenInvoice={(invoice) => {
+            setSelectedCustomerAccount(null);
+            setInvoiceDetails(invoice);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function CustomerAccountDetails({
+  account,
+  invoices,
+  payments,
+  openings,
+  onClose,
+  onPrint,
+  onOpenInvoice,
+}: {
+  account: CustomerAccount;
+  invoices: Invoice[];
+  payments: Payment[];
+  openings: OpeningBalance[];
+  onClose: () => void;
+  onPrint: () => void;
+  onOpenInvoice: (invoice: Invoice) => void;
+}) {
+  const customerId = account.customer._id;
+  const accountInvoices = invoices.filter(
+    (item) => item.customer?._id === customerId && item.status !== "void",
+  );
+  const accountPayments = payments.filter(
+    (item) => item.customer?._id === customerId && item.status !== "void",
+  );
+  const accountOpenings = openings.filter(
+    (item) => item.customer?._id === customerId && item.status !== "void",
+  );
+  const customerName =
+    account.customer.businessName || account.customer.fullName;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-3 backdrop-blur-sm" onMouseDown={onClose}>
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${customerName} account details`}
+        onMouseDown={(event) => event.stopPropagation()}
+        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-red-700">Customer account</p>
+            <h2 className="truncate text-lg font-black text-slate-950">{customerName}</h2>
+            <p className="truncate text-xs text-slate-500">
+              {[account.customer.businessName ? account.customer.fullName : "", account.customer.phone]
+                .filter(Boolean)
+                .join(" · ") || "Account activity"}
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-1.5">
+            <button type="button" onClick={onPrint} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-slate-950 px-3 text-xs font-bold text-white">
+              <Printer size={14} /> <span className="hidden sm:inline">Statement</span>
+            </button>
+            <button type="button" onClick={onClose} aria-label="Close account details" className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100">
+              <X size={16} />
+            </button>
+          </div>
+        </header>
+        <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 border-b border-slate-200 bg-slate-50 sm:grid-cols-4 sm:divide-y-0">
+          {[
+            ["Total charged", account.invoiceTotal + account.openingTotal],
+            ["Payments received", account.amountPaid],
+            ["Outstanding balance", account.balance],
+            ["Invoices", accountInvoices.length],
+          ].map(([label, value], index) => (
+            <div key={String(label)} className="px-3 py-2.5">
+              <p className="text-[9px] font-extrabold uppercase tracking-wide text-slate-500">{label}</p>
+              <p className="mt-0.5 truncate text-sm font-black text-slate-950">
+                {index === 3 ? value : `${money(Number(value))} RWF`}
+              </p>
+            </div>
+          ))}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <AccountActivity title="Invoices" count={accountInvoices.length} empty="No invoices for this customer.">
+              {accountInvoices.map((invoice) => (
+                <button key={invoice._id} type="button" onClick={() => onOpenInvoice(invoice)} className="grid w-full grid-cols-[1fr_auto] gap-3 border-t border-slate-100 px-3 py-2 text-left transition first:border-t-0 hover:bg-slate-50">
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-extrabold text-slate-950">{invoice.invoiceNumber}</span>
+                    <span className="block text-[10px] text-slate-500">{new Date(invoice.issueDate).toLocaleDateString("en-RW")} · {invoice.status.replaceAll("_", " ")}</span>
+                  </span>
+                  <span className="text-right text-xs font-black text-slate-950">{money(invoice.balance)} RWF<span className="block text-[9px] font-medium text-slate-500">of {money(invoice.total)}</span></span>
+                </button>
+              ))}
+            </AccountActivity>
+            <AccountActivity title="Receipts & payments" count={accountPayments.length} empty="No payments recorded for this customer.">
+              {accountPayments.map((payment) => (
+                <div key={payment._id} className="grid grid-cols-[1fr_auto] gap-3 border-t border-slate-100 px-3 py-2 first:border-t-0">
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-extrabold text-slate-950">{payment.receiptNumber}</span>
+                    <span className="block truncate text-[10px] text-slate-500">{new Date(payment.receivedAt).toLocaleDateString("en-RW")} · {payment.method.replaceAll("_", " ")}{payment.invoice?.invoiceNumber ? ` · ${payment.invoice.invoiceNumber}` : ""}</span>
+                  </span>
+                  <span className={`text-right text-xs font-black ${isCompletedPayment(payment) ? "text-emerald-700" : "text-amber-700"}`}>{money(payment.amount)} RWF<span className="block text-[9px] font-medium uppercase">{payment.status || "received"}</span></span>
+                </div>
+              ))}
+            </AccountActivity>
+            {accountOpenings.length > 0 && (
+              <div className="lg:col-span-2">
+                <AccountActivity title="Opening debts" count={accountOpenings.length} empty="">
+                  {accountOpenings.map((opening) => (
+                    <div key={opening._id} className="grid grid-cols-[1fr_auto] gap-3 border-t border-slate-100 px-3 py-2 first:border-t-0">
+                      <span className="min-w-0"><span className="block text-xs font-extrabold text-slate-950">{opening.openingNumber}</span><span className="block truncate text-[10px] text-slate-500">{opening.description} · {new Date(opening.openingDate).toLocaleDateString("en-RW")}</span></span>
+                      <span className="text-right text-xs font-black text-slate-950">{money(opening.balance)} RWF<span className="block text-[9px] font-medium text-slate-500">of {money(opening.amount)}</span></span>
+                    </div>
+                  ))}
+                </AccountActivity>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function AccountActivity({ title, count, empty, children }: { title: string; count: number; empty: string; children: React.ReactNode }) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <header className="flex items-center justify-between bg-slate-50 px-3 py-2"><h3 className="text-xs font-extrabold text-slate-950">{title}</h3><span className="rounded-full bg-white px-2 py-0.5 text-[9px] font-bold text-slate-600">{count}</span></header>
+      {count ? children : <p className="px-3 py-6 text-center text-xs text-slate-500">{empty}</p>}
+    </section>
   );
 }
