@@ -111,6 +111,8 @@ export interface GetTransactionsOptions {
 
   inventory?: string;
 
+  productionBatch?: string;
+
   type?: InventoryTransactionType;
 
   startDate?: Date;
@@ -1313,6 +1315,13 @@ export const getInventoryTransactions =
           options.inventory,
           "inventory ID"
         );
+    }
+
+    if (options.productionBatch) {
+      filter.productionBatch = ensureObjectId(
+        options.productionBatch,
+        "production batch ID",
+      );
     }
 
     if (options.type) {

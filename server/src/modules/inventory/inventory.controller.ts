@@ -386,6 +386,11 @@ export const getInventoryTransactions =
                   )
                 : undefined,
 
+            productionBatch:
+              req.query.productionBatch
+                ? String(req.query.productionBatch)
+                : undefined,
+
             type:
               req.query.type
                 ? String(

@@ -38,6 +38,7 @@ import type {
 import { printCanaDocument } from "../../utils/printCanaDocument";
 import { useConfirmation } from "@/context/confirmationContext";
 import { getMaterialConsumptions } from "../../rawMaterialConsumption/services/materialConsumption.service";
+import api from "@/services/api";
 
 // =====================================================
 // STATUS STYLE
@@ -131,12 +132,26 @@ function canDeleteBatch(batch: ProductionBatch): boolean {
 }
 
 async function printBatchRecord(batch: ProductionBatch) {
-  const consumptions = await getMaterialConsumptions({
-    productionBatch: batch._id,
-  });
+  const [consumptions, transactionResponse] = await Promise.all([
+    getMaterialConsumptions({ productionBatch: batch._id }),
+    api.get<{
+      data?: {
+        transactions?: Array<{
+          rawMaterialName?: string;
+          rawMaterialCode?: string;
+          type: string;
+          quantity: number;
+          unit: string;
+          unitCost: number;
+          totalCost?: number;
+        }>;
+      };
+    }>(`/inventory/transactions?productionBatch=${batch._id}&limit=200`),
+  ]);
   const consumption = consumptions.find(
     (record) => record.status !== "Cancelled",
   );
+  const costTransactions = transactionResponse.data?.data?.transactions || [];
   const outputVariance =
     Number(batch.actualQuantity || 0) - Number(batch.plannedQuantity || 0);
   const outputYield =
@@ -146,18 +161,57 @@ async function printBatchRecord(batch: ProductionBatch) {
         100
       : 0;
   const plannedPacks = getPackBreakdown(batch.plannedQuantity);
-  const actualPacks = getPackBreakdown(batch.actualQuantity);
+  const completeProductionCost =
+    Number(batch.actualMaterialCost || 0) +
+    Number(batch.allocatedLaborCost || 0) +
+    Number(batch.allocatedEnergyCost || 0) +
+    Number(batch.allocatedOtherCost || 0);
+  const completeCostPerKg =
+    Number(batch.actualQuantity || 0) > 0
+      ? completeProductionCost / Number(batch.actualQuantity)
+      : 0;
   const calculatedCostPerPack =
-    Number(batch.costPerKg || 0) * PRODUCTION_PACK_WEIGHT_KG;
-  const materialRows = (consumption?.items || []).map((item, index) => [
-    index + 1,
-    `${item.rawMaterialName}${item.rawMaterialCode ? ` · ${item.rawMaterialCode}` : ""}`,
-    `${formatNumber(item.standardQuantity)} ${item.unit}`,
-    `${formatNumber(item.issuedQuantity)} ${item.unit}`,
-    `${formatNumber(item.actualQuantity)} ${item.unit}`,
-    `${formatNumber(item.wasteQuantity)} / ${formatNumber(item.returnQuantity)} ${item.unit}`,
-    `${Number(item.varianceQuantity || 0) > 0 ? "+" : ""}${formatNumber(item.varianceQuantity)} ${item.unit}`,
-  ]);
+    completeCostPerKg * PRODUCTION_PACK_WEIGHT_KG;
+  const materialRows = (consumption?.items || []).map((item, index) => {
+    const movements = costTransactions.filter(
+      (transaction) =>
+        transaction.rawMaterialCode === item.rawMaterialCode ||
+        transaction.rawMaterialName === item.rawMaterialName,
+    );
+    const issuedCost = movements.reduce(
+      (sum, transaction) =>
+        sum +
+        (transaction.type === "Production Return" ? -1 : 1) *
+          Number(transaction.totalCost ?? transaction.quantity * transaction.unitCost),
+      0,
+    );
+    const issuedQuantity = movements.reduce(
+      (sum, transaction) =>
+        sum +
+        (transaction.type === "Production Return" ? -1 : 1) *
+          Number(transaction.quantity || 0),
+      0,
+    );
+    const quantity = Number(item.actualQuantity || item.issuedQuantity || issuedQuantity);
+    const unitCost = issuedQuantity > 0 ? issuedCost / issuedQuantity : 0;
+
+    return [
+      index + 1,
+      `${item.rawMaterialName}${item.rawMaterialCode ? ` · ${item.rawMaterialCode}` : ""}`,
+      `${formatNumber(quantity)} ${item.unit}`,
+      unitCost > 0 ? formatMoney(unitCost) : "—",
+      issuedCost > 0 ? formatMoney(issuedCost) : "—",
+    ];
+  });
+  if (materialRows.length && batch.costedAt) {
+    materialRows.push([
+      "",
+      "MATERIALS SUBTOTAL",
+      "",
+      "",
+      formatMoney(batch.actualMaterialCost),
+    ]);
+  }
 
   printCanaDocument({
     title: "Production & Cost Record",
@@ -168,7 +222,7 @@ async function printBatchRecord(batch: ProductionBatch) {
         : `${batch.status} · working record`,
     issueDate: batch.endDate || batch.costedAt || undefined,
     brandLine: "CANA Paints · Production Control",
-    orientation: "landscape",
+    orientation: "portrait",
     details: [
       {
         label: "Product",
@@ -177,10 +231,6 @@ async function printBatchRecord(batch: ProductionBatch) {
       {
         label: "Formula",
         value: `${batch.formulaName} · ${batch.formulaCode} v${batch.formulaVersion}`,
-      },
-      {
-        label: "Production lot",
-        value: batch.lotNumber || "—",
       },
       {
         label: "Planned output",
@@ -195,20 +245,8 @@ async function printBatchRecord(batch: ProductionBatch) {
         value: `${PRODUCTION_PACK_WEIGHT_KG} kg per pack`,
       },
       {
-        label: "Planned packs",
-        value: `${formatNumber(plannedPacks.exactPacks)} pack equivalent`,
-      },
-      {
         label: "Actual packs produced",
         value: formatPackOutput(batch.actualQuantity),
-      },
-      {
-        label: "Output variance",
-        value: `${outputVariance > 0 ? "+" : ""}${formatNumber(outputVariance)} ${batch.unit}`,
-      },
-      {
-        label: "Production yield",
-        value: `${formatNumber(outputYield)}%`,
       },
       { label: "Start date", value: formatDate(batch.startDate) },
       { label: "Completion date", value: formatDate(batch.endDate) },
@@ -216,16 +254,6 @@ async function printBatchRecord(batch: ProductionBatch) {
       {
         label: "Material issue reference",
         value: consumption?.consumptionNo || "Not issued",
-      },
-      {
-        label: "Material reconciliation",
-        value: consumption?.status || "Not available",
-      },
-      {
-        label: "Finished goods posted",
-        value: batch.finishedGoodsPostedAt
-          ? formatDate(batch.finishedGoodsPostedAt)
-          : "Not posted",
       },
       {
         label: "Issued materials cost",
@@ -246,7 +274,7 @@ async function printBatchRecord(batch: ProductionBatch) {
           : "Pending completion",
       },
       {
-        label: "Other production cost",
+        label: "Production overhead & other expenses",
         value: batch.costedAt
           ? formatMoney(batch.allocatedOtherCost)
           : "Pending completion",
@@ -254,13 +282,13 @@ async function printBatchRecord(batch: ProductionBatch) {
       {
         label: "Total actual batch cost",
         value: batch.costedAt
-          ? formatMoney(batch.totalActualCost)
+          ? formatMoney(completeProductionCost)
           : "Pending completion",
       },
       {
         label: "Actual cost per kg",
         value: batch.costedAt
-          ? `${formatMoney(batch.costPerKg)} / kg`
+          ? `${formatMoney(completeCostPerKg)} / kg`
           : "Pending completion",
       },
       ...(calculatedCostPerPack > 0
@@ -277,11 +305,9 @@ async function printBatchRecord(batch: ProductionBatch) {
           headers: [
             "#",
             "Raw material",
-            "Standard",
-            "Issued",
-            "Used",
-            "Waste / return",
-            "Variance",
+            "Quantity consumed",
+            "Unit cost",
+            "Total cost",
           ],
           rows: materialRows,
         }
@@ -293,7 +319,7 @@ async function printBatchRecord(batch: ProductionBatch) {
         : "Cost remains provisional until material consumption is confirmed and the batch is completed.",
       !materialRows.length
         ? "No active raw-material consumption record was available for this batch."
-        : "Material quantities are shown as standard / issued / actual usage, with waste, returns and production variance disclosed separately.",
+        : `Production cost includes consumed materials, labour, energy, and all production overhead/other expenses recorded in the formula. Planned pack equivalent: ${formatNumber(plannedPacks.exactPacks)} packs. Output variance: ${outputVariance > 0 ? "+" : ""}${formatNumber(outputVariance)} ${batch.unit}; yield: ${formatNumber(outputYield)}%.`,
     ]
       .filter(Boolean)
       .join(" "),

@@ -802,18 +802,16 @@ export async function updateProductionBatch(
   // ---------------------------------------------------
 
   if (nextStatus === "Completed") {
-    const finalActual =
-      data.actualQuantity !== undefined
-        ? Number(data.actualQuantity)
-        : Number(batch.actualQuantity);
+    const finalActual = Number(batch.plannedQuantity);
 
     if (!Number.isFinite(finalActual) || finalActual <= 0) {
       throw new ProductionBatchServiceError(
-        "A completed batch must have actual produced quantity greater than 0.",
+        "A completed batch must have a planned quantity greater than 0.",
         400,
       );
     }
 
+    batch.actualQuantity = finalActual;
     batch.endDate = new Date();
   }
 

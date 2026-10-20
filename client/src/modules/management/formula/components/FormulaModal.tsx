@@ -1284,11 +1284,11 @@ export default function FormulaModal({
 
                   <div>
                     <h3 className="text-sm font-bold text-gray-900">
-                      Additional Costs
+                      Production Expenses
                     </h3>
 
                     <p className="mt-1 text-xs text-gray-500">
-                      Costs associated with the standard batch.
+                      Add every non-material expense for the standard batch.
                     </p>
 
                     <div className="mt-4 space-y-4">
@@ -1345,7 +1345,7 @@ export default function FormulaModal({
 
                       <div>
                         <label className="text-xs font-semibold text-gray-600">
-                          Other Cost
+                          Production Overhead & Other Expenses
                         </label>
 
                         <input
@@ -1361,6 +1361,7 @@ export default function FormulaModal({
                               )
                             )
                           }
+                          placeholder="Maintenance, transport, cleaning, water and other factory costs"
                           className="mt-1.5 h-11 w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500"
                         />
                       </div>

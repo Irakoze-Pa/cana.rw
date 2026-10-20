@@ -5,6 +5,8 @@ import Product from "../product/product.model";
 import RawMaterial from "../raw-materials/rawMaterial.model";
 import Inventory from "../inventory/inventory.model";
 import SupplierMaterial from "../raw-materials/supplierMaterial.model";
+import RawMaterialConsumption from "../production/materialConsumption/materialConsumption.model";
+import ProductionBatch from "../production/productionBatch/productionBatch.model";
 
 // =====================================================
 // TYPES
@@ -1355,6 +1357,72 @@ export async function updateFormula(
   );
 
   await formula.save();
+
+  // Keep unissued batch recipes aligned with an edited formula. Once material
+  // has been issued the consumption remains immutable for stock auditability.
+  const draftConsumptions = await RawMaterialConsumption.find({
+    formula: formula._id,
+    status: "Draft",
+  });
+
+  if (draftConsumptions.length > 0) {
+    const materialIds = formula.items.map((item: any) => item.rawMaterial);
+    const materials = await RawMaterial.find({ _id: { $in: materialIds } })
+      .select("name code unit")
+      .lean();
+    const materialById = new Map(
+      materials.map((material: any) => [String(material._id), material]),
+    );
+
+    for (const consumption of draftConsumptions) {
+      const batch = await ProductionBatch.findById(consumption.productionBatch)
+        .select("plannedQuantity")
+        .lean();
+      if (!batch) continue;
+
+      const scale = Number(batch.plannedQuantity || 0) / Number(formula.batchSize || 1);
+      const syncedItems = formula.items.map((formulaItem: any) => {
+        const material = materialById.get(String(formulaItem.rawMaterial));
+        if (!material) {
+          throw new Error("A formula raw material could not be synchronized to its draft batch.");
+        }
+        const standardQuantity = Number(
+          (
+            Number(formulaItem.quantity || 0) *
+            (1 + Number(formulaItem.wastePercentage || 0) / 100) *
+            scale
+          ).toFixed(4),
+        );
+        return {
+          rawMaterial: material._id,
+          rawMaterialName: material.name,
+          rawMaterialCode: material.code,
+          unit: material.unit || formulaItem.unit,
+          standardQuantity,
+          issuedQuantity: 0,
+          actualQuantity: 0,
+          wasteQuantity: 0,
+          returnQuantity: 0,
+          varianceQuantity: -standardQuantity,
+          variancePercentage: standardQuantity > 0 ? -100 : 0,
+          lotNumber: "",
+          notes: formulaItem.notes || "",
+        };
+      });
+      const totalStandardQuantity = syncedItems.reduce(
+        (sum: number, item: any) => sum + Number(item.standardQuantity || 0),
+        0,
+      );
+      consumption.items = syncedItems as any;
+      consumption.totalStandardQuantity = Number(totalStandardQuantity.toFixed(4));
+      consumption.totalIssuedQuantity = 0;
+      consumption.totalActualQuantity = 0;
+      consumption.totalWasteQuantity = 0;
+      consumption.totalReturnQuantity = 0;
+      consumption.totalVarianceQuantity = -Number(totalStandardQuantity.toFixed(4));
+      await consumption.save();
+    }
+  }
 
   return Formula.findById(
     formula._id

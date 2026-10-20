@@ -164,8 +164,6 @@ export default function RawMaterialConsumptionDetailsPage() {
 
   const [recipeError, setRecipeError] = useState<string>("");
 
-  const [finishedOutput, setFinishedOutput] = useState<string>("");
-
   /* ------------------------------------------------------------------------ */
   /* LOAD DATA                                                                */
   /* ------------------------------------------------------------------------ */
@@ -216,18 +214,6 @@ export default function RawMaterialConsumptionDetailsPage() {
   useEffect(() => {
     void loadConsumption();
   }, [loadConsumption]);
-
-  useEffect(() => {
-    if (!consumption || finishedOutput) return;
-    const requestedOutput = safeNumber(searchParams.get("actualQuantity"));
-    const savedOutput =
-      typeof consumption.productionBatch === "object"
-        ? safeNumber(consumption.productionBatch.actualQuantity)
-        : 0;
-    if (requestedOutput > 0 || savedOutput > 0) {
-      setFinishedOutput(String(requestedOutput || savedOutput));
-    }
-  }, [consumption, finishedOutput, searchParams]);
 
   /* ------------------------------------------------------------------------ */
   /* NORMALIZE ITEMS                                                          */
@@ -349,7 +335,10 @@ export default function RawMaterialConsumptionDetailsPage() {
   const isDraft = consumption.status === "Draft";
 
   const completionRequested = searchParams.get("completeBatch") === "1";
-  const completionQuantity = safeNumber(finishedOutput);
+  const completionQuantity =
+    typeof consumption.productionBatch === "object"
+      ? safeNumber(consumption.productionBatch.plannedQuantity)
+      : safeNumber(searchParams.get("plannedQuantity"));
   const completionUnit =
     searchParams.get("unit") ||
     (typeof consumption.productionBatch === "object"
@@ -406,7 +395,6 @@ export default function RawMaterialConsumptionDetailsPage() {
       setPostingBatch(true);
       await updateProductionBatch(productionBatchId, {
         status: "Completed",
-        actualQuantity: completionQuantity,
       });
       window.dispatchEvent(new Event("cana:stock-updated"));
       toast("Production batch completed and stock posted.", "success");
@@ -539,19 +527,13 @@ export default function RawMaterialConsumptionDetailsPage() {
                 <p className="mt-2 text-lg font-extrabold text-slate-950">
                   Confirm finished production
                 </p>
-                <div className="mt-3 flex max-w-sm items-center overflow-hidden rounded-xl border border-slate-300 bg-white focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-100">
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={finishedOutput}
-                    onChange={(event) => setFinishedOutput(event.target.value)}
-                    placeholder="Finished quantity"
-                    className="h-11 min-w-0 flex-1 px-3 text-sm font-bold text-slate-950 outline-none"
-                  />
-                  <span className="border-l border-slate-200 bg-slate-50 px-3 py-3 text-xs font-bold text-slate-600">
-                    {completionUnit}
+                <div className="mt-3 inline-flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Output to post
                   </span>
+                  <strong className="text-base text-slate-950">
+                    {formatNumber(completionQuantity)} {completionUnit}
+                  </strong>
                 </div>
                 {batchStatus === "Paused" ? (
                   <p className="mt-2 text-sm font-semibold text-amber-700">
@@ -561,7 +543,7 @@ export default function RawMaterialConsumptionDetailsPage() {
                   <p className="mt-2 text-sm text-slate-600">
                     {isDraft
                       ? "Review the batch recipe, then issue the required quantities from available stock."
-                      : "Materials are issued. Confirm the real finished output to post stock."}
+                      : "Materials are issued. The planned quantity will be posted automatically as finished output."}
                   </p>
                 )}
               </div>

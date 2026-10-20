@@ -109,8 +109,17 @@ export default function ProductionBatchDetailsModal({
       ? Math.min(100, (batch.actualQuantity / batch.plannedQuantity) * 100)
       : 0;
   const producedPacks = packBreakdown(batch.actualQuantity);
+  const completeProductionCost =
+    Number(batch.actualMaterialCost || 0) +
+    Number(batch.allocatedLaborCost || 0) +
+    Number(batch.allocatedEnergyCost || 0) +
+    Number(batch.allocatedOtherCost || 0);
+  const completeCostPerKg =
+    Number(batch.actualQuantity || 0) > 0
+      ? completeProductionCost / Number(batch.actualQuantity)
+      : 0;
   const actualCostPerPack =
-    Number(batch.costPerKg || 0) * PRODUCTION_PACK_WEIGHT_KG;
+    completeCostPerKg * PRODUCTION_PACK_WEIGHT_KG;
 
   return (
     <div
@@ -136,33 +145,34 @@ export default function ProductionBatchDetailsModal({
                       Completed batch cost
                     </p>
                     <h3 className="mt-1 text-lg font-extrabold text-slate-950">
-                      {money(batch.totalActualCost)}
+                      {money(completeProductionCost)}
                     </h3>
                   </div>
                   <p className="text-xs text-slate-500">
                     Frozen {formatDateTime(batch.costedAt)}
                   </p>
                 </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <CostItem
                     label="Issued materials"
                     value={money(batch.actualMaterialCost)}
                   />
                   <CostItem
-                    label="Labour & energy"
-                    value={money(
-                      Number(batch.allocatedLaborCost || 0) +
-                        Number(batch.allocatedEnergyCost || 0),
-                    )}
+                    label="Labour"
+                    value={money(batch.allocatedLaborCost)}
                   />
                   <CostItem
-                    label="Other cost"
+                    label="Energy"
+                    value={money(batch.allocatedEnergyCost)}
+                  />
+                  <CostItem
+                    label="Overhead & other expenses"
                     value={money(batch.allocatedOtherCost)}
                   />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-200 pt-3 text-sm">
                   <span>
-                    <strong>{money(batch.costPerKg)}</strong> / kg
+                    <strong>{money(completeCostPerKg)}</strong> / kg
                   </span>
                   {actualCostPerPack > 0 && (
                     <span>
