@@ -560,7 +560,7 @@ export default function RawMaterialConsumptionDetailsPage() {
                 ) : (
                   <p className="mt-2 text-sm text-slate-600">
                     {isDraft
-                      ? "Review the batch recipe, then issue materials from the correct lots."
+                      ? "Review the batch recipe, then issue the required quantities from available stock."
                       : "Materials are issued. Confirm the real finished output to post stock."}
                   </p>
                 )}
@@ -726,7 +726,6 @@ export default function RawMaterialConsumptionDetailsPage() {
 
                     {!isDraft && <TableHeader>Variance</TableHeader>}
 
-                    {!isDraft && <TableHeader align="left">Lot</TableHeader>}
                   </tr>
                 </thead>
 
@@ -788,11 +787,6 @@ export default function RawMaterialConsumptionDetailsPage() {
                                 }
                               >
                                 {formatNumber(variance)}
-                              </span>
-                            </td>
-                            <td className="px-5 py-4">
-                              <span className="text-sm font-medium text-slate-700">
-                                {item.lotNumber || "-"}
                               </span>
                             </td>
                           </>

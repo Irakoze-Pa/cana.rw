@@ -8,7 +8,6 @@ import { useEffect, useState } from "react";
 import {
   issueMaterialConsumption,
 } from "../services/materialConsumption.service";
-import api from "@/services/api";
 
 import type {
   MaterialConsumption,
@@ -29,13 +28,6 @@ interface FormItem extends IssueMaterialItem {
   rawMaterialCode: string;
   unit: string;
   standardQuantity: number;
-}
-
-interface LotOption {
-  lotNumber: string;
-  availableQuantity: number;
-  unit: string;
-  status: string;
 }
 
 function getRawMaterialId(
@@ -67,7 +59,6 @@ export default function IssueMaterialsModal({
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [lotsByMaterial, setLotsByMaterial] = useState<Record<string, LotOption[]>>({});
 
   useEffect(() => {
     if (!open || !consumption) {
@@ -84,7 +75,6 @@ export default function IssueMaterialsModal({
         unit: item.unit,
         standardQuantity: item.standardQuantity,
         issuedQuantity: item.standardQuantity,
-        lotNumber: item.lotNumber || "",
         notes: item.notes || "",
       })),
     );
@@ -92,31 +82,6 @@ export default function IssueMaterialsModal({
     setNotes(consumption.notes || "");
     setError("");
 
-    void Promise.all(
-      consumption.items.map(async (item) => {
-        const rawMaterialId = getRawMaterialId(
-          item.rawMaterial,
-        );
-
-        if (!rawMaterialId) {
-          return ["", []] as const;
-        }
-
-        const response = await api.get<{ data: LotOption[] }>(
-          `/raw-materials/${rawMaterialId}/lots`,
-        );
-
-        return [rawMaterialId, response.data.data || []] as const;
-      }),
-    )
-      .then((entries) =>
-        setLotsByMaterial(
-          Object.fromEntries(
-            entries.filter(([id]) => Boolean(id)),
-          ),
-        ),
-      )
-      .catch(() => setLotsByMaterial({}));
   }, [open, consumption]);
 
   if (!open || !consumption) {
@@ -161,13 +126,6 @@ export default function IssueMaterialsModal({
         return;
       }
 
-      const availableLots = (lotsByMaterial[item.rawMaterial] || []).filter(
-        (lot) => lot.status === "available" && lot.availableQuantity > 0,
-      );
-      if (availableLots.length > 0 && !item.lotNumber?.trim()) {
-        setError(`Select the receipt lot for ${item.rawMaterialName} before issuing stock.`);
-        return;
-      }
     }
 
     try {
@@ -182,8 +140,6 @@ export default function IssueMaterialsModal({
               issuedQuantity: Number(
                 item.issuedQuantity,
               ),
-              lotNumber:
-                item.lotNumber?.trim() || undefined,
               notes:
                 item.notes?.trim() || undefined,
             })),
@@ -261,10 +217,6 @@ export default function IssueMaterialsModal({
                   </th>
 
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Lot Number
-                  </th>
-
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Notes
                   </th>
                 </tr>
@@ -306,32 +258,6 @@ export default function IssueMaterialsModal({
                         }
                         className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-right text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
                       />
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <input
-                        type="text"
-                        list={`lot-options-${item.rawMaterial}`}
-                        value={item.lotNumber || ""}
-                        onChange={(e) =>
-                          updateItem(
-                            index,
-                            "lotNumber",
-                            e.target.value,
-                          )
-                        }
-                        placeholder="LOT-001"
-                        className="w-36 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                      />
-                      <datalist id={`lot-options-${item.rawMaterial}`}>
-                        {(lotsByMaterial[item.rawMaterial] || [])
-                          .filter((lot) => lot.status === "available" && lot.availableQuantity > 0)
-                          .map((lot) => (
-                            <option key={lot.lotNumber} value={lot.lotNumber}>
-                              {lot.availableQuantity} {lot.unit} available
-                            </option>
-                          ))}
-                      </datalist>
                     </td>
 
                     <td className="px-4 py-4">

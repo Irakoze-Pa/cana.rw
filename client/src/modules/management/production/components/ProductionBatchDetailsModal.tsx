@@ -6,6 +6,7 @@ import {
   FileText,
   Hash,
   Package,
+  Printer,
   User,
   X,
 } from "lucide-react";
@@ -17,6 +18,7 @@ interface ProductionBatchDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   batch: ProductionBatch | null;
+  onPrint?: () => void | Promise<void>;
 }
 
 function formatDate(value?: string) {
@@ -60,6 +62,16 @@ function formatDateTime(value?: string) {
 const money = (value?: number) =>
   `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 })} RWF`;
 
+const PRODUCTION_PACK_WEIGHT_KG = 30;
+
+function packBreakdown(quantityKg?: number) {
+  const kilograms = Math.max(0, Number(quantityKg || 0));
+  const fullPacks = Math.floor(kilograms / PRODUCTION_PACK_WEIGHT_KG);
+  const remainderKg = kilograms - fullPacks * PRODUCTION_PACK_WEIGHT_KG;
+
+  return { fullPacks, remainderKg };
+}
+
 function getStatusClass(status: ProductionBatch["status"]) {
   switch (status) {
     case "Completed":
@@ -86,6 +98,7 @@ export default function ProductionBatchDetailsModal({
   isOpen,
   onClose,
   batch,
+  onPrint,
 }: ProductionBatchDetailsModalProps) {
   if (!isOpen || !batch) {
     return null;
@@ -95,6 +108,9 @@ export default function ProductionBatchDetailsModal({
     batch.plannedQuantity > 0
       ? Math.min(100, (batch.actualQuantity / batch.plannedQuantity) * 100)
       : 0;
+  const producedPacks = packBreakdown(batch.actualQuantity);
+  const actualCostPerPack =
+    Number(batch.costPerKg || 0) * PRODUCTION_PACK_WEIGHT_KG;
 
   return (
     <div
@@ -148,9 +164,9 @@ export default function ProductionBatchDetailsModal({
                   <span>
                     <strong>{money(batch.costPerKg)}</strong> / kg
                   </span>
-                  {Number(batch.costPerPack || 0) > 0 && (
+                  {actualCostPerPack > 0 && (
                     <span>
-                      <strong>{money(batch.costPerPack)}</strong> / pack
+                      <strong>{money(actualCostPerPack)}</strong> / 30 kg pack
                     </span>
                   )}
                 </div>
@@ -178,13 +194,25 @@ export default function ProductionBatchDetailsModal({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl p-2 text-gray-500 hover:bg-gray-100"
-          >
-            <X size={21} />
-          </button>
+          <div className="flex items-center gap-2">
+            {onPrint && (
+              <button
+                type="button"
+                onClick={() => void onPrint()}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              >
+                <Printer size={16} />
+                Print record
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl p-2 text-gray-500 hover:bg-gray-100"
+            >
+              <X size={21} />
+            </button>
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
@@ -209,6 +237,13 @@ export default function ProductionBatchDetailsModal({
                     {Number(batch.actualQuantity).toLocaleString()} /{" "}
                     {Number(batch.plannedQuantity).toLocaleString()}{" "}
                     {batch.unit}
+                  </p>
+                  <p className="mt-1 text-sm font-extrabold text-slate-950">
+                    {producedPacks.fullPacks.toLocaleString()} full packs
+                    {producedPacks.remainderKg > 0
+                      ? ` + ${producedPacks.remainderKg.toLocaleString()} kg`
+                      : ""}{" "}
+                    · 30 kg each
                   </p>
                 </div>
 

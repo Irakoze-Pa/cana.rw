@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   XCircle,
   Copy,
+  Pencil,
 } from "lucide-react";
 
 import FormulaModal from "../components/FormulaModal";
@@ -32,6 +33,7 @@ import {
   getFormulas,
   createFormula,
   createNewFormulaVersion,
+  updateFormula,
   deactivateFormula,
   deleteFormula,
 } from "../services/formula.service";
@@ -299,6 +301,25 @@ export default function FormulasPage() {
     }
   };
 
+  const handleUpdate = async (
+    data: CreateFormulaData
+  ) => {
+    if (!editingFormula) {
+      throw new Error("No formula selected for editing.");
+    }
+
+    try {
+      await updateFormula(editingFormula._id, data);
+      await loadFormulas(true);
+      closeModal();
+    } catch (error: any) {
+      console.error("Update Formula Error:", error);
+      throw new Error(
+        error?.response?.data?.message || "Failed to update formula."
+      );
+    }
+  };
+
   // =====================================================
   // CLOSE MODAL
   // =====================================================
@@ -328,6 +349,12 @@ export default function FormulasPage() {
   ) => {
     setEditingFormula(formula);
     setCreateNewVersion(true);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (formula: Formula) => {
+    setEditingFormula(formula);
+    setCreateNewVersion(false);
     setIsModalOpen(true);
   };
 
@@ -953,6 +980,15 @@ export default function FormulasPage() {
 
                             <button
                               type="button"
+                              onClick={() => openEditModal(formula)}
+                              title="Edit formula"
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+                            >
+                              <Pencil size={16} />
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={() =>
                                 openNewVersionModal(
                                   formula
@@ -1092,7 +1128,9 @@ export default function FormulasPage() {
         onSubmit={
           createNewVersion
             ? handleCreateNewVersion
-            : handleCreate
+            : editingFormula
+              ? handleUpdate
+              : handleCreate
         }
 
         editingFormula={editingFormula}

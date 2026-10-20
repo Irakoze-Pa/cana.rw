@@ -100,6 +100,28 @@ function formatMoney(value?: number): string {
   return `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 })} RWF`;
 }
 
+const PRODUCTION_PACK_WEIGHT_KG = 30;
+
+function getPackBreakdown(quantityKg?: number) {
+  const kilograms = Math.max(0, Number(quantityKg || 0));
+  const fullPacks = Math.floor(kilograms / PRODUCTION_PACK_WEIGHT_KG);
+  const remainderKg = kilograms - fullPacks * PRODUCTION_PACK_WEIGHT_KG;
+
+  return {
+    fullPacks,
+    exactPacks: kilograms / PRODUCTION_PACK_WEIGHT_KG,
+    remainderKg,
+  };
+}
+
+function formatPackOutput(quantityKg?: number): string {
+  const { fullPacks, remainderKg } = getPackBreakdown(quantityKg);
+
+  return remainderKg > 0
+    ? `${formatNumber(fullPacks)} full packs + ${formatNumber(remainderKg)} kg`
+    : `${formatNumber(fullPacks)} packs`;
+}
+
 // =====================================================
 // CAN DELETE
 // =====================================================
@@ -108,11 +130,45 @@ function canDeleteBatch(batch: ProductionBatch): boolean {
   return batch.status === "Planned";
 }
 
-function printBatchRecord(batch: ProductionBatch) {
+async function printBatchRecord(batch: ProductionBatch) {
+  const consumptions = await getMaterialConsumptions({
+    productionBatch: batch._id,
+  });
+  const consumption = consumptions.find(
+    (record) => record.status !== "Cancelled",
+  );
+  const outputVariance =
+    Number(batch.actualQuantity || 0) - Number(batch.plannedQuantity || 0);
+  const outputYield =
+    Number(batch.plannedQuantity || 0) > 0
+      ? (Number(batch.actualQuantity || 0) /
+          Number(batch.plannedQuantity || 0)) *
+        100
+      : 0;
+  const plannedPacks = getPackBreakdown(batch.plannedQuantity);
+  const actualPacks = getPackBreakdown(batch.actualQuantity);
+  const calculatedCostPerPack =
+    Number(batch.costPerKg || 0) * PRODUCTION_PACK_WEIGHT_KG;
+  const materialRows = (consumption?.items || []).map((item, index) => [
+    index + 1,
+    `${item.rawMaterialName}${item.rawMaterialCode ? ` · ${item.rawMaterialCode}` : ""}`,
+    `${formatNumber(item.standardQuantity)} ${item.unit}`,
+    `${formatNumber(item.issuedQuantity)} ${item.unit}`,
+    `${formatNumber(item.actualQuantity)} ${item.unit}`,
+    `${formatNumber(item.wasteQuantity)} / ${formatNumber(item.returnQuantity)} ${item.unit}`,
+    `${Number(item.varianceQuantity || 0) > 0 ? "+" : ""}${formatNumber(item.varianceQuantity)} ${item.unit}`,
+  ]);
+
   printCanaDocument({
-    title: "Production batch record",
+    title: "Production & Cost Record",
     reference: batch.batchNo || batch.batchNumber,
-    status: batch.status,
+    status:
+      batch.status === "Completed"
+        ? "Completed · stock posted"
+        : `${batch.status} · working record`,
+    issueDate: batch.endDate || batch.costedAt || undefined,
+    brandLine: "CANA Paints · Production Control",
+    orientation: "landscape",
     details: [
       {
         label: "Product",
@@ -134,9 +190,37 @@ function printBatchRecord(batch: ProductionBatch) {
         label: "Actual output",
         value: `${formatNumber(batch.actualQuantity)} ${batch.unit}`,
       },
+      {
+        label: "Pack size",
+        value: `${PRODUCTION_PACK_WEIGHT_KG} kg per pack`,
+      },
+      {
+        label: "Planned packs",
+        value: `${formatNumber(plannedPacks.exactPacks)} pack equivalent`,
+      },
+      {
+        label: "Actual packs produced",
+        value: formatPackOutput(batch.actualQuantity),
+      },
+      {
+        label: "Output variance",
+        value: `${outputVariance > 0 ? "+" : ""}${formatNumber(outputVariance)} ${batch.unit}`,
+      },
+      {
+        label: "Production yield",
+        value: `${formatNumber(outputYield)}%`,
+      },
       { label: "Start date", value: formatDate(batch.startDate) },
       { label: "Completion date", value: formatDate(batch.endDate) },
       { label: "Supervisor", value: batch.supervisorName },
+      {
+        label: "Material issue reference",
+        value: consumption?.consumptionNo || "Not issued",
+      },
+      {
+        label: "Material reconciliation",
+        value: consumption?.status || "Not available",
+      },
       {
         label: "Finished goods posted",
         value: batch.finishedGoodsPostedAt
@@ -144,7 +228,31 @@ function printBatchRecord(batch: ProductionBatch) {
           : "Not posted",
       },
       {
-        label: "Actual batch cost",
+        label: "Issued materials cost",
+        value: batch.costedAt
+          ? formatMoney(batch.actualMaterialCost)
+          : "Pending completion",
+      },
+      {
+        label: "Labour cost",
+        value: batch.costedAt
+          ? formatMoney(batch.allocatedLaborCost)
+          : "Pending completion",
+      },
+      {
+        label: "Energy cost",
+        value: batch.costedAt
+          ? formatMoney(batch.allocatedEnergyCost)
+          : "Pending completion",
+      },
+      {
+        label: "Other production cost",
+        value: batch.costedAt
+          ? formatMoney(batch.allocatedOtherCost)
+          : "Pending completion",
+      },
+      {
+        label: "Total actual batch cost",
         value: batch.costedAt
           ? formatMoney(batch.totalActualCost)
           : "Pending completion",
@@ -155,16 +263,48 @@ function printBatchRecord(batch: ProductionBatch) {
           ? `${formatMoney(batch.costPerKg)} / kg`
           : "Pending completion",
       },
-      ...(Number(batch.costPerPack || 0) > 0
+      ...(calculatedCostPerPack > 0
         ? [
             {
-              label: "Actual cost per pack",
-              value: formatMoney(batch.costPerPack),
+              label: "Actual cost per 30 kg pack",
+              value: formatMoney(calculatedCostPerPack),
             },
           ]
         : []),
     ],
-    notes: batch.notes,
+    table: materialRows.length
+      ? {
+          headers: [
+            "#",
+            "Raw material",
+            "Standard",
+            "Issued",
+            "Used",
+            "Waste / return",
+            "Variance",
+          ],
+          rows: materialRows,
+        }
+      : undefined,
+    notes: [
+      batch.notes?.trim(),
+      batch.costedAt
+        ? `Cost snapshot frozen on ${formatDate(batch.costedAt)} from posted material issues and allocated production costs.`
+        : "Cost remains provisional until material consumption is confirmed and the batch is completed.",
+      !materialRows.length
+        ? "No active raw-material consumption record was available for this batch."
+        : "Material quantities are shown as standard / issued / actual usage, with waste, returns and production variance disclosed separately.",
+    ]
+      .filter(Boolean)
+      .join(" "),
+    approval: {
+      status:
+        batch.status === "Completed"
+          ? "Approved production record"
+          : "Internal working record",
+      signatoryName: "KABANDA Fred",
+      signatoryTitle: "Managing Director",
+    },
   });
 }
 
@@ -681,6 +821,11 @@ const ProductionBatchesPage = () => {
                           {batch.unit}
                         </p>
                         {Number(batch.actualQuantity) > 0 && (
+                          <p className="mt-1 text-xs font-extrabold text-slate-900">
+                            {formatPackOutput(batch.actualQuantity)} · 30 kg/pack
+                          </p>
+                        )}
+                        {Number(batch.actualQuantity) > 0 && (
                           <p
                             className={`mt-1 text-xs font-bold ${
                               Number(batch.actualQuantity) >=
@@ -739,7 +884,17 @@ const ProductionBatchesPage = () => {
 
                           <button
                             type="button"
-                            onClick={() => printBatchRecord(batch)}
+                            onClick={async () => {
+                              try {
+                                await printBatchRecord(batch);
+                              } catch (error) {
+                                alert(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Failed to prepare the production record.",
+                                );
+                              }
+                            }}
                             className="rounded-xl border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 hover:text-gray-900"
                             title="Print batch record"
                           >
@@ -881,6 +1036,18 @@ const ProductionBatchesPage = () => {
           setSelectedBatch(null);
         }}
         batch={selectedBatch}
+        onPrint={async () => {
+          if (!selectedBatch) return;
+          try {
+            await printBatchRecord(selectedBatch);
+          } catch (error) {
+            alert(
+              error instanceof Error
+                ? error.message
+                : "Failed to prepare the production record.",
+            );
+          }
+        }}
       />
     </div>
   );

@@ -13,7 +13,6 @@ import ProductionBatch from "../productionBatch/productionBatch.model";
 import Inventory from "../../inventory/inventory.model";
 import InventoryTransaction from "../../inventory/inventoryTransaction.model";
 import RawMaterial from "../../raw-materials/rawMaterial.model";
-import RawMaterialLot from "../../raw-materials/rawMaterialLot.model";
 import Formula from "../../formula/formula.model";
 import { createNewFormulaVersion } from "../../formula/formula.service";
 
@@ -139,129 +138,6 @@ const syncRawMaterialInventorySnapshot = async (
       costPerUnit: inventory.averageCostPerUnit,
     },
     { session },
-  );
-};
-
-const issueRawMaterialLot = async (
-  rawMaterialId: mongoose.Types.ObjectId,
-  lotNumber: string,
-  quantity: number,
-  unit: string,
-  session: mongoose.ClientSession,
-) => {
-  const normalizedLotNumber = lotNumber.trim().toUpperCase();
-  const now = new Date();
-  const availableLotCount = await RawMaterialLot.countDocuments({
-    rawMaterial: rawMaterialId,
-    status: "available",
-    availableQuantity: { $gt: QUANTITY_TOLERANCE },
-    $or: [
-      { expiresAt: { $exists: false } },
-      { expiresAt: null },
-      { expiresAt: { $gt: now } },
-    ],
-  }).session(session);
-
-  if (!normalizedLotNumber) {
-    if (availableLotCount > 0) {
-      throw new Error(
-        "Select an available receipt lot before issuing a lot-tracked raw material.",
-      );
-    }
-    return;
-  }
-
-  const lot = await RawMaterialLot.findOne({
-    rawMaterial: rawMaterialId,
-    lotNumber: normalizedLotNumber,
-  }).session(session);
-
-  if (!lot) {
-    throw new Error(
-      `Lot ${normalizedLotNumber} was not found for this raw material.`,
-    );
-  }
-
-  if (lot.status !== "available") {
-    throw new Error(
-      `Lot ${normalizedLotNumber} is ${lot.status} and cannot be issued.`,
-    );
-  }
-
-  if (lot.expiresAt && lot.expiresAt <= now) {
-    await RawMaterialLot.findByIdAndUpdate(
-      lot._id,
-      { status: "expired" },
-      { session },
-    );
-    throw new Error(
-      `Lot ${normalizedLotNumber} has expired and cannot be issued.`,
-    );
-  }
-
-  if (lot.unit.trim().toLowerCase() !== unit.trim().toLowerCase()) {
-    throw new Error(
-      `Lot ${normalizedLotNumber} uses ${lot.unit}, but this consumption uses ${unit}.`,
-    );
-  }
-
-  if (Number(lot.availableQuantity) + QUANTITY_TOLERANCE < quantity) {
-    throw new Error(
-      `Lot ${normalizedLotNumber} has only ${lot.availableQuantity} ${lot.unit} available.`,
-    );
-  }
-
-  const remaining = roundNumber(Number(lot.availableQuantity) - quantity);
-  const updated = await RawMaterialLot.findOneAndUpdate(
-    {
-      _id: lot._id,
-      status: "available",
-      availableQuantity: { $gte: quantity },
-    },
-    {
-      $inc: { availableQuantity: -quantity },
-      $set: {
-        status: remaining <= QUANTITY_TOLERANCE ? "consumed" : "available",
-      },
-    },
-    { new: true, session, runValidators: true },
-  );
-
-  if (!updated) {
-    throw new Error(
-      `Lot ${normalizedLotNumber} changed before it could be issued. Please try again.`,
-    );
-  }
-};
-
-const returnRawMaterialLot = async (
-  rawMaterialId: mongoose.Types.ObjectId,
-  lotNumber: string,
-  quantity: number,
-  session: mongoose.ClientSession,
-) => {
-  const normalizedLotNumber = lotNumber.trim().toUpperCase();
-  if (!normalizedLotNumber) return;
-
-  const lot = await RawMaterialLot.findOne({
-    rawMaterial: rawMaterialId,
-    lotNumber: normalizedLotNumber,
-  }).session(session);
-  if (!lot) {
-    throw new Error(
-      `Lot ${normalizedLotNumber} was not found for this raw material return.`,
-    );
-  }
-  if (lot.status === "quarantined" || lot.status === "expired") {
-    throw new Error(
-      `Lot ${normalizedLotNumber} is ${lot.status}; it cannot receive returned production material.`,
-    );
-  }
-
-  await RawMaterialLot.findByIdAndUpdate(
-    lot._id,
-    { $inc: { availableQuantity: quantity }, $set: { status: "available" } },
-    { session, runValidators: true },
   );
 };
 
@@ -939,7 +815,7 @@ export const issueMaterialConsumption = async (
 
           issuedQuantity: roundNumber(requestedQuantity),
 
-          lotNumber: requested?.lotNumber?.trim() || item.lotNumber || "",
+          lotNumber: "",
 
           notes: requested?.notes?.trim() || item.notes || "",
         };
@@ -979,14 +855,6 @@ export const issueMaterialConsumption = async (
             `Insufficient stock for ${item.rawMaterialName}. Required: ${quantity} ${item.unit}, Available: ${available} ${inventory.unit}.`,
           );
         }
-
-        await issueRawMaterialLot(
-          item.rawMaterial,
-          prepared.lotNumber,
-          quantity,
-          item.unit,
-          session,
-        );
 
         const quantityBefore = available;
 
@@ -1055,8 +923,6 @@ export const issueMaterialConsumption = async (
               quantity,
 
               unit: item.unit,
-
-              lotNumber: prepared.lotNumber || undefined,
 
               unitCost: toNumber(inventory.averageCostPerUnit),
 
@@ -1134,7 +1000,7 @@ export const issueMaterialConsumption = async (
 
           variancePercentage: 0,
 
-          lotNumber: prepared.lotNumber,
+          lotNumber: "",
 
           notes: prepared.notes,
         });
@@ -1355,7 +1221,6 @@ export const getMaterialConsumptionByBatch = async (
  *   - standardQuantity (Draft only, before any issue)
  *   - actualQuantity
  *   - wasteQuantity
- *   - lotNumber
  *   - notes
  *
  * Protected:
@@ -1463,11 +1328,6 @@ export const updateMaterialConsumption = async (
         );
       }
 
-      const lotNumber =
-        incoming?.lotNumber !== undefined
-          ? incoming.lotNumber.trim()
-          : (existingItem.lotNumber ?? "");
-
       const notes =
         incoming?.notes !== undefined
           ? incoming.notes.trim()
@@ -1496,7 +1356,7 @@ export const updateMaterialConsumption = async (
 
         variancePercentage: 0,
 
-        lotNumber,
+        lotNumber: "",
 
         notes,
       });
@@ -1735,7 +1595,7 @@ export const returnMaterialConsumption = async (
 
           variancePercentage: 0,
 
-          lotNumber: item.lotNumber,
+          lotNumber: "",
 
           notes: requested.notes?.trim() || item.notes || "",
         });
@@ -1823,13 +1683,6 @@ export const returnMaterialConsumption = async (
           );
         }
 
-        await returnRawMaterialLot(
-          item.rawMaterial,
-          item.lotNumber || "",
-          quantity,
-          session,
-        );
-
         await syncRawMaterialInventorySnapshot(
           item.rawMaterial,
           updatedInventory,
@@ -1852,8 +1705,6 @@ export const returnMaterialConsumption = async (
               quantity,
 
               unit: item.unit,
-
-              lotNumber: item.lotNumber || undefined,
 
               unitCost: toNumber(inventory.averageCostPerUnit),
 
