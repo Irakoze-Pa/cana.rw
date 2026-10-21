@@ -209,7 +209,7 @@ export default function IssueMaterialsModal({
                   </th>
 
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Standard
+                    Formula qty
                   </th>
 
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">

@@ -76,7 +76,7 @@ export default function ConsumptionTable({
             </th>
 
             <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Standard
+              Formula qty
             </th>
 
             <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -142,7 +142,7 @@ export default function ConsumptionTable({
                 </div>
               </td>
 
-              {/* Standard */}
+              {/* Formula quantity */}
               <td className="px-5 py-4 text-right font-medium text-slate-700">
                 {Number(
                   consumption.totalStandardQuantity ?? 0,

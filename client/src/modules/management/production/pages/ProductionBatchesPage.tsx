@@ -38,6 +38,7 @@ import type {
 import { printCanaDocument } from "../../utils/printCanaDocument";
 import { useConfirmation } from "@/context/confirmationContext";
 import { getMaterialConsumptions } from "../../rawMaterialConsumption/services/materialConsumption.service";
+import { getRawMaterials } from "../../rawMaterial/services/rawMaterialService";
 import api from "@/services/api";
 
 // =====================================================
@@ -101,22 +102,21 @@ function formatMoney(value?: number): string {
   return `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 })} RWF`;
 }
 
-const PRODUCTION_PACK_WEIGHT_KG = 30;
-
-function getPackBreakdown(quantityKg?: number) {
+function getPackBreakdown(quantityKg?: number, packSizeKg = 30) {
   const kilograms = Math.max(0, Number(quantityKg || 0));
-  const fullPacks = Math.floor(kilograms / PRODUCTION_PACK_WEIGHT_KG);
-  const remainderKg = kilograms - fullPacks * PRODUCTION_PACK_WEIGHT_KG;
+  const size = Math.max(0.001, Number(packSizeKg || 30));
+  const fullPacks = Math.floor(kilograms / size);
+  const remainderKg = kilograms - fullPacks * size;
 
   return {
     fullPacks,
-    exactPacks: kilograms / PRODUCTION_PACK_WEIGHT_KG,
+    exactPacks: kilograms / size,
     remainderKg,
   };
 }
 
-function formatPackOutput(quantityKg?: number): string {
-  const { fullPacks, remainderKg } = getPackBreakdown(quantityKg);
+function formatPackOutput(quantityKg?: number, packSizeKg = 30): string {
+  const { fullPacks, remainderKg } = getPackBreakdown(quantityKg, packSizeKg);
 
   return remainderKg > 0
     ? `${formatNumber(fullPacks)} full packs + ${formatNumber(remainderKg)} kg`
@@ -132,7 +132,10 @@ function canDeleteBatch(batch: ProductionBatch): boolean {
 }
 
 async function printBatchRecord(batch: ProductionBatch) {
-  const [consumptions, transactionResponse] = await Promise.all([
+  const product = typeof batch.product === "object" ? batch.product : undefined;
+  const packSizeKg = Number(product?.packSizeKg || 30);
+  const packLabel = product?.unit || `${formatNumber(packSizeKg)} kg`;
+  const [consumptions, transactionResponse, rawMaterials] = await Promise.all([
     getMaterialConsumptions({ productionBatch: batch._id }),
     api.get<{
       data?: {
@@ -147,6 +150,7 @@ async function printBatchRecord(batch: ProductionBatch) {
         }>;
       };
     }>(`/inventory/transactions?productionBatch=${batch._id}&limit=200`),
+    getRawMaterials(),
   ]);
   const consumption = consumptions.find(
     (record) => record.status !== "Cancelled",
@@ -160,7 +164,7 @@ async function printBatchRecord(batch: ProductionBatch) {
           Number(batch.plannedQuantity || 0)) *
         100
       : 0;
-  const plannedPacks = getPackBreakdown(batch.plannedQuantity);
+  const plannedPacks = getPackBreakdown(batch.plannedQuantity, packSizeKg);
   const completeProductionCost =
     Number(batch.actualMaterialCost || 0) +
     Number(batch.allocatedLaborCost || 0) +
@@ -171,7 +175,7 @@ async function printBatchRecord(batch: ProductionBatch) {
       ? completeProductionCost / Number(batch.actualQuantity)
       : 0;
   const calculatedCostPerPack =
-    completeCostPerKg * PRODUCTION_PACK_WEIGHT_KG;
+    completeCostPerKg * packSizeKg;
   const materialRows = (consumption?.items || []).map((item, index) => {
     const movements = costTransactions.filter(
       (transaction) =>
@@ -193,14 +197,20 @@ async function printBatchRecord(batch: ProductionBatch) {
       0,
     );
     const quantity = Number(item.actualQuantity || item.issuedQuantity || issuedQuantity);
-    const unitCost = issuedQuantity > 0 ? issuedCost / issuedQuantity : 0;
+    const currentMaterial = rawMaterials.find(
+      (material) => material.code === item.rawMaterialCode,
+    );
+    const unitCost = issuedQuantity > 0
+      ? issuedCost / issuedQuantity
+      : Number(currentMaterial?.costPerUnit || 0);
+    const totalCost = issuedCost > 0 ? issuedCost : quantity * unitCost;
 
     return [
       index + 1,
       `${item.rawMaterialName}${item.rawMaterialCode ? ` · ${item.rawMaterialCode}` : ""}`,
       `${formatNumber(quantity)} ${item.unit}`,
       unitCost > 0 ? formatMoney(unitCost) : "—",
-      issuedCost > 0 ? formatMoney(issuedCost) : "—",
+      totalCost > 0 ? formatMoney(totalCost) : "—",
     ];
   });
   if (materialRows.length && batch.costedAt) {
@@ -242,11 +252,11 @@ async function printBatchRecord(batch: ProductionBatch) {
       },
       {
         label: "Pack size",
-        value: `${PRODUCTION_PACK_WEIGHT_KG} kg per pack`,
+        value: `${packLabel} per pack`,
       },
       {
         label: "Actual packs produced",
-        value: formatPackOutput(batch.actualQuantity),
+        value: formatPackOutput(batch.actualQuantity, packSizeKg),
       },
       { label: "Start date", value: formatDate(batch.startDate) },
       { label: "Completion date", value: formatDate(batch.endDate) },
@@ -294,7 +304,7 @@ async function printBatchRecord(batch: ProductionBatch) {
       ...(calculatedCostPerPack > 0
         ? [
             {
-              label: "Actual cost per 30 kg pack",
+              label: `Actual cost per ${packLabel} pack`,
               value: formatMoney(calculatedCostPerPack),
             },
           ]
@@ -504,7 +514,7 @@ const ProductionBatchesPage = () => {
     if (!consumption) {
       throw new Error(
         batch.status === "Planned" || batch.status === "Ready"
-          ? "Start this batch first. Its raw-material consumption record will be created automatically."
+          ? "The batch formula could not be prepared. Refresh the page and try again."
           : "No raw-material consumption record exists for this batch.",
       );
     }
@@ -522,7 +532,7 @@ const ProductionBatchesPage = () => {
       if (nextStatus === "In Progress" && batch.status === "Ready") {
         const approved = await confirm({
           title: "Start production batch",
-          description: `Start ${batch.batchNo}? A batch-specific material recipe will be created from formula ${batch.formulaCode} v${batch.formulaVersion}.`,
+          description: `Start ${batch.batchNo} using its saved batch formula based on ${batch.formulaCode} v${batch.formulaVersion}?`,
           confirmLabel: "Start production",
           tone: "primary",
         });
@@ -860,7 +870,7 @@ const ProductionBatchesPage = () => {
                         </p>
                         {Number(batch.actualQuantity) > 0 && (
                           <p className="mt-1 text-xs font-extrabold text-slate-900">
-                            {formatPackOutput(batch.actualQuantity)} · 30 kg/pack
+                            {formatPackOutput(batch.actualQuantity, Number(typeof batch.product === "object" ? batch.product.packSizeKg || 30 : 30))} · {typeof batch.product === "object" ? batch.product.unit || `${batch.product.packSizeKg || 30} kg` : "30 kg"}/pack
                           </p>
                         )}
                         {Number(batch.actualQuantity) > 0 && (
@@ -1083,6 +1093,19 @@ const ProductionBatchesPage = () => {
               error instanceof Error
                 ? error.message
                 : "Failed to prepare the production record.",
+            );
+          }
+        }}
+        onOpenRecipe={async () => {
+          if (!selectedBatch) return;
+          try {
+            await openMaterialConsumption(selectedBatch);
+            setIsDetailsModalOpen(false);
+          } catch (error) {
+            alert(
+              error instanceof Error
+                ? error.message
+                : "Failed to open the saved batch formula.",
             );
           }
         }}

@@ -19,6 +19,8 @@ type Order = {
   deliveredAt?: string;
   status: string;
   total?: number;
+  subtotal?: number;
+  tax?: number;
   customer?: { fullName?: string };
   items: OrderItem[];
   statusHistory?: StatusEntry[];
@@ -27,7 +29,10 @@ type Invoice = {
   _id: string;
   invoiceNumber?: string;
   createdAt: string;
+  issueDate?: string;
   status?: string;
+  subtotal?: number;
+  tax?: number;
   total?: number;
   balance?: number;
   customer?: { fullName?: string };
@@ -38,6 +43,8 @@ type Payment = {
   receivedAt: string;
   amount: number;
   method: string;
+  status?: string;
+  chequeStatus?: string;
   customer?: { fullName?: string };
 };
 type SupplierPayment = {
@@ -98,17 +105,19 @@ function Metric({
   label,
   value,
   tone = "text-slate-950",
+  primary = false,
 }: {
   label: string;
   value: string | number;
   tone?: string;
+  primary?: boolean;
 }) {
   return (
-    <article className="cana-panel px-3 py-2.5">
-      <p className="text-[10px] font-extrabold uppercase tracking-[.13em] text-slate-500">
+    <article className={`border px-3 py-3 ${primary ? "border-slate-950 bg-slate-950" : "border-slate-200 bg-white"}`}>
+      <p className={`text-[10px] font-extrabold uppercase tracking-[.13em] ${primary ? "text-slate-300" : "text-slate-500"}`}>
         {label}
       </p>
-      <p className={`mt-1 text-lg font-extrabold tracking-tight ${tone}`}>
+      <p className={`mt-1 truncate text-lg font-black tracking-tight ${primary ? "text-white" : tone}`} title={String(value)}>
         {value}
       </p>
     </article>
@@ -140,6 +149,25 @@ function PnlRow({
         className={`${strong ? "text-base" : "text-sm"} ${value < 0 ? "text-red-700" : "text-slate-950"} font-extrabold`}
       >
         {value < 0 ? `(${money(Math.abs(value))})` : money(value)} RWF
+      </span>
+    </div>
+  );
+}
+
+function PercentageRow({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: number;
+  strong?: boolean;
+}) {
+  return (
+    <div className={`flex items-center justify-between gap-4 px-4 py-2 ${strong ? "bg-slate-50" : ""}`}>
+      <span className="text-xs font-semibold text-slate-500">{label}</span>
+      <span className={`text-xs font-extrabold ${value < 0 ? "text-red-700" : "text-slate-700"}`}>
+        {Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 1 })}%
       </span>
     </div>
   );
@@ -216,9 +244,15 @@ export default function OperationalReportsPage() {
       (order) => order.status === "delivered" && inside(deliveryDate(order)),
     );
     const issued = invoices.filter(
-      (invoice) => inside(invoice.createdAt) && invoice.status !== "void",
+      (invoice) => inside(invoice.issueDate || invoice.createdAt) && invoice.status !== "void",
     );
-    const received = payments.filter((payment) => inside(payment.receivedAt));
+    const received = payments.filter(
+      (payment) =>
+        inside(payment.receivedAt) &&
+        payment.status !== "void" &&
+        payment.status !== "pending" &&
+        (!payment.chequeStatus || payment.chequeStatus === "cleared"),
+    );
     const supplier = supplierPayments.filter(
       (payment) =>
         inside(payment.paidAt) &&
@@ -292,7 +326,12 @@ export default function OperationalReportsPage() {
       .filter((line) => line.store === "sales")
       .reduce((sum, line) => sum + line.value, 0);
     const revenue = delivered.reduce(
-      (sum, order) => sum + Number(order.total || 0),
+      (sum, order) =>
+        sum + Number(order.subtotal ?? Number(order.total || 0) - Number(order.tax || 0)),
+      0,
+    );
+    const outputTax = delivered.reduce(
+      (sum, order) => sum + Number(order.tax || 0),
       0,
     );
     const operatingExpenses = operating.reduce(
@@ -323,7 +362,7 @@ export default function OperationalReportsPage() {
         amount: Number(order.total || 0),
       })),
       ...issued.map((invoice) => ({
-        date: invoice.createdAt,
+        date: invoice.issueDate || invoice.createdAt,
         type: "Invoice",
         reference: invoice.invoiceNumber || "—",
         party: invoice.customer?.fullName || "Customer",
@@ -361,6 +400,7 @@ export default function OperationalReportsPage() {
       received,
       transactions,
       revenue,
+      outputTax,
       cogs,
       operatingExpenses,
       grossProfit,
@@ -414,14 +454,14 @@ export default function OperationalReportsPage() {
       table: {
         headers: ["Profit & loss item", "Amount (RWF)"],
         rows: [
-          ["Revenue — delivered sales", money(report.revenue)],
+          ["Turnover — delivered sales excluding tax", money(report.revenue)],
           ["Less: cost of goods sold", `(${money(report.cogs)})`],
           ["Gross profit", money(report.grossProfit)],
           ["Less: operating expenses", `(${money(report.operatingExpenses)})`],
           ["Net profit / (loss)", money(report.netProfit)],
         ],
       },
-      notes: `Profit is recognised when an order is delivered. Customer and supplier payments are cash movements, not profit. ${report.estimatedLines ? `${report.estimatedLines} historical sale line(s) use the latest recorded production cost as an estimate.` : "All costed sale lines use their delivery cost snapshot."}`,
+      notes: `Turnover excludes ${money(report.outputTax)} RWF of output tax. Profit is recognised when an order is delivered. Customer and supplier payments are cash movements, not profit. ${report.estimatedLines ? `${report.estimatedLines} historical sale line(s) use the latest recorded production cost as an estimate.` : "All costed sale lines use their delivery cost snapshot."}`,
     });
   const applyMonth = (offset: number) => {
     const date = new Date();
@@ -444,9 +484,6 @@ export default function OperationalReportsPage() {
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
               Profit & loss
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Delivered sales less production cost and operating expenses.
-            </p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -472,7 +509,7 @@ export default function OperationalReportsPage() {
           {error}
         </p>
       )}
-      <section className="cana-panel flex flex-wrap items-end gap-3 p-3">
+      <section className="flex flex-wrap items-end gap-3 border border-slate-200 bg-white p-3">
         <CalendarRange size={17} className="mb-2 text-slate-500" />
         <label className="text-xs font-bold text-slate-500">
           From
@@ -510,10 +547,11 @@ export default function OperationalReportsPage() {
           </button>
         </div>
       </section>
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
-          label="Sales revenue"
+          label="Turnover"
           value={loading ? "—" : `${money(report.revenue)} RWF`}
+          primary
         />
         <Metric
           label="Production cost"
@@ -535,7 +573,7 @@ export default function OperationalReportsPage() {
         />
       </section>
       <section className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,.8fr)]">
-        <section className="cana-panel overflow-hidden">
+        <section className="overflow-hidden border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>
               <p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-slate-500">
@@ -556,40 +594,45 @@ export default function OperationalReportsPage() {
             </span>
           </div>
           <div className="divide-y divide-slate-100 text-sm">
-            <PnlRow label="Delivered sales revenue" value={report.revenue} />
+            <PnlRow label="Turnover — delivered sales, excluding tax" value={report.revenue} />
+            {report.outputTax > 0 && (
+              <PnlRow label="Output tax excluded from turnover" value={report.outputTax} muted />
+            )}
             <PnlRow
               label="Less: cost of goods sold"
               value={-report.cogs}
               muted
             />
             <PnlRow label="Gross profit" value={report.grossProfit} strong />
+            <PercentageRow label="Gross margin" value={report.grossMargin} />
             <PnlRow
               label="Less: operating expenses"
               value={-report.operatingExpenses}
               muted
             />
             <PnlRow label="Net result" value={report.netProfit} strong />
+            <PercentageRow label="Net margin" value={report.netMargin} strong />
           </div>
         </section>
-        <aside className="cana-panel p-4">
+        <aside className="border border-slate-200 bg-white p-4">
           <p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-slate-500">
             Cost quality
           </p>
           <h2 className="mt-1 font-extrabold text-slate-950">
             Sales cost coverage
           </h2>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="rounded-lg bg-emerald-50 px-2 py-3 text-emerald-800">
+          <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden border border-slate-200 bg-slate-200 text-center text-xs">
+            <div className="bg-white px-2 py-3 text-emerald-800">
               <strong className="block text-base">{report.actualLines}</strong>
               Actual
             </div>
-            <div className="rounded-lg bg-amber-50 px-2 py-3 text-amber-800">
+            <div className="bg-white px-2 py-3 text-amber-800">
               <strong className="block text-base">
                 {report.estimatedLines}
               </strong>
               Estimated
             </div>
-            <div className="rounded-lg bg-red-50 px-2 py-3 text-red-700">
+            <div className="bg-white px-2 py-3 text-red-700">
               <strong className="block text-base">
                 {report.unpricedLines}
               </strong>
@@ -606,9 +649,7 @@ export default function OperationalReportsPage() {
                 Operating expenses
               </p>
               <div className="mt-2 space-y-1.5">
-                {report.expenseByCategory
-                  .slice(0, 4)
-                  .map(([category, amount]) => (
+                {report.expenseByCategory.map(([category, amount]) => (
                     <div
                       key={category}
                       className="flex items-center justify-between gap-3 text-xs"
@@ -618,6 +659,9 @@ export default function OperationalReportsPage() {
                       </span>
                       <span className="font-bold text-slate-900">
                         {money(amount)} RWF
+                      </span>
+                      <span className="w-12 text-right text-[10px] font-bold text-slate-500">
+                        {report.operatingExpenses > 0 ? ((amount / report.operatingExpenses) * 100).toFixed(1) : "0.0"}%
                       </span>
                     </div>
                   ))}
@@ -653,7 +697,7 @@ export default function OperationalReportsPage() {
           />
         </div>
       </section>
-      <section className="cana-panel overflow-hidden">
+      <section className="overflow-hidden border border-slate-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-slate-500">
@@ -740,16 +784,16 @@ export default function OperationalReportsPage() {
           product. Inventory is an asset, not revenue or profit.
         </p>
       </section>
-      <section className="cana-panel overflow-hidden">
+      <section className="overflow-hidden border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <h2 className="font-extrabold text-slate-950">Activity register</h2>
           <span className="text-sm text-slate-500">
             {report.transactions.length} records
           </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+        <div className="max-h-[420px] overflow-auto">
+          <table className="min-w-full text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-slate-950 text-[9px] uppercase tracking-wide text-white">
               <tr>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Activity</th>
@@ -774,7 +818,7 @@ export default function OperationalReportsPage() {
                   <td className="px-4 py-3 text-slate-700">{item.party}</td>
                   <td className="px-4 py-3 text-slate-500">{item.status}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-bold text-slate-900">
-                    {money(item.amount)} RWF
+                    {item.amount < 0 ? `(${money(Math.abs(item.amount))})` : money(item.amount)} RWF
                   </td>
                 </tr>
               ))}

@@ -1012,7 +1012,11 @@ export default function FormulaModal({
                               </th>
 
                               <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500">
-                                Cost
+                                Unit price
+                              </th>
+
+                              <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500">
+                                Line cost
                               </th>
 
                               <th className="w-12 px-4 py-3" />
@@ -1234,6 +1238,12 @@ export default function FormulaModal({
                                     </td>
 
                                     {/* COST */}
+
+                                    <td className="px-4 py-3 text-right">
+                                      <span className="text-xs font-semibold text-gray-700">
+                                        {Number(material?.costPerUnit || 0).toLocaleString("en-RW")} RWF/{material?.unit || item.unit}
+                                      </span>
+                                    </td>
 
                                     <td className="px-4 py-3 text-right">
                                       <span className="text-xs font-bold text-gray-900">

@@ -290,8 +290,9 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
     validateObjectId(String(data.product || ""), "product ID");
     validateObjectId(String(data.formula || ""), "formula ID");
 
-    const formula = await Formula.findById(data.formula)
-      .select("product name code version batchSize batchUnit status")
+    const formula: any = await Formula.findById(data.formula)
+      .select("product name code version batchSize batchUnit status items")
+      .populate("items.rawMaterial", "name code unit")
       .lean();
 
     if (!formula) {
@@ -338,6 +339,16 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
       formulaName: formula.name,
       formulaCode: formula.code,
       formulaVersion: formula.version,
+      formulaSnapshot: (formula.items || []).map((item: any) => ({
+        rawMaterial: item.rawMaterial?._id || item.rawMaterial,
+        rawMaterialName: item.rawMaterial?.name || "Raw material",
+        rawMaterialCode: item.rawMaterial?.code || "RM",
+        quantity: Number(item.quantity || 0) *
+          (1 + Number(item.wastePercentage || 0) / 100),
+        unit: item.rawMaterial?.unit || item.unit || "kg",
+        wastePercentage: Number(item.wastePercentage || 0),
+        notes: item.notes || "",
+      })),
       unit: formula.batchUnit || product.baseUnit || product.unit || "kg",
       items: [{}],
       directBatchRecord: true,
@@ -407,31 +418,37 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
   // EXISTING BATCHES
   // ---------------------------------------------------
 
-  const existingBatches = await ProductionBatch.find({
-    productionOrder: productionOrder._id,
-    status: {
-      $ne: "Cancelled",
-    },
-  })
-    .select("plannedQuantity actualQuantity status")
-    .lean();
+  // Direct batches use the formula output only as a scaling reference. It is
+  // not a production ceiling: an operator may produce any positive quantity
+  // and the saved batch recipe is scaled proportionally. The remaining-order
+  // guard is retained only for legacy batches created from a production order.
+  if (!productionOrder.isDirectBatch) {
+    const existingBatches = await ProductionBatch.find({
+      productionOrder: productionOrder._id,
+      status: {
+        $ne: "Cancelled",
+      },
+    })
+      .select("plannedQuantity actualQuantity status")
+      .lean();
 
-  const plannedAlready = getOrderCommittedQuantity(existingBatches);
+    const plannedAlready = getOrderCommittedQuantity(existingBatches);
 
-  const remainingQuantity = roundNumber(orderQuantity - plannedAlready);
+    const remainingQuantity = roundNumber(orderQuantity - plannedAlready);
 
-  if (remainingQuantity <= 0) {
-    throw new ProductionBatchServiceError(
-      "No remaining quantity is available for another production batch.",
-      409,
-    );
-  }
+    if (remainingQuantity <= 0) {
+      throw new ProductionBatchServiceError(
+        "No remaining quantity is available for another production batch.",
+        409,
+      );
+    }
 
-  if (plannedQuantity > remainingQuantity) {
-    throw new ProductionBatchServiceError(
-      `Batch quantity (${plannedQuantity}) exceeds the remaining production order quantity (${remainingQuantity}).`,
-      409,
-    );
+    if (plannedQuantity > remainingQuantity) {
+      throw new ProductionBatchServiceError(
+        `Batch quantity (${plannedQuantity}) exceeds the remaining production order quantity (${remainingQuantity}).`,
+        409,
+      );
+    }
   }
 
   // ---------------------------------------------------
@@ -470,6 +487,18 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
 
       formulaVersion: productionOrder.formulaVersion,
 
+      formulaSnapshot: Array.isArray(productionOrder.formulaSnapshot)
+        ? productionOrder.formulaSnapshot.map((item: any) => ({
+            ...item,
+            quantity: Number(
+              (
+                Number(item.quantity || 0) *
+                (plannedQuantity / Number(productionOrder.quantity || plannedQuantity))
+              ).toFixed(4),
+            ),
+          }))
+        : [],
+
       plannedQuantity,
 
       actualQuantity: 0,
@@ -499,6 +528,25 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
     // Creating a batch commits a prepared order to production. The order
     // becomes In Production only when one of its batches actually starts.
     // -------------------------------------------------
+
+    // Materialize the scaled recipe immediately. This draft consumption is
+    // the batch-specific formula: operators may review or edit it before
+    // production starts, while the approved master formula stays unchanged.
+    try {
+      await createMaterialConsumption({
+        productionOrder: data.productionOrder
+          ? String(productionOrder._id)
+          : undefined,
+        productionBatch: String(batch._id),
+        notes: `Batch-specific formula created for ${batch.batchNo}.`,
+      });
+    } catch (error) {
+      await ProductionBatch.deleteOne({ _id: batch._id });
+      throw new ProductionBatchServiceError(
+        `The batch formula could not be prepared: ${error instanceof Error ? error.message : "review the selected master formula."}`,
+        400,
+      );
+    }
 
     if (
       productionOrder.status === "Draft" ||
@@ -532,7 +580,7 @@ export async function getProductionBatches() {
       "productionOrder",
       "productionOrderNo productName productCode quantity unit status",
     )
-    .populate("product", "name code category unit")
+    .populate("product", "name code category unit baseUnit packSizeKg")
     .populate("formula", "name code version batchSize batchUnit")
     .sort({
       createdAt: -1,
@@ -546,13 +594,43 @@ export async function getProductionBatches() {
 export async function getProductionBatchById(id: string) {
   validateObjectId(id, "production batch ID");
 
-  return ProductionBatch.findById(id)
+  const batch: any = await ProductionBatch.findById(id)
     .populate(
       "productionOrder",
       "productionOrderNo productName productCode quantity unit status",
     )
-    .populate("product", "name code category unit")
-    .populate("formula", "name code version batchSize batchUnit");
+    .populate("product", "name code category unit baseUnit packSizeKg")
+    .populate("formula", "name code version batchSize batchUnit")
+    .lean();
+  if (!batch) return null;
+
+  // Historical batches created before formula snapshots were introduced
+  // already retain their recipe in material consumption. Materialize that
+  // snapshot onto the batch so the past formula remains independently visible.
+  if (!Array.isArray(batch.formulaSnapshot) || !batch.formulaSnapshot.length) {
+    const consumption: any = await RawMaterialConsumption.findOne({
+      productionBatch: batch._id,
+      status: { $ne: "Cancelled" },
+    })
+      .select("items")
+      .lean();
+    if (Array.isArray(consumption?.items) && consumption.items.length) {
+      batch.formulaSnapshot = consumption.items.map((item: any) => ({
+        rawMaterial: item.rawMaterial,
+        rawMaterialName: item.rawMaterialName,
+        rawMaterialCode: item.rawMaterialCode,
+        quantity: Number(item.standardQuantity || 0),
+        unit: item.unit,
+        wastePercentage: 0,
+        notes: item.notes || "",
+      }));
+      await ProductionBatch.updateOne(
+        { _id: batch._id, $or: [{ formulaSnapshot: { $exists: false } }, { formulaSnapshot: { $size: 0 } }] },
+        { $set: { formulaSnapshot: batch.formulaSnapshot } },
+      );
+    }
+  }
+  return batch;
 }
 
 // =====================================================
@@ -731,6 +809,39 @@ export async function updateProductionBatch(
           `The new batch quantity (${quantity}) exceeds the remaining historical production order quantity (${remainingForThisBatch}).`,
           409,
         );
+      }
+    }
+
+    const previousQuantity = Number(batch.plannedQuantity || 0);
+
+    // A batch owns its formula snapshot. Rescale that snapshot when its output
+    // changes so the master formula and all historical batches remain intact.
+    if (
+      previousQuantity > 0 &&
+      quantity !== previousQuantity &&
+      Array.isArray((batch as any).formulaSnapshot)
+    ) {
+      const scale = quantity / previousQuantity;
+      (batch as any).formulaSnapshot = (batch as any).formulaSnapshot.map(
+        (item: any) => ({
+          ...(typeof item?.toObject === "function" ? item.toObject() : item),
+          quantity: roundNumber(Number(item.quantity || 0) * scale),
+        }),
+      );
+
+      const draftConsumption: any = await RawMaterialConsumption.findOne({
+        productionBatch: batch._id,
+        status: "Draft",
+      });
+
+      if (draftConsumption) {
+        await updateMaterialConsumption(String(draftConsumption._id), {
+          items: (draftConsumption.items || []).map((item: any) => ({
+            standardQuantity: roundNumber(
+              Number(item.standardQuantity || 0) * scale,
+            ),
+          })),
+        });
       }
     }
 

@@ -430,6 +430,7 @@ export const getMaterialConsumptionByIdController = async (
  * PATCH /api/material-consumptions/:id
  *
  * ALLOWED:
+ * - standardQuantity (item level, Draft recipes only)
  * - actualQuantity
  * - wasteQuantity
  * - lotNumber
@@ -437,7 +438,7 @@ export const getMaterialConsumptionByIdController = async (
  * - general notes
  *
  * PROTECTED:
- * - standardQuantity
+ * - top-level standardQuantity
  * - issuedQuantity
  * - returnQuantity
  * - varianceQuantity
@@ -597,6 +598,28 @@ export const updateMaterialConsumptionController = async (
         }
 
         /**
+         * Batch recipe quantity
+         *
+         * The service enforces the important workflow rule: this can only be
+         * edited while the consumption is Draft, before any stock is issued.
+         */
+
+        if (item.standardQuantity !== undefined) {
+          if (
+            typeof item.standardQuantity !== "number" ||
+            !Number.isFinite(item.standardQuantity) ||
+            item.standardQuantity < 0
+          ) {
+            return res.status(400).json({
+              success: false,
+              message: `Item ${
+                index + 1
+              }: standardQuantity must be a valid non-negative number.`,
+            });
+          }
+        }
+
+        /**
          * Actual
          */
 
@@ -679,13 +702,6 @@ export const updateMaterialConsumptionController = async (
           });
         }
 
-        if (item.standardQuantity !== undefined) {
-          return res.status(400).json({
-            success: false,
-            message: "standardQuantity cannot be changed here.",
-          });
-        }
-
         if (item.varianceQuantity !== undefined) {
           return res.status(400).json({
             success: false,
@@ -704,11 +720,13 @@ export const updateMaterialConsumptionController = async (
          * Raw material identity is locked
          */
 
-        if (item.rawMaterial !== undefined) {
+        if (
+          item.rawMaterial !== undefined &&
+          (typeof item.rawMaterial !== "string" || !item.rawMaterial.trim())
+        ) {
           return res.status(400).json({
             success: false,
-            message:
-              "rawMaterial cannot be changed after Material Consumption creation.",
+            message: `Item ${index + 1}: rawMaterial must be a valid ID.`,
           });
         }
 
@@ -746,6 +764,8 @@ export const updateMaterialConsumptionController = async (
 
     const updateInput: {
       items?: Array<{
+        rawMaterial?: string;
+        standardQuantity?: number;
         actualQuantity?: number;
         wasteQuantity?: number;
         lotNumber?: string;
@@ -756,6 +776,14 @@ export const updateMaterialConsumptionController = async (
 
     if (Array.isArray(items)) {
       updateInput.items = items.map((item) => ({
+        ...(item.rawMaterial !== undefined
+          ? { rawMaterial: item.rawMaterial }
+          : {}),
+
+        ...(item.standardQuantity !== undefined
+          ? { standardQuantity: item.standardQuantity }
+          : {}),
+
         ...(item.actualQuantity !== undefined
           ? {
               actualQuantity: item.actualQuantity,

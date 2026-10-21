@@ -110,7 +110,7 @@ export async function issueMaterialConsumption(
  */
 export async function updateBatchRecipe(
   id: string,
-  items: Array<Pick<MaterialConsumptionItem, "standardQuantity">>,
+  items: Array<Pick<MaterialConsumptionItem, "rawMaterial" | "standardQuantity">>,
 ) {
   return request<MaterialConsumption>(`${BASE_URL}/${id}`, {
     method: "PUT",
@@ -120,7 +120,7 @@ export async function updateBatchRecipe(
 
 export async function saveBatchRecipeAsFormulaVersion(
   id: string,
-  items: Array<Pick<MaterialConsumptionItem, "standardQuantity">>,
+  items: Array<Pick<MaterialConsumptionItem, "rawMaterial" | "standardQuantity">>,
 ) {
   return request<{ consumption: MaterialConsumption }>(
     `${BASE_URL}/${id}/save-formula-version`,

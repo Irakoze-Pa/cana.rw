@@ -26,6 +26,8 @@ export interface ProductSummary {
   sku?: string;
   category?: string;
   unit?: string;
+  baseUnit?: "kg" | "pcs";
+  packSizeKg?: number;
 }
 
 export interface FormulaSummary {
@@ -65,6 +67,15 @@ export interface ProductionBatch {
   formulaName: string;
   formulaCode: string;
   formulaVersion: number;
+  formulaSnapshot?: Array<{
+    rawMaterial: string | { _id?: string };
+    rawMaterialName: string;
+    rawMaterialCode: string;
+    quantity: number;
+    unit: string;
+    wastePercentage?: number;
+    notes?: string;
+  }>;
 
   plannedQuantity: number;
   actualQuantity: number;

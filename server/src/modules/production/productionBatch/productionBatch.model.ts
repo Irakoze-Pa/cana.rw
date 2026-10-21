@@ -50,6 +50,15 @@ export interface IProductionBatch
   formulaName: string;
   formulaCode: string;
   formulaVersion: number;
+  formulaSnapshot: Array<{
+    rawMaterial: mongoose.Types.ObjectId;
+    rawMaterialName: string;
+    rawMaterialCode: string;
+    quantity: number;
+    unit: string;
+    wastePercentage: number;
+    notes?: string;
+  }>;
 
   // ---------------------------------------------------
   // PRODUCTION QUANTITY
@@ -212,6 +221,26 @@ const productionBatchSchema =
         required: true,
         min: 1,
         default: 1,
+      },
+
+      // Scaled recipe owned by this batch. It remains unchanged when the
+      // master formula is edited and is locked once materials are issued.
+      formulaSnapshot: {
+        type: [
+          new Schema(
+            {
+              rawMaterial: { type: Schema.Types.ObjectId, ref: "RawMaterial", required: true },
+              rawMaterialName: { type: String, required: true, trim: true },
+              rawMaterialCode: { type: String, required: true, trim: true, uppercase: true },
+              quantity: { type: Number, required: true, min: 0 },
+              unit: { type: String, required: true, trim: true },
+              wastePercentage: { type: Number, default: 0, min: 0, max: 100 },
+              notes: { type: String, default: "", trim: true },
+            },
+            { _id: false },
+          ),
+        ],
+        default: [],
       },
 
       // -------------------------------------------------

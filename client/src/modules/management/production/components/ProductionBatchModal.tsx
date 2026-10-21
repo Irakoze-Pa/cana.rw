@@ -289,6 +289,12 @@ export default function ProductionBatchModal({
     [directFormulas, directFormulaId],
   );
 
+  const formulaReferenceOutput = numberValue(selectedDirectFormula?.batchSize);
+  const batchScale =
+    !isEdit && formulaReferenceOutput > 0 && numberValue(plannedQuantity) > 0
+      ? numberValue(plannedQuantity) / formulaReferenceOutput
+      : null;
+
   const directFormulasForProduct = useMemo(
     () =>
       directFormulas.filter((formula) => {
@@ -913,8 +919,8 @@ export default function ProductionBatchModal({
                 <label className="block text-sm font-semibold text-gray-800">
                   {isEdit
                     ? "Planned Batch Quantity"
-                    : "Formula reference output"}
-                  {isEdit && <span className="ml-1 text-red-600">*</span>}
+                    : "Batch formula output"}
+                  <span className="ml-1 text-red-600">*</span>
                 </label>
 
                 {!isEdit && remainingQuantity !== null && (
@@ -929,7 +935,7 @@ export default function ProductionBatchModal({
                   type="number"
                   min="0.01"
                   max={
-                    !isEdit || canEditPlannedQuantity(currentStatus)
+                    isEdit && canEditPlannedQuantity(currentStatus)
                       ? (remainingQuantity ?? undefined)
                       : undefined
                   }
@@ -939,8 +945,7 @@ export default function ProductionBatchModal({
                   disabled={
                     submitting ||
                     loadingBatches ||
-                    plannedQuantityLocked ||
-                    !isEdit
+                    plannedQuantityLocked
                   }
                   className="h-12 min-w-0 flex-1 rounded-xl border border-gray-200 px-4 text-sm text-gray-900 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
                   placeholder="Enter batch quantity"
@@ -974,10 +979,17 @@ export default function ProductionBatchModal({
                 </p>
               )}
               {!isEdit && (
-                <p className="mt-1.5 text-xs text-slate-500">
-                  This is the formula batch size used only as a reference.
-                  Record the real finished quantity when completing the batch.
-                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <span>
+                    Formula reference: <strong className="text-slate-900">{formulaReferenceOutput.toLocaleString()} {unit || "kg"}</strong>
+                  </span>
+                  {batchScale !== null && (
+                    <span>
+                      Recipe scale: <strong className="text-slate-900">{batchScale.toLocaleString(undefined, { maximumFractionDigits: 3 })}×</strong>
+                    </span>
+                  )}
+                  <span>This creates an independent, editable formula for this batch.</span>
+                </div>
               )}
             </div>
 

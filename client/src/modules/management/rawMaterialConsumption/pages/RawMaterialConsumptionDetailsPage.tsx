@@ -16,8 +16,10 @@ import {
   Factory,
   Package,
   PackageCheck,
+  Plus,
   RefreshCw,
   Send,
+  Trash2,
   XCircle,
 } from "lucide-react";
 
@@ -28,8 +30,10 @@ import type {
 
 import {
   getMaterialConsumptionById,
-  updateBatchRecipe,
+  saveBatchRecipeAsFormulaVersion,
 } from "../services/materialConsumption.service";
+import { getRawMaterials } from "../../rawMaterial/services/rawMaterialService";
+import type { RawMaterial } from "../../rawMaterial/types/rawMaterial.types";
 
 import IssueMaterialsModal from "../components/IssueMaterialsModal";
 import { updateProductionBatch } from "../../production/services/productionBatch.service";
@@ -158,7 +162,8 @@ export default function RawMaterialConsumptionDetailsPage() {
 
   const [recipeEditorOpen, setRecipeEditorOpen] = useState<boolean>(false);
 
-  const [recipeQuantities, setRecipeQuantities] = useState<string[]>([]);
+  const [recipeLines, setRecipeLines] = useState<Array<{ rawMaterial: string; quantity: string }>>([]);
+  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
 
   const [savingRecipe, setSavingRecipe] = useState<boolean>(false);
 
@@ -411,14 +416,34 @@ export default function RawMaterialConsumptionDetailsPage() {
     }
   };
 
-  const openRecipeEditor = () => {
+  const openRecipeEditor = async () => {
     setRecipeError("");
-    setRecipeQuantities(items.map((item) => String(item.standardQuantity)));
+    setRecipeLines(items.map((item) => ({
+      rawMaterial:
+        typeof item.rawMaterial === "string"
+          ? item.rawMaterial
+          : String((item.rawMaterial as any)?._id || ""),
+      quantity: String(item.standardQuantity),
+    })));
     setRecipeEditorOpen(true);
+    try {
+      const materials = await getRawMaterials();
+      setRawMaterials(materials.filter((material) => material.status !== "Inactive"));
+    } catch (error) {
+      setRecipeError(error instanceof Error ? error.message : "Could not load raw materials.");
+    }
   };
 
   const saveBatchRecipe = async () => {
-    const quantities = recipeQuantities.map((quantity) => Number(quantity));
+    const quantities = recipeLines.map((line) => Number(line.quantity));
+    if (recipeLines.some((line) => !line.rawMaterial)) {
+      setRecipeError("Select a raw material on every formula line.");
+      return;
+    }
+    if (new Set(recipeLines.map((line) => line.rawMaterial)).size !== recipeLines.length) {
+      setRecipeError("A raw material can appear only once in the formula.");
+      return;
+    }
     if (
       quantities.some((quantity) => !Number.isFinite(quantity) || quantity < 0)
     ) {
@@ -430,15 +455,31 @@ export default function RawMaterialConsumptionDetailsPage() {
       return;
     }
     try {
+      const approved = await confirm({
+        title: "Save and use new formula version",
+        description:
+          "Create the next formula version with these quantities and this batch output? It will be used by this batch and offered for future batches. Previous versions remain in history.",
+        confirmLabel: "Save & use version",
+        tone: "primary",
+      });
+      if (!approved) return;
       setSavingRecipe(true);
       setRecipeError("");
-      const recipeItems = quantities.map((standardQuantity) => ({
+      const recipeItems = quantities.map((standardQuantity, index) => ({
+        rawMaterial: recipeLines[index].rawMaterial,
         standardQuantity,
       }));
-      const updated = await updateBatchRecipe(consumption._id, recipeItems);
-      setConsumption((updated as any)?.data ?? updated);
+      const result = await saveBatchRecipeAsFormulaVersion(
+        consumption._id,
+        recipeItems,
+      );
+      setConsumption(
+        (result as any)?.data?.consumption ??
+          (result as any)?.consumption ??
+          consumption,
+      );
       setRecipeEditorOpen(false);
-      toast("Batch recipe saved for this production only.", "success");
+      toast("New formula version saved and linked to this batch.", "success");
     } catch (err) {
       setRecipeError(
         err instanceof Error
@@ -696,7 +737,7 @@ export default function RawMaterialConsumptionDetailsPage() {
                   <tr className="border-b border-slate-100 bg-slate-50">
                     <TableHeader align="left">Raw Material</TableHeader>
 
-                    <TableHeader>Standard</TableHeader>
+                    <TableHeader>Formula qty</TableHeader>
 
                     {!isDraft && <TableHeader>Issued</TableHeader>}
 
@@ -856,11 +897,11 @@ export default function RawMaterialConsumptionDetailsPage() {
                   This production batch only
                 </p>
                 <h2 className="mt-1 text-lg font-extrabold text-slate-950">
-                  Edit this batch recipe
+                  Edit formula quantities
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Changes apply only to this production batch. The approved
-                  formula remains unchanged.
+                  Saving creates the next reusable formula version and links it
+                  to this batch. Previous versions remain in history.
                 </p>
               </div>
               <button
@@ -878,42 +919,63 @@ export default function RawMaterialConsumptionDetailsPage() {
                   {recipeError}
                 </p>
               )}
-              {items.map((item, index) => (
-                <label
-                  key={`${item.rawMaterial}-${index}`}
-                  className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_10rem] sm:items-center"
+              {recipeLines.map((line, index) => {
+                const material = rawMaterials.find((item) => item._id === line.rawMaterial);
+                return (
+                <div
+                  key={`${line.rawMaterial}-${index}`}
+                  className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_10rem_9rem_2.5rem] sm:items-center"
                 >
-                  <span>
-                    <strong className="block text-sm text-slate-950">
-                      {item.rawMaterialName}
-                    </strong>
-                    <small className="text-slate-500">
-                      {item.rawMaterialCode}
-                    </small>
-                  </span>
+                  <select
+                    value={line.rawMaterial}
+                    onChange={(event) => setRecipeLines((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, rawMaterial: event.target.value } : entry))}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900"
+                  >
+                    <option value="">Select raw material</option>
+                    {rawMaterials.map((option) => (
+                      <option key={option._id} value={option._id} disabled={recipeLines.some((entry, entryIndex) => entryIndex !== index && entry.rawMaterial === option._id)}>
+                        {option.name} · {option.code}
+                      </option>
+                    ))}
+                  </select>
                   <span className="relative">
                     <input
                       type="number"
                       min="0"
                       step="0.0001"
-                      value={recipeQuantities[index] ?? ""}
+                      value={line.quantity}
                       onChange={(event) =>
-                        setRecipeQuantities((current) =>
-                          current.map((quantity, quantityIndex) =>
-                            quantityIndex === index
-                              ? event.target.value
-                              : quantity,
+                        setRecipeLines((current) =>
+                          current.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? { ...entry, quantity: event.target.value }
+                              : entry,
                           ),
                         )
                       }
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-sm font-semibold"
                     />
                     <small className="pointer-events-none absolute right-3 top-2.5 text-slate-500">
-                      {item.unit}
+                      {material?.unit || "kg"}
                     </small>
                   </span>
-                </label>
-              ))}
+                  <span className="rounded-lg bg-slate-50 px-3 py-2 text-right">
+                    <small className="block text-[10px] font-bold uppercase text-slate-500">Price / {material?.unit || "unit"}</small>
+                    <strong className="text-xs text-slate-950">{Number(material?.costPerUnit || 0).toLocaleString("en-RW")} RWF</strong>
+                    <small className="mt-0.5 block text-[10px] text-slate-500">Line: {(Number(line.quantity || 0) * Number(material?.costPerUnit || 0)).toLocaleString("en-RW")} RWF</small>
+                  </span>
+                  <button type="button" onClick={() => setRecipeLines((current) => current.filter((_, entryIndex) => entryIndex !== index))} disabled={recipeLines.length === 1} className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30" aria-label="Remove raw material">
+                    <Trash2 size={16}/>
+                  </button>
+                </div>
+              )})}
+              <button type="button" onClick={() => setRecipeLines((current) => [...current, { rawMaterial: "", quantity: "0" }])} className="inline-flex items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:border-slate-500 hover:bg-slate-50">
+                <Plus size={16}/> Add raw material
+              </button>
+              <div className="flex items-center justify-between rounded-xl bg-slate-950 px-4 py-3 text-sm text-white">
+                <span className="font-semibold text-slate-300">Estimated material cost</span>
+                <strong>{recipeLines.reduce((total, line) => total + Number(line.quantity || 0) * Number(rawMaterials.find((material) => material._id === line.rawMaterial)?.costPerUnit || 0), 0).toLocaleString("en-RW")} RWF</strong>
+              </div>
             </div>
             <footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
               <button
@@ -930,7 +992,7 @@ export default function RawMaterialConsumptionDetailsPage() {
                 disabled={savingRecipe}
                 className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
               >
-                {savingRecipe ? "Saving…" : "Save batch recipe"}
+                {savingRecipe ? "Saving…" : "Save & use new version"}
               </button>
             </footer>
           </section>

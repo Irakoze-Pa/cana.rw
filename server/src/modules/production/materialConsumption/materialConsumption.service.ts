@@ -32,6 +32,7 @@ interface MaterialConsumptionItemUpdate {
    * before stock is issued; it never changes the master product formula.
    */
   standardQuantity?: number;
+  rawMaterial?: string;
   actualQuantity?: number;
   wasteQuantity?: number;
   lotNumber?: string;
@@ -541,12 +542,15 @@ export const createMaterialConsumption = async (
   }
 
   // =================================================
-  // ONLY IN PROGRESS
+  // PREPARE BATCH FORMULA BEFORE PRODUCTION
   // =================================================
 
-  if (batch.status !== "In Progress") {
+  // The Draft consumption record is the editable, batch-specific formula.
+  // It may be prepared while planning, but issueMaterialConsumption keeps the
+  // stricter In Progress check so no inventory can leave the store early.
+  if (!["Planned", "Ready", "In Progress"].includes(batch.status)) {
     throw new Error(
-      `Material Consumption can only be created for an In Progress Production Batch. Current status: ${batch.status}.`,
+      `A batch formula can only be prepared for a Planned, Ready or In Progress Production Batch. Current status: ${batch.status}.`,
     );
   }
 
@@ -590,7 +594,33 @@ export const createMaterialConsumption = async (
     legacyOrder = await ProductionOrder.findById(batch.productionOrder);
   }
 
-  if (legacyOrder) {
+  const batchSnapshot = Array.isArray((batch as any).formulaSnapshot)
+    ? (batch as any).formulaSnapshot
+    : [];
+
+  if (batchSnapshot.length > 0) {
+    items = batchSnapshot.map((item: any, index: number) => {
+      if (!item.rawMaterial) {
+        throw new Error(`Raw material is missing at batch recipe item ${index + 1}.`);
+      }
+      const standardQuantity = roundNumber(toNumber(item.quantity));
+      return {
+        rawMaterial: item.rawMaterial,
+        rawMaterialName: item.rawMaterialName,
+        rawMaterialCode: item.rawMaterialCode,
+        unit: item.unit,
+        standardQuantity,
+        issuedQuantity: 0,
+        actualQuantity: 0,
+        wasteQuantity: 0,
+        returnQuantity: 0,
+        varianceQuantity: roundNumber(-standardQuantity),
+        variancePercentage: standardQuantity > 0 ? -100 : 0,
+        lotNumber: "",
+        notes: item.notes || "",
+      };
+    });
+  } else if (legacyOrder) {
     items = await buildConsumptionItems(
       legacyOrder.items,
       toNumber(legacyOrder.quantity),
@@ -1255,11 +1285,73 @@ export const updateMaterialConsumption = async (
   if (input.items) {
     const existingItems = getConsumptionItems(consumption.items);
 
-    if (input.items.length !== existingItems.length) {
+    if (
+      consumption.status !== "Draft" &&
+      input.items.length !== existingItems.length
+    ) {
       throw new Error(
-        "Material item structure cannot be changed after creation.",
+        "Formula materials cannot be added or removed after stock is issued.",
       );
     }
+
+    if (consumption.status === "Draft") {
+      if (!input.items.length) {
+        throw new Error("A batch formula must contain at least one raw material.");
+      }
+
+      const materialIds = input.items.map((item, index) => {
+        const id = item.rawMaterial || String(existingItems[index]?.rawMaterial || "");
+        if (!mongoose.isValidObjectId(id)) {
+          throw new Error(`Item ${index + 1}: select a valid raw material.`);
+        }
+        return id;
+      });
+
+      if (new Set(materialIds).size !== materialIds.length) {
+        throw new Error("A raw material can appear only once in a batch formula.");
+      }
+
+      const materials = await RawMaterial.find({
+        _id: { $in: materialIds },
+        status: "Active",
+      }).select("name code unit").lean();
+      const materialMap = new Map(materials.map((item: any) => [String(item._id), item]));
+
+      if (materialMap.size !== materialIds.length) {
+        throw new Error("One or more selected raw materials are unavailable or inactive.");
+      }
+
+      const rebuiltItems = input.items.map((incoming, index) => {
+        const material: any = materialMap.get(materialIds[index]);
+        const quantity = roundNumber(toNumber(incoming.standardQuantity));
+        validateNonNegativeQuantity(`${material.name} formula quantity`, quantity);
+        return calculateLine({
+          rawMaterial: material._id,
+          rawMaterialName: material.name,
+          rawMaterialCode: material.code,
+          unit: material.unit || "kg",
+          standardQuantity: quantity,
+          issuedQuantity: 0,
+          actualQuantity: 0,
+          wasteQuantity: 0,
+          returnQuantity: 0,
+          varianceQuantity: 0,
+          variancePercentage: 0,
+          lotNumber: "",
+          notes: incoming.notes?.trim() || "",
+        });
+      });
+
+      consumption.items = rebuiltItems;
+      const totals = calculateTotals(rebuiltItems);
+      consumption.totalStandardQuantity = totals.totalStandardQuantity;
+      consumption.totalIssuedQuantity = totals.totalIssuedQuantity;
+      consumption.totalActualQuantity = totals.totalActualQuantity;
+      consumption.totalWasteQuantity = totals.totalWasteQuantity;
+      consumption.totalReturnQuantity = totals.totalReturnQuantity;
+      consumption.totalVarianceQuantity = totals.totalVarianceQuantity;
+      consumption.status = "Draft";
+    } else {
 
     const updatedItems = existingItems.map((existingItem, index) => {
       const incoming = input.items?.[index];
@@ -1379,6 +1471,7 @@ export const updateMaterialConsumption = async (
     consumption.totalVarianceQuantity = totals.totalVarianceQuantity;
 
     consumption.status = determineConsumptionStatus(updatedItems);
+    }
   }
 
   if (input.notes !== undefined) {
@@ -1386,6 +1479,27 @@ export const updateMaterialConsumption = async (
   }
 
   await consumption.save();
+
+  // The batch owns the editable recipe snapshot. Keeping it synchronized
+  // preserves exactly what this production used even if the master formula
+  // is changed or the consumption record is later archived.
+  if (input.items) {
+    const batch = await ProductionBatch.findById(consumption.productionBatch);
+    if (batch) {
+      (batch as any).formulaSnapshot = getConsumptionItems(consumption.items).map(
+        (item: any) => ({
+          rawMaterial: item.rawMaterial,
+          rawMaterialName: item.rawMaterialName,
+          rawMaterialCode: item.rawMaterialCode,
+          quantity: Number(item.standardQuantity || 0),
+          unit: item.unit,
+          wastePercentage: 0,
+          notes: item.notes || "",
+        }),
+      );
+      await batch.save();
+    }
+  }
 
   return populateConsumption(consumption._id);
 };
@@ -1409,17 +1523,32 @@ export const saveBatchRecipeAsFormulaVersion = async (
   const baseFormula = await Formula.findById(consumption.formula).lean();
   if (!baseFormula) throw new Error("The source formula was not found.");
 
+  const batch = await ProductionBatch.findById(consumption.productionBatch);
+  if (!batch) throw new Error("The production batch was not found.");
+
+  const versionOutput = Number(batch.plannedQuantity || 0);
+  if (!Number.isFinite(versionOutput) || versionOutput <= 0) {
+    throw new Error("The batch output must be greater than zero.");
+  }
+
   const formula = await createNewFormulaVersion(String(consumption.formula), {
+    batchSize: versionOutput,
+    batchUnit: batch.unit || "kg",
     items: consumption.items.map((item: any) => {
       const source = baseFormula.items.find(
         (formulaItem: any) =>
           String(formulaItem.rawMaterial) === String(item.rawMaterial),
       );
+      const wastePercentage = Number(source?.wastePercentage || 0);
       return {
         rawMaterial: String(item.rawMaterial),
-        quantity: Number(item.standardQuantity || 0),
+        // Batch standard quantity already includes formula waste allowance.
+        // Remove it before saving the reusable base quantity so the next
+        // batch does not apply the allowance twice.
+        quantity: Number(item.standardQuantity || 0) /
+          (1 + wastePercentage / 100),
         unit: item.unit,
-        wastePercentage: Number(source?.wastePercentage || 0),
+        wastePercentage,
         notes: source?.notes || item.notes || "",
       };
     }),
@@ -1430,14 +1559,11 @@ export const saveBatchRecipeAsFormulaVersion = async (
     throw new Error("Could not create the next formula version.");
   }
 
-  const batch = await ProductionBatch.findById(consumption.productionBatch);
-  if (batch) {
-    batch.formula = formula._id;
-    batch.formulaName = formula.name;
-    batch.formulaCode = formula.code;
-    batch.formulaVersion = Number(formula.version);
-    await batch.save();
-  }
+  batch.formula = formula._id;
+  batch.formulaName = formula.name;
+  batch.formulaCode = formula.code;
+  batch.formulaVersion = Number(formula.version);
+  await batch.save();
 
   consumption.formula = formula._id;
   consumption.formulaName = formula.name;
