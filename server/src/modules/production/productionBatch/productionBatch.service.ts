@@ -6,6 +6,7 @@ import Formula from "../../formula/formula.model";
 import Product from "../../product/product.model";
 import FinishedGoodsStoreBalance from "../../finishedGoods/storeBalance.model";
 import InventoryTransaction from "../../inventory/inventoryTransaction.model";
+import Inventory from "../../inventory/inventory.model";
 import RawMaterialConsumption from "../materialConsumption/materialConsumption.model";
 import {
   completeMaterialConsumption,
@@ -79,23 +80,44 @@ export class ProductionBatchServiceError extends Error {
   }
 }
 
-async function snapshotCompletedBatchCost(batch: any, productionOrder?: any) {
-  if (batch.costedAt) return;
+async function snapshotCompletedBatchCost(
+  batch: any,
+  productionOrder?: any,
+  forceRevalue = false,
+) {
+  if (batch.costedAt && !forceRevalue) return;
 
   const [transactions, product] = await Promise.all([
     InventoryTransaction.find({
       productionBatch: batch._id,
       type: { $in: ["Production Issue", "Production Return"] },
     })
-      .select("type totalCost")
+      .select("type rawMaterial quantity unitCost totalCost")
       .lean(),
     Product.findById(batch.product).select("packSizeKg baseUnit").lean(),
   ]);
+  const materialIds = [...new Set(
+    transactions.map((transaction: any) => String(transaction.rawMaterial)),
+  )].filter((id) => mongoose.Types.ObjectId.isValid(id));
+  const inventories = await Inventory.find({ rawMaterial: { $in: materialIds } })
+    .select("rawMaterial averageCostPerUnit")
+    .lean();
+  const inventoryCostByMaterial = new Map(
+    inventories.map((inventory: any) => [
+      String(inventory.rawMaterial),
+      Number(inventory.averageCostPerUnit || 0),
+    ]),
+  );
   const materialCost = transactions.reduce(
     (total, transaction) =>
       total +
       (transaction.type === "Production Return" ? -1 : 1) *
-        Number(transaction.totalCost || 0),
+        (
+          Number(transaction.totalCost || 0) > 0
+            ? Number(transaction.totalCost || 0)
+            : Number(transaction.quantity || 0) *
+              Number(inventoryCostByMaterial.get(String(transaction.rawMaterial)) || 0)
+        ),
     0,
   );
   const orderQuantity = Number(productionOrder?.quantity || 0);
@@ -122,6 +144,25 @@ async function snapshotCompletedBatchCost(batch: any, productionOrder?: any) {
   batch.costPerPack = roundNumber(packSizeKg > 0 ? perKg * packSizeKg : 0);
   batch.costedAt = new Date();
   await batch.save();
+}
+
+export async function revalueProductionBatchCost(id: string) {
+  validateObjectId(id, "production batch ID");
+  const batch: any = await ProductionBatch.findById(id);
+  if (!batch) {
+    throw new ProductionBatchServiceError("Production batch not found.", 404);
+  }
+  if (batch.status !== "Completed") {
+    throw new ProductionBatchServiceError(
+      "Only a completed production batch can be revalued.",
+      409,
+    );
+  }
+  const productionOrder = batch.productionOrder
+    ? await ProductionOrder.findById(batch.productionOrder).lean()
+    : undefined;
+  await snapshotCompletedBatchCost(batch, productionOrder, true);
+  return getProductionBatchById(id);
 }
 
 // =====================================================

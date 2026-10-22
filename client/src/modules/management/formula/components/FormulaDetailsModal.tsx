@@ -6,7 +6,10 @@ import {
   Package,
   Calculator,
   FileText,
+  Printer,
 } from "lucide-react";
+
+import { printCanaDocument } from "../../utils/printCanaDocument";
 
 import type {
   Formula,
@@ -74,6 +77,93 @@ export default function FormulaDetails({
       ? null
       : formula.product;
 
+  const printFormulaCostSheet = () => {
+    const materialRows = (formula.items || []).map((item, index) => {
+      const material = getMaterial(item.rawMaterial);
+      const quantity = Number(item.quantity || 0);
+      const waste = Number(item.wastePercentage || 0);
+      const costQuantity = quantity * (1 + waste / 100);
+      const unitCost = Number(material?.costPerUnit || 0);
+
+      return [
+        index + 1,
+        material
+          ? `${material.name}${material.code ? ` · ${material.code}` : ""}`
+          : "Material unavailable",
+        `${quantity.toLocaleString("en-RW")} ${item.unit}`,
+        `${waste.toLocaleString("en-RW")} %`,
+        `${costQuantity.toLocaleString("en-RW", { maximumFractionDigits: 3 })} ${item.unit}`,
+        unitCost > 0 ? formatMoney(unitCost) : "Not priced",
+        unitCost > 0 ? formatMoney(costQuantity * unitCost) : "Not priced",
+      ];
+    });
+
+    materialRows.push([
+      "",
+      "MATERIALS SUBTOTAL",
+      "",
+      "",
+      "",
+      "",
+      formatMoney(formula.estimatedMaterialCost),
+    ]);
+
+    const outputQuantity = Number(formula.batchSize || 0);
+    const unitProductionCost = outputQuantity > 0
+      ? Number(formula.estimatedTotalCost || 0) / outputQuantity
+      : 0;
+
+    printCanaDocument({
+      title: "Formula Cost Sheet",
+      reference: `${formula.code} · Version ${formula.version}`,
+      status: formula.status,
+      issueDate: formula.updatedAt,
+      brandLine: "CANA Paints · Production Costing",
+      orientation: "landscape",
+      details: [
+        {
+          label: "Product",
+          value: product ? `${product.name} · ${product.code}` : "Product unavailable",
+        },
+        { label: "Formula", value: formula.name },
+        {
+          label: "Reference output",
+          value: `${outputQuantity.toLocaleString("en-RW")} ${formula.batchUnit}`,
+        },
+        { label: "Materials", value: formatMoney(formula.estimatedMaterialCost) },
+        { label: "Labour", value: formatMoney(formula.laborCost) },
+        { label: "Energy", value: formatMoney(formula.energyCost) },
+        { label: "Other production overhead", value: formatMoney(formula.otherCost) },
+        { label: "Total production cost", value: formatMoney(formula.estimatedTotalCost) },
+        {
+          label: `Estimated cost per ${formula.batchUnit}`,
+          value: formatMoney(unitProductionCost),
+        },
+        {
+          label: "Cost completeness",
+          value: formula.costingComplete === false ? "Incomplete pricing" : "All materials priced",
+        },
+      ],
+      table: {
+        headers: ["#", "Raw material", "Formula qty", "Waste", "Cost qty", "Unit price", "Line cost"],
+        rows: materialRows,
+      },
+      notes: [
+        "Formula quantities include the stated waste allowance when calculating cost.",
+        "Prices are the current inventory weighted-average costs, with the latest active supplier offer used when valued stock is unavailable.",
+        formula.costingComplete === false
+          ? `Unpriced materials: ${(formula.unpricedMaterials || []).join(", ") || "review the material lines marked Not priced"}.`
+          : "All raw-material lines have a price for this estimate.",
+        formula.notes?.trim(),
+      ].filter(Boolean).join(" "),
+      approval: {
+        status: "Internal production cost sheet",
+        signatoryName: "KABANDA Fred",
+        signatoryTitle: "Managing Director",
+      },
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -115,13 +205,24 @@ export default function FormulaDetails({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={printFormulaCostSheet}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 transition hover:border-red-200 hover:text-red-700"
+            >
+              <Printer size={16} />
+              <span className="hidden sm:inline">Print cost sheet</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* =================================================

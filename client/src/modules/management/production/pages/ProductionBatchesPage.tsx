@@ -27,6 +27,7 @@ import {
   deleteProductionBatch,
   getProductionBatchById,
   getProductionBatches,
+  revalueProductionBatchCost,
   updateProductionBatch,
 } from "../services/productionBatch.service";
 
@@ -39,6 +40,8 @@ import { printCanaDocument } from "../../utils/printCanaDocument";
 import { useConfirmation } from "@/context/confirmationContext";
 import { getMaterialConsumptions } from "../../rawMaterialConsumption/services/materialConsumption.service";
 import { getRawMaterials } from "../../rawMaterial/services/rawMaterialService";
+import { getFormulaById } from "../../formula/services/formula.service";
+import inventoryService from "../../inventory/services/inventoryService";
 import api from "@/services/api";
 
 // =====================================================
@@ -132,10 +135,14 @@ function canDeleteBatch(batch: ProductionBatch): boolean {
 }
 
 async function printBatchRecord(batch: ProductionBatch) {
+  if (batch.status === "Completed") {
+    batch = await revalueProductionBatchCost(batch._id);
+  }
   const product = typeof batch.product === "object" ? batch.product : undefined;
+  const formulaId = typeof batch.formula === "object" ? batch.formula._id : batch.formula;
   const packSizeKg = Number(product?.packSizeKg || 30);
   const packLabel = product?.unit || `${formatNumber(packSizeKg)} kg`;
-  const [consumptions, transactionResponse, rawMaterials] = await Promise.all([
+  const [consumptions, transactionResponse, rawMaterials, inventory, formula] = await Promise.all([
     getMaterialConsumptions({ productionBatch: batch._id }),
     api.get<{
       data?: {
@@ -151,6 +158,10 @@ async function printBatchRecord(batch: ProductionBatch) {
       };
     }>(`/inventory/transactions?productionBatch=${batch._id}&limit=200`),
     getRawMaterials(),
+    inventoryService.getInventory(),
+    formulaId
+      ? getFormulaById(formulaId).catch(() => null)
+      : Promise.resolve(null),
   ]);
   const consumption = consumptions.find(
     (record) => record.status !== "Cancelled",
@@ -165,29 +176,12 @@ async function printBatchRecord(batch: ProductionBatch) {
         100
       : 0;
   const plannedPacks = getPackBreakdown(batch.plannedQuantity, packSizeKg);
-  const completeProductionCost =
-    Number(batch.actualMaterialCost || 0) +
-    Number(batch.allocatedLaborCost || 0) +
-    Number(batch.allocatedEnergyCost || 0) +
-    Number(batch.allocatedOtherCost || 0);
-  const completeCostPerKg =
-    Number(batch.actualQuantity || 0) > 0
-      ? completeProductionCost / Number(batch.actualQuantity)
-      : 0;
-  const calculatedCostPerPack =
-    completeCostPerKg * packSizeKg;
+  let printableMaterialSubtotal = 0;
   const materialRows = (consumption?.items || []).map((item, index) => {
     const movements = costTransactions.filter(
       (transaction) =>
         transaction.rawMaterialCode === item.rawMaterialCode ||
         transaction.rawMaterialName === item.rawMaterialName,
-    );
-    const issuedCost = movements.reduce(
-      (sum, transaction) =>
-        sum +
-        (transaction.type === "Production Return" ? -1 : 1) *
-          Number(transaction.totalCost ?? transaction.quantity * transaction.unitCost),
-      0,
     );
     const issuedQuantity = movements.reduce(
       (sum, transaction) =>
@@ -197,13 +191,49 @@ async function printBatchRecord(batch: ProductionBatch) {
       0,
     );
     const quantity = Number(item.actualQuantity || item.issuedQuantity || issuedQuantity);
-    const currentMaterial = rawMaterials.find(
-      (material) => material.code === item.rawMaterialCode,
+    const currentMaterial = rawMaterials.find((material) =>
+      material._id === item.rawMaterial ||
+      material.code?.trim().toLowerCase() === item.rawMaterialCode?.trim().toLowerCase() ||
+      material.name?.trim().toLowerCase() === item.rawMaterialName?.trim().toLowerCase()
     );
-    const unitCost = issuedQuantity > 0
-      ? issuedCost / issuedQuantity
-      : Number(currentMaterial?.costPerUnit || 0);
-    const totalCost = issuedCost > 0 ? issuedCost : quantity * unitCost;
+    const inventoryItem = inventory.find((entry) => {
+      const material = typeof entry.rawMaterial === "object" ? entry.rawMaterial : undefined;
+      const materialId = material?._id || entry.rawMaterial;
+      return materialId === item.rawMaterial ||
+        entry.rawMaterialCode?.trim().toLowerCase() === item.rawMaterialCode?.trim().toLowerCase() ||
+        entry.rawMaterialName?.trim().toLowerCase() === item.rawMaterialName?.trim().toLowerCase();
+    });
+    const formulaItem = formula?.items?.find((entry) => {
+      const material = typeof entry.rawMaterial === "object" ? entry.rawMaterial : undefined;
+      const materialId = material?._id || entry.rawMaterial;
+      return materialId === item.rawMaterial ||
+        material?.code?.trim().toLowerCase() === item.rawMaterialCode?.trim().toLowerCase() ||
+        material?.name?.trim().toLowerCase() === item.rawMaterialName?.trim().toLowerCase();
+    });
+    const formulaMaterial = formulaItem && typeof formulaItem.rawMaterial === "object"
+      ? formulaItem.rawMaterial
+      : undefined;
+    const fallbackUnitCost = Number(
+      inventoryItem?.averageCostPerUnit ||
+          formulaMaterial?.costPerUnit ||
+          currentMaterial?.costPerUnit ||
+          0,
+    );
+    const resolvedIssuedCost = movements.reduce((sum, transaction) => {
+      const transactionCost = Number(transaction.totalCost || 0) > 0
+        ? Number(transaction.totalCost)
+        : Number(transaction.quantity || 0) *
+          Number(transaction.unitCost || fallbackUnitCost);
+      return sum +
+        (transaction.type === "Production Return" ? -1 : 1) * transactionCost;
+    }, 0);
+    const unitCost = issuedQuantity > 0 && resolvedIssuedCost > 0
+      ? resolvedIssuedCost / issuedQuantity
+      : fallbackUnitCost;
+    const totalCost = resolvedIssuedCost > 0
+      ? resolvedIssuedCost
+      : quantity * unitCost;
+    printableMaterialSubtotal += totalCost;
 
     return [
       index + 1,
@@ -213,13 +243,26 @@ async function printBatchRecord(batch: ProductionBatch) {
       totalCost > 0 ? formatMoney(totalCost) : "—",
     ];
   });
-  if (materialRows.length && batch.costedAt) {
+  const effectiveMaterialCost = materialRows.length
+    ? printableMaterialSubtotal
+    : Number(batch.actualMaterialCost || 0);
+  const completeProductionCost =
+    effectiveMaterialCost +
+    Number(batch.allocatedLaborCost || formula?.laborCost || 0) +
+    Number(batch.allocatedEnergyCost || formula?.energyCost || 0) +
+    Number(batch.allocatedOtherCost || formula?.otherCost || 0);
+  const completeCostPerKg = Number(batch.actualQuantity || 0) > 0
+    ? completeProductionCost / Number(batch.actualQuantity)
+    : 0;
+  const calculatedCostPerPack = completeCostPerKg * packSizeKg;
+
+  if (materialRows.length) {
     materialRows.push([
       "",
       "MATERIALS SUBTOTAL",
       "",
       "",
-      formatMoney(batch.actualMaterialCost),
+      formatMoney(effectiveMaterialCost),
     ]);
   }
 
@@ -267,26 +310,26 @@ async function printBatchRecord(batch: ProductionBatch) {
       },
       {
         label: "Issued materials cost",
-        value: batch.costedAt
-          ? formatMoney(batch.actualMaterialCost)
-          : "Pending completion",
+        value: materialRows.length || batch.costedAt
+          ? formatMoney(effectiveMaterialCost)
+          : "Pending material pricing",
       },
       {
         label: "Labour cost",
         value: batch.costedAt
-          ? formatMoney(batch.allocatedLaborCost)
+          ? formatMoney(batch.allocatedLaborCost || formula?.laborCost || 0)
           : "Pending completion",
       },
       {
         label: "Energy cost",
         value: batch.costedAt
-          ? formatMoney(batch.allocatedEnergyCost)
+          ? formatMoney(batch.allocatedEnergyCost || formula?.energyCost || 0)
           : "Pending completion",
       },
       {
         label: "Production overhead & other expenses",
         value: batch.costedAt
-          ? formatMoney(batch.allocatedOtherCost)
+          ? formatMoney(batch.allocatedOtherCost || formula?.otherCost || 0)
           : "Pending completion",
       },
       {
@@ -325,7 +368,7 @@ async function printBatchRecord(batch: ProductionBatch) {
     notes: [
       batch.notes?.trim(),
       batch.costedAt
-        ? `Cost snapshot frozen on ${formatDate(batch.costedAt)} from posted material issues and allocated production costs.`
+        ? `Cost record dated ${formatDate(batch.costedAt)}. Material lines use the posted issue price; any legacy zero-price issue is valued using the current inventory weighted-average price, then the saved formula price as fallback.`
         : "Cost remains provisional until material consumption is confirmed and the batch is completed.",
       !materialRows.length
         ? "No active raw-material consumption record was available for this batch."
@@ -342,6 +385,8 @@ async function printBatchRecord(batch: ProductionBatch) {
       signatoryTitle: "Managing Director",
     },
   });
+
+  return batch;
 }
 
 // =====================================================
@@ -1087,7 +1132,9 @@ const ProductionBatchesPage = () => {
         onPrint={async () => {
           if (!selectedBatch) return;
           try {
-            await printBatchRecord(selectedBatch);
+            const updatedBatch = await printBatchRecord(selectedBatch);
+            setSelectedBatch(updatedBatch);
+            await loadData(true);
           } catch (error) {
             alert(
               error instanceof Error

@@ -841,6 +841,16 @@ async function applyCurrentInventoryValuation(formulas: any[]) {
   const plain = formulas.map((formula) =>
     typeof formula?.toObject === "function" ? formula.toObject() : formula,
   );
+  const setupCostByMaterial = new Map<string, number>();
+  plain.forEach((formula) => {
+    (formula.items || []).forEach((item: any) => {
+      const id = String(item.rawMaterial?._id || item.rawMaterial);
+      const setupCost = Number(item.rawMaterial?.costPerUnit || 0);
+      if (mongoose.Types.ObjectId.isValid(id) && setupCost > 0) {
+        setupCostByMaterial.set(id, setupCost);
+      }
+    });
+  });
   const materialIds = [
     ...new Set(
       plain.flatMap((formula) =>
@@ -873,18 +883,34 @@ async function applyCurrentInventoryValuation(formulas: any[]) {
         id,
         Number(item.quantity || 0) > 0 && average > 0
           ? average
-          : Number(latestOfferByMaterial.get(id) || 0),
+          : Number(
+              latestOfferByMaterial.get(id) ||
+                setupCostByMaterial.get(id) ||
+                0,
+            ),
       ];
     }),
   );
   latestOfferByMaterial.forEach((price, id) => {
     if (!costByMaterial.has(id)) costByMaterial.set(id, price);
   });
+  setupCostByMaterial.forEach((price, id) => {
+    if (!costByMaterial.has(id) || Number(costByMaterial.get(id) || 0) <= 0) {
+      costByMaterial.set(id, price);
+    }
+  });
+
+  const resolveMaterialCost = (id: string, rawMaterial?: any) =>
+    Number(
+      costByMaterial.get(id) ||
+        rawMaterial?.costPerUnit ||
+        0,
+    );
 
   return plain.map((formula) => {
     const items = (formula.items || []).map((item: any) => {
       const id = String(item.rawMaterial?._id || item.rawMaterial);
-      const currentCost = Number(costByMaterial.get(id) || 0);
+      const currentCost = resolveMaterialCost(id, item.rawMaterial);
       return {
         ...item,
         rawMaterial:
@@ -898,12 +924,12 @@ async function applyCurrentInventoryValuation(formulas: any[]) {
       const quantityWithWaste =
         Number(item.quantity || 0) *
         (1 + Number(item.wastePercentage || 0) / 100);
-      return sum + quantityWithWaste * Number(costByMaterial.get(id) || 0);
+      return sum + quantityWithWaste * resolveMaterialCost(id, item.rawMaterial);
     }, 0);
     const unpricedMaterials = items
       .filter((item: any) => {
         const id = String(item.rawMaterial?._id || item.rawMaterial);
-        return Number(costByMaterial.get(id) || 0) <= 0;
+        return resolveMaterialCost(id, item.rawMaterial) <= 0;
       })
       .map((item: any) => item.rawMaterial?.name || "Raw material");
     return {

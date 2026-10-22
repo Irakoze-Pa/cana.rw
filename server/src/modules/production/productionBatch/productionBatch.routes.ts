@@ -7,6 +7,7 @@ import {
   getProductionBatchStatsController,
   updateProductionBatchController,
   deleteProductionBatchController,
+  revalueProductionBatchCostController,
 } from "./productionBatch.controller";
 import { authorizeArea, protect } from "../../../middleware/auth.middleware";
 
@@ -29,6 +30,11 @@ router.get(
 router.post(
   "/",
   createProductionBatchController
+);
+
+router.post(
+  "/:id/revalue-cost",
+  revalueProductionBatchCostController,
 );
 
 // =====================================================

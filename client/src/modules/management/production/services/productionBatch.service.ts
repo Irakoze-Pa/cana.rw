@@ -125,6 +125,24 @@ export async function getProductionBatchById(
   return result.data;
 }
 
+export async function revalueProductionBatchCost(
+  id: string,
+): Promise<ProductionBatch> {
+  if (!id.trim()) {
+    throw new Error("Production batch ID is required.");
+  }
+
+  const response = await authenticatedFetch(
+    `${API_URL}/${id}/revalue-cost`,
+    { method: "POST" },
+  );
+  const result = await parseResponse<{
+    success: boolean;
+    data: ProductionBatch;
+  }>(response);
+  return result.data;
+}
+
 // =====================================================
 // GET STATS
 // =====================================================

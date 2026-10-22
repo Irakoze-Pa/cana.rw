@@ -11,8 +11,29 @@ import {
   getActiveProductionBatches,
   updateProductionBatch,
   deleteProductionBatch,
+  revalueProductionBatchCost,
   ProductionBatchServiceError,
 } from "./productionBatch.service";
+
+export async function revalueProductionBatchCostController(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const batch = await revalueProductionBatchCost(String(req.params.id || "").trim());
+    return res.status(200).json({
+      success: true,
+      message: "Production batch cost updated from inventory valuation.",
+      data: batch,
+    });
+  } catch (error: unknown) {
+    return handleProductionBatchError(
+      error,
+      res,
+      "Failed to update production batch cost.",
+    );
+  }
+}
 
 // =====================================================
 // ERROR HANDLER
