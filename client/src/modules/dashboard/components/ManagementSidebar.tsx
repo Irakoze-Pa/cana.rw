@@ -30,6 +30,7 @@ import {
   BookOpen,
   Scale,
   WalletCards,
+  PackageSearch,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/authContext";
@@ -165,6 +166,14 @@ const groups: Group[] = [
         category: "Production operations",
         departments: ["production", "management"],
         permissions: ["production"],
+      },
+      {
+        label: "Material planning",
+        to: "/management/production/material-planning",
+        icon: PackageSearch,
+        category: "Production operations",
+        departments: ["production", "procurement", "warehouse", "management"],
+        permissions: ["production", "procurement", "inventory"],
       },
       {
         label: "Formulas",

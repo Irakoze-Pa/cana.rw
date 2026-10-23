@@ -73,6 +73,7 @@ import FormulasPage from "@/modules/management/formula/pages/FormulaPage";
 
 import ProductionBatchesPage from "@/modules/management/production/pages/ProductionBatchesPage";
 import ProductionWorkspacePage from "@/modules/management/production/pages/ProductionWorkspacePage";
+import MaterialRequirementsPage from "@/modules/management/production/pages/MaterialRequirementsPage";
 import SalesOrdersPage from "@/modules/management/sales/SalesOrdersPage";
 import SalesWorkspacePage from "@/modules/management/sales/SalesWorkspacePage";
 import QuotationsPage from "@/modules/management/sales/QuotationsPage";
@@ -406,6 +407,11 @@ const router = createBrowserRouter([
       {
         path: "production/batches",
         element: <ProductionBatchesPage />,
+      },
+
+      {
+        path: "production/material-planning",
+        element: <MaterialRequirementsPage />,
       },
 
       // =================================================

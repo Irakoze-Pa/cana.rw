@@ -35,6 +35,7 @@ const titles: Record<string, string> = {
   "/management/inventory/finished-goods": "Finished goods & transfers",
   "/management/inventory": "Inventory control",
   "/management/production": "Production workspace",
+  "/management/production/material-planning": "Material requirements planning",
   "/management/purchase-orders": "Procurement",
   "/management/sales": "Sales & orders",
   "/management/sales/orders": "Sales orders",
@@ -315,7 +316,7 @@ export default function DashboardTopbar() {
                   .join(
                     ", ",
                   )}${lowProductionPacks.length > 3 ? ` and ${lowProductionPacks.length - 3} more` : ""} ${lowProductionPacks.length === 1 ? "has" : "have"} fewer than 30 packs.`,
-                to: "/management/inventory/finished-goods",
+                to: "/management/production/material-planning",
                 tone: "red" as const,
                 kind: "stock" as const,
               },
