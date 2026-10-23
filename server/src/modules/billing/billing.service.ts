@@ -387,6 +387,38 @@ export async function updateCustomerCheque(paymentId: string, nextStatus: string
   });
 }
 
+export async function updateCustomerChequeDetails(
+  paymentId: string,
+  input: { chequeNumber?: string; bankName?: string; chequeDate?: string; reference?: string; notes?: string },
+) {
+  if (!mongoose.Types.ObjectId.isValid(paymentId)) throw new Error("Invalid customer cheque.");
+  const chequeNumber = String(input.chequeNumber || "").trim();
+  const bankName = String(input.bankName || "").trim();
+  const chequeDate = new Date(String(input.chequeDate || ""));
+  if (!chequeNumber || !bankName) throw new Error("Cheque number and bank name are required.");
+  if (!Number.isFinite(chequeDate.getTime())) throw new Error("Enter a valid cheque maturity date.");
+  const payment: any = await Payment.findById(paymentId);
+  if (!payment || payment.method !== "bank_cheque") throw new Error("Customer cheque not found.");
+  if (!["received", "due", "deposited"].includes(payment.chequeStatus))
+    throw new Error(`A ${payment.chequeStatus} cheque cannot be edited.`);
+  payment.chequeNumber = chequeNumber;
+  payment.bankName = bankName;
+  payment.chequeDate = chequeDate;
+  if (input.reference !== undefined) payment.reference = String(input.reference).trim();
+  if (input.notes !== undefined) payment.notes = String(input.notes).trim();
+  if (payment.chequeStatus !== "deposited") {
+    const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999);
+    payment.chequeStatus = chequeDate.getTime() <= endOfToday.getTime() ? "due" : "received";
+  }
+  payment.statusHistory.push({ status: payment.chequeStatus, at: new Date(), note: "Customer cheque details edited" });
+  await payment.save();
+  return Payment.findById(payment._id)
+    .populate("invoice", "invoiceNumber total balance status")
+    .populate("openingBalance", "openingNumber amount balance status description")
+    .populate("customer", "fullName phone")
+    .lean();
+}
+
 /** Reverse a receipt without erasing it, then restore its outstanding balance. */
 export async function reversePayment(
   paymentId: string,

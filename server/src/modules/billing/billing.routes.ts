@@ -14,6 +14,7 @@ router.get("/customer-accounts", controller.customerAccounts);
 router.get("/payments", controller.payments);
 router.post("/payments", controller.receive);
 router.patch("/payments/:paymentId/cheque-status", controller.chequeStatus);
+router.patch("/payments/:paymentId/cheque", controller.editCheque);
 router.post(
   "/payments/:paymentId/reverse",
   authorizeRoles("superadmin"),
