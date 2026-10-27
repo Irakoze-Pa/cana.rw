@@ -32,6 +32,8 @@ type FinishedBalance = {
   minimumQuantity?: number;
 };
 type InputMode = "kg" | "packs";
+type SalesOrder = { status?: string; createdAt?: string; deliveredAt?: string; statusHistory?: { status?: string; at?: string }[]; items?: { product?: string | { _id?: string }; itemType?: string; productName?: string; quantity?: number; stockQuantity?: number; packSizeKg?: number }[] };
+type Batch = { product?: string | { _id?: string }; productName?: string; status?: string; plannedQuantity?: number; actualQuantity?: number };
 type Requirement = {
   id: string;
   name: string;
@@ -122,6 +124,9 @@ export default function MaterialRequirementsPage() {
   const [inventory, setInventory] = useState<Inventory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [finishedGoods, setFinishedGoods] = useState<FinishedBalance[]>([]);
+  const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [demandPeriod, setDemandPeriod] = useState<30 | 90 | 180>(90);
   const [formulaId, setFormulaId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [mode, setMode] = useState<InputMode>("packs");
@@ -137,11 +142,15 @@ export default function MaterialRequirementsPage() {
         inventoryData,
         productResponse,
         finishedGoodsResponse,
+        salesResponse,
+        batchResponse,
       ] = await Promise.all([
         getFormulas(),
         inventoryService.getInventory(),
         api.get<{ data: Product[] }>("/products"),
         api.get<{ data: FinishedBalance[] }>("/finished-goods/balances"),
+        api.get<{ data: SalesOrder[] }>("/sales-orders"),
+        api.get<{ data: Batch[] }>("/production-batches"),
       ]);
       const active = (formulaData || []).filter(
         (item) => item.status === "Active",
@@ -150,6 +159,8 @@ export default function MaterialRequirementsPage() {
       setInventory(inventoryData || []);
       setProducts(productResponse.data?.data || []);
       setFinishedGoods(finishedGoodsResponse.data?.data || []);
+      setSalesOrders(salesResponse.data?.data || []);
+      setBatches(batchResponse.data?.data || []);
       setFormulaId((current) => current || active[0]?._id || "");
     } catch (cause) {
       setError(
@@ -205,12 +216,20 @@ export default function MaterialRequirementsPage() {
               ? (candidate.product as Product)
               : null);
           const candidatePackSize = Number(candidateProduct?.packSizeKg || 0);
-          if (
-            !candidateProduct ||
-            candidateProduct.baseUnit === "pcs" ||
-            candidatePackSize <= 0
-          )
-            return [];
+          if (!candidateProduct || candidatePackSize <= 0) return [];
+          const cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - demandPeriod);
+          cutoff.setHours(0, 0, 0, 0);
+          const soldQuantity = salesOrders.reduce((total, order) => {
+            const deliveredAt = order.deliveredAt || [...(order.statusHistory || [])].reverse().find((entry) => entry.status?.toLowerCase() === "delivered")?.at || order.createdAt;
+            if (order.status?.toLowerCase() !== "delivered" || !deliveredAt || new Date(deliveredAt) < cutoff) return total;
+            return total + (order.items || []).reduce((subtotal, line) => {
+              if (line.itemType === "raw_material") return subtotal;
+              const id = typeof line.product === "string" ? line.product : line.product?._id;
+              if (id !== productId && String(line.productName || "").toLowerCase() !== candidateProduct.name.toLowerCase()) return subtotal;
+              return subtotal + Number(line.stockQuantity ?? (line.packSizeKg ? Number(line.quantity || 0) * line.packSizeKg : line.quantity) ?? 0);
+            }, 0);
+          }, 0);
           const production = finishedGoods.find(
             (item) =>
               item.store === "production" && item.product?._id === productId,
@@ -221,10 +240,17 @@ export default function MaterialRequirementsPage() {
           const productionPacks =
             Number(production?.quantity || 0) / candidatePackSize;
           const salesPacks = Number(sales?.quantity || 0) / candidatePackSize;
-          const totalPacks = productionPacks + salesPacks;
-          if (totalPacks >= 30) return [];
-          const productionNeeded = Math.ceil(30 - totalPacks);
-          if (productionNeeded <= 0) return [];
+          const onHandKg = Number(production?.quantity || 0) + Number(sales?.quantity || 0);
+          const openOutputKg = batches.reduce((sum, batch) => {
+            const id = typeof batch.product === "string" ? batch.product : batch.product?._id;
+            if (id !== productId && String(batch.productName || "").toLowerCase() !== candidateProduct.name.toLowerCase()) return sum;
+            if (!["Planned", "Ready", "In Progress", "Paused"].includes(String(batch.status))) return sum;
+            return sum + Math.max(0, Number(batch.plannedQuantity || 0) - (batch.status === "In Progress" ? Number(batch.actualQuantity || 0) : 0));
+          }, 0);
+          const dailyDemand = soldQuantity / demandPeriod;
+          const targetKg = Math.max(dailyDemand * 30, candidatePackSize);
+          const productionNeeded = Math.ceil(Math.max(0, targetKg - onHandKg - openOutputKg) / candidatePackSize);
+          if (productionNeeded <= 0 && soldQuantity <= 0) return [];
           const materialPlan = calculateRequirements(
             candidate,
             productionNeeded * candidatePackSize,
@@ -238,6 +264,9 @@ export default function MaterialRequirementsPage() {
               product: candidateProduct,
               productionPacks,
               salesPacks,
+              soldQuantity,
+              openOutputKg,
+              priorityScore: dailyDemand > 0 ? Math.round((Math.min(60, dailyDemand) + Math.max(0, 1 - onHandKg / Math.max(targetKg, 1)) * 40) * 10) / 10 : 0,
               productionNeeded,
               missing,
               needsUnitReview,
@@ -245,8 +274,8 @@ export default function MaterialRequirementsPage() {
             },
           ];
         })
-        .sort((a, b) => b.productionNeeded - a.productionNeeded),
-    [formulas, products, finishedGoods, inventory],
+        .sort((a, b) => b.priorityScore - a.priorityScore || b.soldQuantity - a.soldQuantity),
+    [formulas, products, finishedGoods, inventory, salesOrders, batches, demandPeriod],
   );
 
   const reviewRecommendation = (item: (typeof recommendations)[number]) => {
@@ -404,15 +433,13 @@ export default function MaterialRequirementsPage() {
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
           <div>
             <p className="text-[9px] font-extrabold uppercase tracking-wide text-red-700">
-              Stock control
+              Demand-led production
             </p>
             <h2 className="text-sm font-black text-slate-950">
-              Production recommendations · below 30 packs
+              Manufacturing priorities · demand and material readiness
             </h2>
           </div>
-          <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-bold text-white">
-            {recommendations.length}
-          </span>
+          <div className="flex items-center gap-2">{([30, 90, 180] as const).map((days) => <button key={days} onClick={() => setDemandPeriod(days)} className={`rounded-lg px-2.5 py-1.5 text-[10px] font-bold ${demandPeriod === days ? "bg-slate-900 text-white" : "border bg-white text-slate-600"}`}>Last {days}d</button>)}<span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-bold text-white">{recommendations.length}</span></div>
         </div>
         {recommendations.length ? (
           <div className="divide-y divide-slate-100">
@@ -425,13 +452,13 @@ export default function MaterialRequirementsPage() {
                   <strong className="block text-sm text-slate-950">
                     {item.product.name}
                   </strong>
-                  <span className="text-[10px] text-slate-500">
-                    {item.product.code || item.formula.code} ·{" "}
-                    {number(item.product.packSizeKg || 0)} kg/pack
-                  </span>
+                  <span className="text-[10px] text-slate-500">{item.product.code || item.formula.code} · Priority {item.priorityScore}</span>
                 </div>
+                <StoreCell label={`Delivered (${demandPeriod}d)`} value={item.soldQuantity / Number(item.product.packSizeKg || 1)} />
                 <StoreCell label="Production" value={item.productionPacks} />
                 <StoreCell label="Sales" value={item.salesPacks} />
+                <StoreCell label="Open output (kg)" value={item.openOutputKg} />
+                <StoreCell label="Suggested batch" value={item.productionNeeded} />
                 <div>
                   {item.ready ? (
                     <Badge text="MATERIALS READY" tone="success" />
@@ -449,7 +476,7 @@ export default function MaterialRequirementsPage() {
                   onClick={() => reviewRecommendation(item)}
                   className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white"
                 >
-                  Review
+              Review plan
                 </button>
               </div>
             ))}
@@ -457,7 +484,7 @@ export default function MaterialRequirementsPage() {
         ) : (
           <div className="flex items-center gap-2 px-4 py-5 text-sm font-semibold text-emerald-700">
             <CheckCircle2 size={17} />
-            Every formula-linked product has at least 30 packs in total stock.
+            No formula-linked product needs replenishment in this demand window.
           </div>
         )}
       </section>

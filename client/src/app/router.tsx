@@ -81,7 +81,6 @@ import FormulasPage from "@/modules/management/formula/pages/FormulaPage";
 
 import ProductionBatchesPage from "@/modules/management/production/pages/ProductionBatchesPage";
 import ProductionWorkspacePage from "@/modules/management/production/pages/ProductionWorkspacePage";
-import ManufacturingPriorityPage from "@/modules/management/production/pages/ManufacturingPriorityPage";
 import MaterialRequirementsPage from "@/modules/management/production/pages/MaterialRequirementsPage";
 import SalesOrdersPage from "@/modules/management/sales/SalesOrdersPage";
 import SalesWorkspacePage from "@/modules/management/sales/SalesWorkspacePage";
@@ -443,7 +442,7 @@ const router = createBrowserRouter([
 
       {
         path: "production/priorities",
-        element: <ManufacturingPriorityPage />,
+        element: <Navigate to="/management/production/material-planning" replace />,
       },
 
       {
