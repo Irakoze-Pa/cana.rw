@@ -5,6 +5,7 @@ export const invoiceStatuses = [
   "issued",
   "partially_paid",
   "paid",
+  "written_off",
   "void",
 ] as const;
 export type InvoiceStatus = (typeof invoiceStatuses)[number];
@@ -39,6 +40,9 @@ const invoiceSchema = new Schema(
     tax: { type: Number, default: 0 },
     total: { type: Number, required: true },
     amountPaid: { type: Number, default: 0 },
+    writtenOffAmount: { type: Number, default: 0, min: 0 },
+    writtenOffAt: Date,
+    writeOffReason: { type: String, trim: true, default: "" },
     balance: { type: Number, required: true },
     status: { type: String, enum: invoiceStatuses, default: "draft" },
     issueDate: { type: Date, default: Date.now },
@@ -50,6 +54,7 @@ const invoiceSchema = new Schema(
 const paymentSchema = new Schema(
   {
     receiptNumber: { type: String, required: true, unique: true, index: true },
+    allocationGroup: { type: String, trim: true, default: "", index: true },
     invoice: { type: Schema.Types.ObjectId, ref: "Invoice", index: true },
     openingBalance: {
       type: Schema.Types.ObjectId,
@@ -91,6 +96,10 @@ const paymentSchema = new Schema(
   },
   { timestamps: true },
 );
+const billingSequenceSchema = new Schema({
+  _id: { type: String, required: true },
+  value: { type: Number, required: true, default: 0 },
+}, { versionKey: false, collection: "billing_sequences" });
 const openingBalanceSchema = new Schema(
   {
     openingNumber: { type: String, required: true, unique: true, index: true },
@@ -136,6 +145,9 @@ export interface InvoiceDoc extends mongoose.Document {
   tax: number;
   total: number;
   amountPaid: number;
+  writtenOffAmount?: number;
+  writtenOffAt?: Date;
+  writeOffReason?: string;
   balance: number;
   status: InvoiceStatus;
   issueDate: Date;
@@ -147,6 +159,8 @@ export const Invoice =
   mongoose.model<InvoiceDoc>("Invoice", invoiceSchema);
 export const Payment =
   mongoose.models.Payment || mongoose.model("Payment", paymentSchema);
+export const BillingSequence =
+  mongoose.models.BillingSequence || mongoose.model("BillingSequence", billingSequenceSchema);
 export const CustomerOpeningBalance =
   mongoose.models.CustomerOpeningBalance ||
   mongoose.model("CustomerOpeningBalance", openingBalanceSchema);

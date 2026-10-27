@@ -37,6 +37,8 @@ type Requirement = {
   name: string;
   code: string;
   unit: string;
+  stockUnit: string;
+  unitMismatch: boolean;
   required: number;
   available: number;
   shortage: number;
@@ -51,6 +53,8 @@ const number = (value: number) =>
 const money = (value: number) => `${number(value)} RWF`;
 const materialId = (value: string | RawMaterial) =>
   typeof value === "string" ? value : value._id;
+const normalizeUnit = (value: unknown) =>
+  String(value || "").trim().toLowerCase().replace(/\s+/g, "");
 
 const calculateRequirements = (
   formula: Formula,
@@ -74,11 +78,14 @@ const calculateRequirements = (
       Number(item.quantity || 0) *
       scale *
       (1 + Number(item.wastePercentage || 0) / 100);
-    const available = Math.max(
+    const unit = item.unit || material?.unit || stock?.unit || "kg";
+    const stockUnit = stock?.unit || material?.unit || unit;
+    const unitMismatch = normalizeUnit(unit) !== normalizeUnit(stockUnit);
+    const available = unitMismatch ? 0 : Math.max(
       0,
       Number(stock?.availableQuantity ?? stock?.quantity ?? 0),
     );
-    const shortage = Math.max(0, required - available);
+    const shortage = unitMismatch ? 0 : Math.max(0, required - available);
     const sizes =
       typeof stock?.rawMaterial === "object"
         ? stock.rawMaterial.packSizes || []
@@ -96,7 +103,9 @@ const calculateRequirements = (
       id,
       name: material?.name || stock?.rawMaterialName || "Raw material",
       code: material?.code || stock?.rawMaterialCode || "—",
-      unit: item.unit || stock?.unit || material?.unit || "kg",
+      unit,
+      stockUnit,
+      unitMismatch,
       required,
       available,
       shortage,
@@ -222,6 +231,7 @@ export default function MaterialRequirementsPage() {
             inventory,
           );
           const missing = materialPlan.filter((item) => item.shortage > 0);
+          const needsUnitReview = materialPlan.some((item) => item.unitMismatch);
           return [
             {
               formula: candidate,
@@ -230,7 +240,8 @@ export default function MaterialRequirementsPage() {
               salesPacks,
               productionNeeded,
               missing,
-              ready: materialPlan.length > 0 && missing.length === 0,
+              needsUnitReview,
+              ready: materialPlan.length > 0 && missing.length === 0 && !needsUnitReview,
             },
           ];
         })
@@ -246,7 +257,8 @@ export default function MaterialRequirementsPage() {
   };
 
   const shortages = requirements.filter((item) => item.shortage > 0);
-  const ready = requirements.length > 0 && shortages.length === 0;
+  const unitReviews = requirements.filter((item) => item.unitMismatch);
+  const ready = requirements.length > 0 && shortages.length === 0 && unitReviews.length === 0;
   const purchaseValue = shortages.reduce(
     (sum, item) => sum + item.proposedQuantity * item.unitCost,
     0,
@@ -279,9 +291,9 @@ export default function MaterialRequirementsPage() {
     printCanaDocument({
       title: "Production Readiness & Purchase Proposal",
       reference: `MRP-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${productCode || formula.code}`,
-      status: ready
+        status: ready
         ? "Ready for production"
-        : `${shortages.length} material shortage${shortages.length === 1 ? "" : "s"}`,
+        : `${shortages.length} material shortage${shortages.length === 1 ? "" : "s"}${unitReviews.length ? ` · ${unitReviews.length} unit review${unitReviews.length === 1 ? "" : "s"}` : ""}`,
       brandLine: "CANA Paints · Material Requirements Planning",
       orientation: "landscape",
       details: [
@@ -303,8 +315,9 @@ export default function MaterialRequirementsPage() {
           value: `${number(selectedProductionPacks)} packs`,
         },
         { label: "Sales Store", value: `${number(selectedSalesPacks)} packs` },
-        { label: "Materials checked", value: requirements.length },
+          { label: "Materials checked", value: requirements.length },
         { label: "Short materials", value: shortages.length },
+          { label: "Unit reviews", value: unitReviews.length },
         { label: "Estimated purchase value", value: money(purchaseValue) },
         {
           label: "Production decision",
@@ -424,7 +437,9 @@ export default function MaterialRequirementsPage() {
                     <Badge text="MATERIALS READY" tone="success" />
                   ) : (
                     <Badge
-                      text={`${item.missing.length} SHORT`}
+                      text={item.needsUnitReview
+                        ? `${item.missing.length} SHORT · UNIT CHECK`
+                        : `${item.missing.length} SHORT`}
                       tone="warning"
                     />
                   )}
@@ -512,6 +527,11 @@ export default function MaterialRequirementsPage() {
             value={String(shortages.length)}
             danger={shortages.length > 0}
           />
+          <Metric
+            label="Unit reviews"
+            value={String(unitReviews.length)}
+            danger={unitReviews.length > 0}
+          />
           <Metric label="Proposed purchase" value={money(purchaseValue)} />
         </section>
       )}
@@ -528,10 +548,10 @@ export default function MaterialRequirementsPage() {
             <strong className="text-sm text-slate-950">
               {ready
                 ? "All materials are available"
-                : `${shortages.length} material${shortages.length === 1 ? " is" : "s are"} short`}
+                : `${shortages.length} material${shortages.length === 1 ? " is" : "s are"} short${unitReviews.length ? ` · ${unitReviews.length} need a unit check` : ""}`}
             </strong>
           </div>
-          {!ready && (
+          {shortages.length > 0 && (
             <Link
               to="/management/purchase-orders"
               className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white"
@@ -580,17 +600,23 @@ export default function MaterialRequirementsPage() {
                     {number(item.required)} {item.unit}
                   </td>
                   <td className="px-3 py-3 text-right">
-                    {number(item.available)} {item.unit}
+                    {item.unitMismatch
+                      ? `Unit check · stock in ${item.stockUnit}`
+                      : `${number(item.available)} ${item.unit}`}
                   </td>
                   <td
                     className={`px-3 py-3 text-right font-black ${item.shortage > 0 ? "text-red-700" : "text-slate-400"}`}
                   >
-                    {item.shortage > 0
-                      ? `${number(item.shortage)} ${item.unit}`
-                      : "—"}
+                    {item.unitMismatch
+                      ? "Unit check required"
+                      : item.shortage > 0
+                        ? `${number(item.shortage)} ${item.unit}`
+                        : "—"}
                   </td>
                   <td className="px-3 py-3">
-                    {item.shortage > 0
+                    {item.unitMismatch
+                      ? "Confirm conversion"
+                      : item.shortage > 0
                       ? item.packSize > 0
                         ? `${number(item.proposedPacks)} × ${number(item.packSize)} ${item.unit}`
                         : `${number(item.proposedQuantity)} ${item.unit}`
@@ -603,9 +629,9 @@ export default function MaterialRequirementsPage() {
                   </td>
                   <td className="px-3 py-3">
                     <span
-                      className={`rounded-full px-2 py-1 text-[9px] font-black ${item.shortage > 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}
+                      className={`rounded-full px-2 py-1 text-[9px] font-black ${item.unitMismatch ? "bg-amber-100 text-amber-800" : item.shortage > 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}
                     >
-                      {item.shortage > 0 ? "PURCHASE" : "AVAILABLE"}
+                      {item.unitMismatch ? "UNIT CHECK" : item.shortage > 0 ? "PURCHASE" : "AVAILABLE"}
                     </span>
                   </td>
                 </tr>

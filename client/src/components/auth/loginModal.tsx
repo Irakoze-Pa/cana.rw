@@ -80,7 +80,7 @@ function LoginModal({
       );
 
       if (isManagementUser) {
-        navigate("/management", { replace: true });
+        navigate(user.company === "cana_services" ? "/cana-services-workspace" : "/management", { replace: true });
         return;
       }
 

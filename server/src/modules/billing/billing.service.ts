@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { TreasuryAccount } from "../accounting/accounting.model";
 import SalesOrder from "../sales/salesOrder.model";
 import User, { UserRole } from "../../models/users";
-import { CustomerOpeningBalance, Invoice, Payment } from "./billing.model";
+import { BillingSequence, CustomerOpeningBalance, Invoice, Payment } from "./billing.model";
 
 /**
  * Use the highest issued number, rather than the number of records.  Counting
@@ -26,6 +26,19 @@ const sequence = async (
   );
   const next = Number.isFinite(previous) ? previous + 1 : 1;
   return `${numberPrefix}${String(next).padStart(5, "0")}`;
+};
+const nextReceiptNumber = async (session?: mongoose.ClientSession) => {
+  const year = new Date().getFullYear();
+  const prefix = `RCT-${year}-`;
+  const latest = await Payment.findOne({ receiptNumber: new RegExp(`^${prefix}\\d+$`) })
+    .sort({ receiptNumber: -1 }).select("receiptNumber").lean();
+  const existing = Number(String(latest?.receiptNumber || "").slice(prefix.length)) || 0;
+  const counter = await BillingSequence.findOneAndUpdate(
+    { _id: `RCT-${year}` },
+    [{ $set: { value: { $add: [{ $ifNull: ["$value", existing] }, 1] } } }],
+    { upsert: true, new: true, updatePipeline: true, ...(session ? { session } : {}) },
+  ).lean();
+  return `${prefix}${String(counter!.value).padStart(5, "0")}`;
 };
 const populateInvoice = (query: ReturnType<typeof Invoice.find>) =>
   query
@@ -202,8 +215,21 @@ export async function createMissingDeliveredInvoices() {
     deliveredOrders: deliveredOrders.length,
   };
 }
+async function validateReceiptTreasuryAccount(method: string, accountId?: string) {
+  if (!accountId || !mongoose.Types.ObjectId.isValid(accountId))
+    throw new Error("Select the receiving cash, bank, or mobile-money account.");
+  const treasuryAccount = await TreasuryAccount.findById(accountId).lean();
+  if (!treasuryAccount || treasuryAccount.status !== "active")
+    throw new Error("Select an active receiving account.");
+  const expectedType = method === "cash" ? "cash" : method === "mobile_money" ? "mobile_money" : "bank";
+  if (method !== "other" && treasuryAccount.type !== expectedType)
+    throw new Error(`The selected account does not match the ${method.replace(/_/g, " ")} payment method.`);
+  return treasuryAccount;
+}
+
 export async function recordPayment(
   input: {
+    allocations?: Array<{ invoice: string; amount: number }>;
     invoice?: string;
     openingBalance?: string;
     amount: number;
@@ -218,6 +244,9 @@ export async function recordPayment(
   },
   receivedBy?: string,
 ) {
+  if (input.allocations?.length) {
+    return recordAllocatedPayment({ ...input, allocations: input.allocations! }, receivedBy);
+  }
   const hasInvoice = Boolean(input.invoice);
   const hasOpeningBalance = Boolean(input.openingBalance);
   if (hasInvoice === hasOpeningBalance)
@@ -239,16 +268,7 @@ export async function recordPayment(
     )
   )
     throw new Error("Select a valid payment method.");
-  if (input.treasuryAccount) {
-    if (!mongoose.Types.ObjectId.isValid(input.treasuryAccount))
-      throw new Error("Select a valid receiving account.");
-    const treasuryAccount = await TreasuryAccount.findById(input.treasuryAccount).lean();
-    if (!treasuryAccount || treasuryAccount.status !== "active")
-      throw new Error("Select an active receiving account.");
-    const expectedType = input.method === "cash" ? "cash" : input.method === "mobile_money" ? "mobile_money" : "bank";
-    if (input.method !== "other" && treasuryAccount.type !== expectedType)
-      throw new Error(`The selected account does not match the ${input.method.replace(/_/g, " ")} payment method.`);
-  }
+  await validateReceiptTreasuryAccount(input.method, input.treasuryAccount);
   if (
     input.receivedAt &&
     !Number.isFinite(new Date(input.receivedAt).getTime())
@@ -289,7 +309,7 @@ export async function recordPayment(
     const [payment] = await Payment.create(
       [
         {
-          receiptNumber: await sequence("RCT", Payment, "receiptNumber"),
+          receiptNumber: await nextReceiptNumber(session),
           ...(invoice
             ? { invoice: invoice._id }
             : { openingBalance: openingBalance!._id }),
@@ -318,8 +338,8 @@ export async function recordPayment(
     );
     if (!isCheque && invoice) {
       invoice.amountPaid = Number((invoice.amountPaid + amount).toFixed(2));
-      invoice.balance = Number((invoice.total - invoice.amountPaid).toFixed(2));
-      invoice.status = invoice.balance <= 0 ? "paid" : "partially_paid";
+      invoice.balance = Number((invoice.total - invoice.amountPaid - Number(invoice.writtenOffAmount || 0)).toFixed(2));
+      invoice.status = invoice.balance <= 0 ? Number(invoice.writtenOffAmount || 0) > 0 ? "written_off" : "paid" : "partially_paid";
       await invoice.save({ session });
     } else if (!isCheque) {
       openingBalance!.amountPaid = Number(
@@ -347,6 +367,92 @@ export async function recordPayment(
     };
   });
 }
+
+/** Record one customer payment split across several invoices. Each allocation
+ * gets its own invoice-linked receipt while sharing cheque/payment metadata. */
+async function recordAllocatedPayment(
+  input: {
+    allocations: Array<{ invoice: string; amount: number }>;
+    amount: number;
+    method: string;
+    treasuryAccount?: string;
+    reference?: string;
+    notes?: string;
+    receivedAt?: string;
+    chequeNumber?: string;
+    bankName?: string;
+    chequeDate?: string;
+  },
+  receivedBy?: string,
+) {
+  if (!Array.isArray(input.allocations) || input.allocations.length < 2)
+    throw new Error("Select at least two invoices for a split payment.");
+  const seen = new Set<string>();
+  const allocations = input.allocations.map((item) => {
+    if (!mongoose.Types.ObjectId.isValid(item.invoice) || seen.has(item.invoice))
+      throw new Error("Choose each invoice only once.");
+    seen.add(item.invoice);
+    const amount = Number(Number(item.amount).toFixed(2));
+    if (!Number.isFinite(amount) || amount <= 0)
+      throw new Error("Every invoice allocation must be greater than zero.");
+    return { invoice: item.invoice, amount };
+  });
+  const amount = Number(Number(input.amount).toFixed(2));
+  const allocatedTotal = Number(allocations.reduce((sum, item) => sum + item.amount, 0).toFixed(2));
+  if (!Number.isFinite(amount) || amount <= 0 || Math.abs(allocatedTotal - amount) > 0.01)
+    throw new Error("Allocation amounts must add up to the payment amount.");
+  if (!["cash", "bank_transfer", "bank_cheque", "mobile_money", "card", "other"].includes(input.method))
+    throw new Error("Select a valid payment method.");
+  await validateReceiptTreasuryAccount(input.method, input.treasuryAccount);
+  if (input.method === "bank_cheque" && (!String(input.chequeNumber || "").trim() || !String(input.bankName || "").trim() || !input.chequeDate || !Number.isFinite(new Date(input.chequeDate).getTime())))
+    throw new Error("Cheque number, bank name and a valid maturity date are required.");
+  if (input.receivedAt && !Number.isFinite(new Date(input.receivedAt).getTime()))
+    throw new Error("Enter a valid payment date.");
+
+  return mongoose.connection.transaction(async (session) => {
+    const invoices = await Invoice.find({ _id: { $in: allocations.map((item) => item.invoice) } }).session(session);
+    if (invoices.length !== allocations.length) throw new Error("One or more selected invoices could not be found.");
+    const customerId = String(invoices[0].customer);
+    if (invoices.some((invoice) => String(invoice.customer) !== customerId))
+      throw new Error("A single payment can only be allocated to one customer.");
+    if (invoices.some((invoice) => invoice.status === "void")) throw new Error("Void invoices cannot receive payment.");
+    const now = new Date();
+    const chequeStatus = input.method === "bank_cheque"
+      ? (new Date(input.chequeDate!).getTime() <= now.getTime() ? "due" : "received")
+      : "cleared";
+    const allocationGroup = new mongoose.Types.ObjectId().toString();
+    const records = [];
+    for (const allocation of allocations) {
+      const invoice = invoices.find((item) => String(item._id) === allocation.invoice)!;
+      const pending = input.method === "bank_cheque"
+        ? await Payment.aggregate([{ $match: { invoice: invoice._id, method: "bank_cheque", chequeStatus: { $in: ["received", "due", "deposited"] } } }, { $group: { _id: null, total: { $sum: "$amount" } } }]).session(session)
+        : [];
+      const availableBalance = Number(invoice.balance || 0) - Number(pending[0]?.total || 0);
+      if (allocation.amount > availableBalance + 0.0001)
+        throw new Error(`${invoice.invoiceNumber} has only ${availableBalance.toLocaleString("en-RW")} RWF available for allocation.`);
+      const [payment] = await Payment.create([{
+        receiptNumber: await nextReceiptNumber(session), allocationGroup, invoice: invoice._id,
+        customer: invoice.customer, amount: allocation.amount, method: input.method,
+        ...(input.treasuryAccount ? { treasuryAccount: input.treasuryAccount } : {}),
+        reference: input.reference || "", chequeNumber: input.chequeNumber || "",
+        bankName: input.bankName || "", chequeDate: input.method === "bank_cheque" ? new Date(input.chequeDate!) : undefined,
+        chequeStatus, clearedAt: input.method === "bank_cheque" ? undefined : now,
+        status: input.method === "bank_cheque" ? "pending" : "received",
+        statusHistory: [{ status: chequeStatus, at: now, note: input.method === "bank_cheque" ? "Customer cheque allocated to invoice" : "Payment allocated to invoice" }],
+        notes: input.notes || "", receivedAt: input.receivedAt ? new Date(input.receivedAt) : now,
+        ...(receivedBy && mongoose.Types.ObjectId.isValid(receivedBy) ? { receivedBy } : {}),
+      }], { session });
+      if (input.method !== "bank_cheque") {
+        invoice.amountPaid = Number((invoice.amountPaid + allocation.amount).toFixed(2));
+        invoice.balance = Number((invoice.total - invoice.amountPaid - Number(invoice.writtenOffAmount || 0)).toFixed(2));
+        invoice.status = invoice.balance <= 0 ? Number(invoice.writtenOffAmount || 0) > 0 ? "written_off" : "paid" : "partially_paid";
+        await invoice.save({ session });
+      }
+      records.push(payment);
+    }
+    return { payments: records, totalAmount: amount, allocationCount: records.length, invoice: undefined };
+  });
+}
 export async function listPayments() {
   const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999);
   await Payment.updateMany({ method: "bank_cheque", chequeStatus: "received", chequeDate: { $lte: endOfToday } }, { $set: { chequeStatus: "due" }, $push: { statusHistory: { status: "due", at: new Date(), note: "Maturity date reached" } } });
@@ -367,23 +473,33 @@ export async function updateCustomerCheque(paymentId: string, nextStatus: string
   return mongoose.connection.transaction(async (session) => {
     const payment: any = await Payment.findById(paymentId).session(session);
     if (!payment || payment.method !== "bank_cheque") throw new Error("Customer cheque not found.");
-    if (!["received", "due", "deposited"].includes(payment.chequeStatus)) throw new Error(`A ${payment.chequeStatus} cheque cannot be changed.`);
-    if (nextStatus === "deposited" && !["received", "due"].includes(payment.chequeStatus)) throw new Error("Only a received or due cheque can be deposited.");
+    const group: any[] = payment.allocationGroup
+      ? await Payment.find({ allocationGroup: payment.allocationGroup }).session(session)
+      : [payment];
+    if (!group.length || group.some((item) => !["received", "due", "deposited"].includes(item.chequeStatus))) throw new Error("This cheque has already been processed.");
+    if (nextStatus === "deposited" && group.some((item) => !["received", "due"].includes(item.chequeStatus))) throw new Error("Only a received or due cheque can be deposited.");
     const now = new Date();
     if (nextStatus === "cleared") {
-      const receivable: any = payment.invoice ? await Invoice.findById(payment.invoice).session(session) : await CustomerOpeningBalance.findById(payment.openingBalance).session(session);
-      if (!receivable || receivable.status === "void") throw new Error("The linked receivable is unavailable.");
-      if (Number(payment.amount) > Number(receivable.balance) + 0.0001) throw new Error("The outstanding balance is now lower than this cheque amount.");
-      receivable.amountPaid = Number((Number(receivable.amountPaid || 0) + Number(payment.amount)).toFixed(2));
-      const total = payment.invoice ? Number(receivable.total) : Number(receivable.amount);
-      receivable.balance = Number((total - receivable.amountPaid).toFixed(2));
-      receivable.status = receivable.balance <= 0 ? "paid" : "partially_paid";
-      await receivable.save({ session }); payment.status = "received"; payment.clearedAt = now;
+      for (const allocation of group) {
+        const receivable: any = allocation.invoice ? await Invoice.findById(allocation.invoice).session(session) : await CustomerOpeningBalance.findById(allocation.openingBalance).session(session);
+        if (!receivable || receivable.status === "void") throw new Error("A receivable linked to this cheque is unavailable.");
+        if (Number(allocation.amount) > Number(receivable.balance) + 0.0001) throw new Error("An invoice balance is now lower than its cheque allocation.");
+        receivable.amountPaid = Number((Number(receivable.amountPaid || 0) + Number(allocation.amount)).toFixed(2));
+        const total = allocation.invoice ? Number(receivable.total) : Number(receivable.amount);
+        receivable.balance = Number((total - receivable.amountPaid).toFixed(2));
+        receivable.status = receivable.balance <= 0 ? "paid" : "partially_paid";
+        await receivable.save({ session });
+        allocation.status = "received"; allocation.clearedAt = now;
+      }
     }
-    if (["bounced", "cancelled"].includes(nextStatus)) payment.status = "void";
-    if (nextStatus === "deposited") payment.depositedAt = now;
-    payment.chequeStatus = nextStatus; payment.statusHistory.push({ status: nextStatus, at: now, note: `Customer cheque marked ${nextStatus}` });
-    await payment.save({ session }); return payment;
+    for (const allocation of group) {
+      if (["bounced", "cancelled"].includes(nextStatus)) allocation.status = "void";
+      if (nextStatus === "deposited") allocation.depositedAt = now;
+      allocation.chequeStatus = nextStatus;
+      allocation.statusHistory.push({ status: nextStatus, at: now, note: `Customer cheque marked ${nextStatus}` });
+      await allocation.save({ session });
+    }
+    return group[0];
   });
 }
 
@@ -465,11 +581,11 @@ export async function reversePayment(
     const total = invoice
       ? Number(invoice.total)
       : Number(openingBalance!.amount);
-    receivable.balance = Number((total - receivable.amountPaid).toFixed(2));
+    receivable.balance = Number((total - receivable.amountPaid - (invoice ? Number(invoice.writtenOffAmount || 0) : 0)).toFixed(2));
     receivable.status =
       receivable.amountPaid <= 0
         ? invoice
-          ? "issued"
+          ? Number(invoice.writtenOffAmount || 0) > 0 ? "written_off" : "issued"
           : "open"
         : "partially_paid";
     await receivable.save({ session });

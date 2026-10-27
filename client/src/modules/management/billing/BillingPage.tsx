@@ -35,6 +35,7 @@ type Invoice = {
   total: number;
   amountPaid: number;
   balance: number;
+  writtenOffAmount?: number;
   status: string;
   customer?: { _id?: string; fullName?: string };
   salesOrder?: { _id?: string; orderNumber?: string };
@@ -106,6 +107,8 @@ const parseMoneyInput = (value: string) =>
 const statusStyle = (status: string) =>
   status === "paid"
     ? "bg-emerald-50 text-emerald-700"
+    : status === "written_off"
+      ? "bg-slate-100 text-slate-700"
     : status === "void"
       ? "bg-slate-100 text-slate-600"
       : status === "partially_paid"
@@ -152,6 +155,9 @@ export default function BillingPage() {
   const [error, setError] = useState("");
   const [openingOpen, setOpeningOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [splitPayment, setSplitPayment] = useState(false);
+  const [splitCustomer, setSplitCustomer] = useState("");
+  const [splitAllocations, setSplitAllocations] = useState<Record<string, string>>({});
   const [paymentToReverse, setPaymentToReverse] = useState<Payment | null>(
     null,
   );
@@ -242,6 +248,21 @@ export default function BillingPage() {
   const receivePayment = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
+    if (splitPayment && paymentForm.method === "bank_cheque") {
+      const allocations = Object.entries(splitAllocations).filter(([, amount]) => Number(amount) > 0).map(([invoice, amount]) => ({ invoice, amount: Number(amount) }));
+      const total = Number(allocations.reduce((sum, allocation) => sum + allocation.amount, 0).toFixed(2));
+      if (allocations.length < 2) { setError("Select at least two invoices and enter an allocation for each."); return; }
+      if (allocations.some((allocation) => allocation.amount > Number(invoices.find((invoice) => invoice._id === allocation.invoice)?.balance || 0))) { setError("An allocation cannot exceed its invoice balance."); return; }
+      if (!(await confirm({ title: "Confirm cheque allocation", description: `Register cheque ${paymentForm.chequeNumber} for ${money(total)} RWF across ${allocations.length} invoices? Invoice balances will change only after clearance.`, confirmLabel: "Register cheque", tone: "warning" }))) return;
+      setSaving(true); setError("");
+      try {
+        await api.post("/billing/payments", { ...paymentForm, amount: total, allocations });
+        setPaymentOpen(false); setSplitPayment(false); setSplitCustomer(""); setSplitAllocations({});
+        await load(); toast("Cheque recorded against the selected invoices, pending clearance.", "success");
+      } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to record cheque."); }
+      finally { setSaving(false); }
+      return;
+    }
     const selectedInvoice = invoices.find(
       (invoice) => invoice._id === paymentForm.invoice,
     );
@@ -480,6 +501,12 @@ export default function BillingPage() {
         },
         { label: "Amount received", value: `${money(payment.amount)} RWF` },
         { label: "Payment method", value: payment.method.replaceAll("_", " ") },
+        ...(payment.method === "bank_cheque" ? [
+          { label: "Cheque number", value: payment.chequeNumber || "—" },
+          { label: "Bank", value: payment.bankName || "—" },
+          { label: "Maturity date", value: payment.chequeDate ? new Date(payment.chequeDate).toLocaleDateString("en-RW") : "—" },
+          { label: "Cheque status", value: payment.chequeStatus || "pending" },
+        ] : []),
         { label: "Transaction reference", value: payment.reference || "—" },
       ],
       notes:
@@ -1381,7 +1408,7 @@ export default function BillingPage() {
                   <span
                     className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusStyle(invoice.status)}`}
                   >
-                    {invoice.status.replaceAll("_", " ")}
+                    {invoice.status.replaceAll("_", " ")}{invoice.writtenOffAmount ? ` · ${money(invoice.writtenOffAmount)} RWF written off` : ""}
                   </span>
                 </div>
                 <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-xs">
@@ -1738,10 +1765,7 @@ export default function BillingPage() {
                   <h2 className="mt-1 text-xl font-extrabold text-slate-950">
                     Record payment
                   </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Choose the exact invoice or opening balance this payment
-                    settles.
-                  </p>
+                  <p className="mt-1 text-sm text-slate-500">Apply received funds to customer invoices or an opening balance.</p>
                 </div>
                 <button
                   type="button"
@@ -1752,6 +1776,12 @@ export default function BillingPage() {
                 </button>
               </div>
               <div className="grid gap-3 p-4 sm:grid-cols-2">
+                {paymentForm.method === "bank_cheque" && <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm sm:col-span-2"><input className="mt-0.5" type="checkbox" checked={splitPayment} onChange={(event) => { setSplitPayment(event.target.checked); setPaymentForm({ ...paymentForm, invoice: "", openingBalance: "", amount: "" }); setSplitAllocations({}); }} /><span><b>Allocate one cheque across invoices</b><small className="mt-0.5 block font-normal text-slate-500">Select one customer and enter the portion for each invoice. All allocations remain pending until the cheque clears.</small></span></label>}
+                {splitPayment && paymentForm.method === "bank_cheque" ? <>
+                  <label className="text-xs font-bold text-slate-600 sm:col-span-2">Customer<select value={splitCustomer} onChange={(event) => { setSplitCustomer(event.target.value); setSplitAllocations({}); }} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-normal"><option value="">Select customer</option>{customers.map((customer) => <option key={customer._id} value={customer._id}>{customer.businessName || customer.fullName}</option>)}</select></label>
+                  <div className="space-y-2 sm:col-span-2">{splitCustomer && <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Outstanding invoices · select and allocate</p>}{invoices.filter((invoice) => invoice.customer?._id === splitCustomer && invoice.balance > 0 && invoice.status !== "void").map((invoice) => <label key={invoice._id} className="grid grid-cols-[auto_1fr_130px] items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm"><input type="checkbox" checked={invoice._id in splitAllocations} onChange={(event) => setSplitAllocations((current) => { const next = { ...current }; if (event.target.checked) next[invoice._id] = String(invoice.balance); else delete next[invoice._id]; return next; })} /><span><b>{invoice.invoiceNumber}</b><small className="block text-slate-500">Outstanding {money(invoice.balance)} RWF</small></span><input aria-label={`Amount for ${invoice.invoiceNumber}`} type="number" min="0.01" step="0.01" max={invoice.balance} disabled={!(invoice._id in splitAllocations)} value={splitAllocations[invoice._id] || ""} onChange={(event) => setSplitAllocations((current) => ({ ...current, [invoice._id]: event.target.value }))} className="w-full rounded-lg border px-2 py-2 text-right disabled:bg-slate-100" /></label>)}{splitCustomer && !invoices.some((invoice) => invoice.customer?._id === splitCustomer && invoice.balance > 0 && invoice.status !== "void") && <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">This customer has no outstanding invoices.</p>}</div>
+                  <div className="flex items-center justify-between rounded-xl bg-slate-950 px-4 py-3 text-sm text-white sm:col-span-2"><span>Cheque total</span><b>{money(Object.values(splitAllocations).reduce((sum, amount) => sum + Number(amount || 0), 0))} RWF</b></div>
+                </> : <>
                 <select
                   value={paymentForm.invoice}
                   onChange={(event) => {
@@ -1861,6 +1891,7 @@ export default function BillingPage() {
                   placeholder="Amount received"
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
                 />
+                </>}
                 <select
                   value={paymentForm.method}
                   onChange={(event) =>
@@ -1878,8 +1909,8 @@ export default function BillingPage() {
                   <option value="cash">Cash</option>
                   <option value="card">Card</option>
                 </select>
-                {treasuryAccounts.length > 0 && (
-                  <select
+                <select
+                    required
                     disabled={!treasuryAccounts.length}
                     value={paymentForm.treasuryAccount}
                     onChange={(event) =>
@@ -1892,8 +1923,8 @@ export default function BillingPage() {
                   >
                     <option value="">
                       {treasuryAccounts.length
-                        ? "Receiving account (optional)"
-                        : "Accounting not configured"}
+                        ? "Select receiving account (required)"
+                        : "No active receiving accounts configured"}
                     </option>
                     {treasuryAccounts.map((item) => {
                       const compatible =
@@ -1911,7 +1942,7 @@ export default function BillingPage() {
                       );
                     })}
                   </select>
-                )}
+                <p className="text-[11px] text-slate-500 sm:col-span-2">Choose where the money was received. This account receives the payment in treasury balances and the general ledger.</p>
                 {paymentForm.method === "bank_cheque" && (
                   <>
                     <input
@@ -1954,8 +1985,7 @@ export default function BillingPage() {
                       />
                     </label>
                     <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-                      The invoice remains outstanding until Finance confirms
-                      that the cheque cleared.
+                      All linked invoice balances remain outstanding until Finance confirms this cheque has cleared.
                     </p>
                   </>
                 )}
@@ -1982,7 +2012,7 @@ export default function BillingPage() {
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm md:col-span-2"
                 />
                 <button
-                  disabled={saving}
+                  disabled={saving || !paymentForm.treasuryAccount || !treasuryAccounts.length}
                   className="disabled:opacity-50 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white sm:col-span-2"
                 >
                   Record payment

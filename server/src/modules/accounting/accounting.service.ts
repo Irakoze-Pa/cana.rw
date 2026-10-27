@@ -190,6 +190,7 @@ export const accounts: Account[] = [
     group: "Operating expenses",
   },
   { code: "5300", name: "Finance and interest expense", type: "expense", group: "Finance costs" },
+  { code: "5310", name: "Bad debt expense", type: "expense", group: "Operating expenses" },
 ];
 
 const account = (code: string) => {

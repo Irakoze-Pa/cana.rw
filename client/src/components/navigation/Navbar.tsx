@@ -70,7 +70,7 @@ function Navbar() {
 
   const dashboardPath =
     user?.role === "admin" || user?.role === "superadmin" || user?.role === "staff"
-      ? "/management"
+      ? user?.company === "cana_services" ? "/cana-services-workspace" : "/management"
       : "/dashboard";
 
   /*

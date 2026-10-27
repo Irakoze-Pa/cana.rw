@@ -97,6 +97,7 @@ export const authorizeArea = (...areas: string[]) => async (
       procurement: ["procurement", "inventory"], finance: ["finance", "reports"],
       marketing: ["sales", "reports", "sites"], hr: ["staff"],
       customer_service: ["sales", "sites"], sites: ["sites"],
+      transport: ["sales", "sites", "inventory"],
       management: ["sales", "production", "inventory", "procurement", "finance", "staff", "reports", "sites"],
     };
     const assigned = user?.permissions?.length ? user.permissions : legacyDepartmentAreas[String(user?.department)] || [];

@@ -11,6 +11,7 @@ import NotFound from "@/pages/NotFound";
 import AppErrorPage from "@/pages/AppErrorPage";
 import ProtectedRoutes from "@/routes/ProtectedRoutes";
 import AdminRoutes from "@/routes/AdminRoutes";
+import ServicesRoutes from "@/routes/ServicesRoutes";
 
 // =====================================================
 // CANA GROUP FEATURES
@@ -27,6 +28,7 @@ import Contact from "@/features/contact";
 
 import CustomerDashboardLayout from "@/modules/dashboard/layouts/CustomerDashboardLayout";
 import ManagementLayout from "@/modules/dashboard/layouts/ManagementLayout";
+import ServicesManagementLayout from "@/modules/cana-services/layouts/ServicesManagementLayout";
 
 // =====================================================
 // DASHBOARD PAGES
@@ -37,6 +39,12 @@ import CustomerQuotationsPage from "@/modules/dashboard/pages/CustomerQuotations
 import CustomerOrdersPage from "@/modules/dashboard/pages/CustomerOrdersPage";
 import CustomerOrderRequestPage from "@/modules/dashboard/pages/CustomerOrderRequestPage";
 import AdminDashboard from "@/modules/dashboard/pages/AdminDashboard";
+import ServicesDashboardPage from "@/modules/management/services/ServicesDashboardPage";
+import TransportOperationsPage from "@/modules/cana-services/pages/TransportOperationsPage";
+import ServiceCustomersPage from "@/modules/cana-services/pages/ServiceCustomersPage";
+import ServicesReportsPage from "@/modules/cana-services/pages/ServicesReportsPage";
+import ServicesFinancePage from "@/modules/cana-services/pages/ServicesFinancePage";
+import ServicesStaffPage from "@/modules/cana-services/pages/ServicesStaffPage";
 
 // =====================================================
 // MANAGEMENT PAGES
@@ -270,7 +278,30 @@ const router = createBrowserRouter([
       },
 
   // =====================================================
-  // MANAGEMENT DASHBOARD
+  // CANA SERVICES WORKSPACE
+  // =====================================================
+
+      {
+        element: <ServicesRoutes />,
+        children: [
+          {
+            path: "/cana-services-workspace",
+            element: <ServicesManagementLayout />,
+            children: [
+              { index: true, element: <ServicesDashboardPage dashboardOnly /> },
+              { path: "clients", element: <ServiceCustomersPage /> },
+              { path: "scaffolding", element: <ServicesDashboardPage /> },
+              { path: "transport", element: <TransportOperationsPage /> },
+              { path: "staff", element: <ServicesStaffPage /> },
+              { path: "finance", element: <ServicesFinancePage /> },
+              { path: "reports", element: <ServicesReportsPage /> },
+            ],
+          },
+        ],
+      },
+
+  // =====================================================
+  // CANAN MANAGEMENT DASHBOARD
   // =====================================================
 
       {
