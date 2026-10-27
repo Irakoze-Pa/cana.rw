@@ -168,6 +168,14 @@ const groups: Group[] = [
         permissions: ["production"],
       },
       {
+        label: "Manufacturing priorities",
+        to: "/management/production/priorities",
+        icon: FileBarChart,
+        category: "Production operations",
+        departments: ["production", "management"],
+        permissions: ["production"],
+      },
+      {
         label: "Material planning",
         to: "/management/production/material-planning",
         icon: PackageSearch,
