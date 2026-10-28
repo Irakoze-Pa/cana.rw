@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -132,6 +132,8 @@ export default function MaterialRequirementsPage() {
   const [mode, setMode] = useState<InputMode>("packs");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
+  const planningSectionRef = useRef<HTMLElement>(null);
 
   const load = async () => {
     try {
@@ -161,6 +163,7 @@ export default function MaterialRequirementsPage() {
       setFinishedGoods(finishedGoodsResponse.data?.data || []);
       setSalesOrders(salesResponse.data?.data || []);
       setBatches(batchResponse.data?.data || []);
+      setLastLoadedAt(new Date());
       setFormulaId((current) => current || active[0]?._id || "");
     } catch (cause) {
       setError(
@@ -202,10 +205,11 @@ export default function MaterialRequirementsPage() {
     return calculateRequirements(formula, plannedOutput, inventory);
   }, [formula, inventory, plannedOutput]);
 
-  const recommendations = useMemo(
-    () =>
-      formulas
-        .flatMap((candidate) => {
+  const recommendations = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - demandPeriod);
+    cutoff.setHours(0, 0, 0, 0);
+    const scored = formulas.flatMap((candidate) => {
           const productId =
             typeof candidate.product === "string"
               ? candidate.product
@@ -217,9 +221,6 @@ export default function MaterialRequirementsPage() {
               : null);
           const candidatePackSize = Number(candidateProduct?.packSizeKg || 0);
           if (!candidateProduct || candidatePackSize <= 0) return [];
-          const cutoff = new Date();
-          cutoff.setDate(cutoff.getDate() - demandPeriod);
-          cutoff.setHours(0, 0, 0, 0);
           const soldQuantity = salesOrders.reduce((total, order) => {
             const deliveredAt = order.deliveredAt || [...(order.statusHistory || [])].reverse().find((entry) => entry.status?.toLowerCase() === "delivered")?.at || order.createdAt;
             if (order.status?.toLowerCase() !== "delivered" || !deliveredAt || new Date(deliveredAt) < cutoff) return total;
@@ -230,6 +231,7 @@ export default function MaterialRequirementsPage() {
               return subtotal + Number(line.stockQuantity ?? (line.packSizeKg ? Number(line.quantity || 0) * line.packSizeKg : line.quantity) ?? 0);
             }, 0);
           }, 0);
+          if (soldQuantity <= 0) return [];
           const production = finishedGoods.find(
             (item) =>
               item.store === "production" && item.product?._id === productId,
@@ -248,9 +250,8 @@ export default function MaterialRequirementsPage() {
             return sum + Math.max(0, Number(batch.plannedQuantity || 0) - (batch.status === "In Progress" ? Number(batch.actualQuantity || 0) : 0));
           }, 0);
           const dailyDemand = soldQuantity / demandPeriod;
-          const targetKg = Math.max(dailyDemand * 30, candidatePackSize);
+          const targetKg = dailyDemand * 30;
           const productionNeeded = Math.ceil(Math.max(0, targetKg - onHandKg - openOutputKg) / candidatePackSize);
-          if (productionNeeded <= 0 && soldQuantity <= 0) return [];
           const materialPlan = calculateRequirements(
             candidate,
             productionNeeded * candidatePackSize,
@@ -265,24 +266,35 @@ export default function MaterialRequirementsPage() {
               productionPacks,
               salesPacks,
               soldQuantity,
+              onHandKg,
               openOutputKg,
-              priorityScore: dailyDemand > 0 ? Math.round((Math.min(60, dailyDemand) + Math.max(0, 1 - onHandKg / Math.max(targetKg, 1)) * 40) * 10) / 10 : 0,
+              targetKg,
+              coverDays: dailyDemand > 0 ? Math.floor(onHandKg / dailyDemand) : 0,
               productionNeeded,
               missing,
               needsUnitReview,
-              ready: materialPlan.length > 0 && missing.length === 0 && !needsUnitReview,
+              ready: productionNeeded <= 0 || (materialPlan.length > 0 && missing.length === 0 && !needsUnitReview),
             },
           ];
-        })
-        .sort((a, b) => b.priorityScore - a.priorityScore || b.soldQuantity - a.soldQuantity),
-    [formulas, products, finishedGoods, inventory, salesOrders, batches, demandPeriod],
-  );
+        });
+    const maxSales = Math.max(1, ...scored.map((item) => item.soldQuantity));
+    return scored
+      .map((item) => {
+        const salesScore = (item.soldQuantity / maxSales) * 60;
+        const stockCover = item.targetKg > 0
+          ? Math.min(1, Math.max(0, item.onHandKg + item.openOutputKg) / item.targetKg)
+          : 1;
+        const stockUrgency = (1 - stockCover) * 40;
+        return { ...item, priorityScore: Math.round((salesScore + stockUrgency) * 10) / 10 };
+      })
+      .sort((a, b) => b.priorityScore - a.priorityScore || b.soldQuantity - a.soldQuantity);
+  }, [formulas, products, finishedGoods, inventory, salesOrders, batches, demandPeriod]);
 
   const reviewRecommendation = (item: (typeof recommendations)[number]) => {
     setFormulaId(item.formula._id);
     setMode("packs");
-    setQuantity(String(item.productionNeeded || 1));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setQuantity(String(item.productionNeeded));
+    planningSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const shortages = requirements.filter((item) => item.shortage > 0);
@@ -306,6 +318,12 @@ export default function MaterialRequirementsPage() {
           item.store === "sales" && item.product?._id === formulaProductId,
       )?.quantity || 0,
     ) / packSize;
+  const prioritySummary = useMemo(() => ({
+    products: recommendations.length,
+    action: recommendations.filter((item) => item.productionNeeded > 0).length,
+    ready: recommendations.filter((item) => item.productionNeeded > 0 && item.ready).length,
+    top: recommendations[0],
+  }), [recommendations]);
 
   const printPlan = () => {
     if (!formula || !requirements.length) return;
@@ -393,23 +411,23 @@ export default function MaterialRequirementsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 pb-8">
-      <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto max-w-7xl space-y-6 pb-10">
+      <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col justify-between gap-5 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 px-6 py-6 text-white sm:flex-row sm:items-center">
         <div className="flex gap-3">
-          <span className="grid h-11 w-11 place-items-center rounded-xl bg-red-50 text-red-700">
-            <PackageSearch size={21} />
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/10 text-red-300 ring-1 ring-white/10">
+            <PackageSearch size={22} />
           </span>
           <div>
-            <p className="cana-section-kicker">Production planning</p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
-              Material requirements
-            </h1>
+            <p className="text-[10px] font-bold uppercase tracking-[.18em] text-red-300">CANA · Production</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight">Production & materials plan</h1>
+            <p className="mt-1 max-w-2xl text-sm text-slate-300">See what to make next, plan a batch, and check the materials needed to make it.</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2">
           <button
             onClick={() => void load()}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"
+            className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2.5 text-xs font-bold text-white hover:bg-white/15"
           >
             <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
             Refresh
@@ -417,86 +435,74 @@ export default function MaterialRequirementsPage() {
           <button
             onClick={printPlan}
             disabled={!requirements.length}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-lg bg-red-700 px-3 py-2.5 text-xs font-bold text-white hover:bg-red-600 disabled:opacity-40"
           >
             <Printer size={15} />
             Print plan
           </button>
         </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-3 text-xs text-slate-600"><span>Suggestions use delivered sales and subtract finished stock and active batches from a 30-day target.</span><span className="font-semibold">{loading ? "Updating…" : lastLoadedAt ? `Data refreshed ${lastLoadedAt.toLocaleTimeString("en-RW", { hour: "2-digit", minute: "2-digit" })}` : "Waiting for data"}</span></div>
       </header>
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </p>
       )}
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <PlanningMetric label="Products with recent sales" value={String(prioritySummary.products)} detail={`Delivered orders · last ${demandPeriod} days`} tone="slate" />
+        <PlanningMetric label="Batches to plan" value={String(prioritySummary.action)} detail="Products below the 30-day stock target" tone={prioritySummary.action ? "red" : "green"} />
+        <PlanningMetric label="Ready to make" value={String(prioritySummary.ready)} detail="Suggested batches have required materials" tone="green" />
+        <PlanningMetric label="Best seller" value={prioritySummary.top?.product.name || "No recent sales"} detail={prioritySummary.top ? `${number(prioritySummary.top.soldQuantity)} kg delivered in ${demandPeriod} days` : "No delivered sales in this period"} tone="slate" />
+      </section>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center">
           <div>
-            <p className="text-[9px] font-extrabold uppercase tracking-wide text-red-700">
-              Demand-led production
-            </p>
-            <h2 className="text-sm font-black text-slate-950">
-              Manufacturing priorities · demand and material readiness
-            </h2>
+            <p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-red-700">Step 1 · Choose what to make</p>
+            <h2 className="mt-1 text-base font-extrabold text-slate-950">Production suggestions</h2>
+            <p className="mt-1 text-xs text-slate-500">Highest demand and lowest stock cover appear first. Batch suggestions include existing finished stock and open production.</p>
           </div>
-          <div className="flex items-center gap-2">{([30, 90, 180] as const).map((days) => <button key={days} onClick={() => setDemandPeriod(days)} className={`rounded-lg px-2.5 py-1.5 text-[10px] font-bold ${demandPeriod === days ? "bg-slate-900 text-white" : "border bg-white text-slate-600"}`}>Last {days}d</button>)}<span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-bold text-white">{recommendations.length}</span></div>
+          <div><p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Sales period</p><div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">{([30, 90, 180] as const).map((days) => <button key={days} aria-pressed={demandPeriod === days} onClick={() => setDemandPeriod(days)} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${demandPeriod === days ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-900"}`}>Last {days}</button>)}</div></div>
         </div>
         {recommendations.length ? (
-          <div className="divide-y divide-slate-100">
-            {recommendations.map((item) => (
-              <div
-                key={item.formula._id}
-                className="grid gap-3 px-4 py-3 sm:grid-cols-2 lg:grid-cols-[1.7fr_.8fr_.8fr_1fr_auto] lg:items-center"
-              >
-                <div>
-                  <strong className="block text-sm text-slate-950">
-                    {item.product.name}
-                  </strong>
-                  <span className="text-[10px] text-slate-500">{item.product.code || item.formula.code} · Priority {item.priorityScore}</span>
-                </div>
-                <StoreCell label={`Delivered (${demandPeriod}d)`} value={item.soldQuantity / Number(item.product.packSizeKg || 1)} />
-                <StoreCell label="Production" value={item.productionPacks} />
-                <StoreCell label="Sales" value={item.salesPacks} />
-                <StoreCell label="Open output (kg)" value={item.openOutputKg} />
-                <StoreCell label="Suggested batch" value={item.productionNeeded} />
-                <div>
-                  {item.ready ? (
-                    <Badge text="MATERIALS READY" tone="success" />
-                  ) : (
-                    <Badge
-                      text={item.needsUnitReview
-                        ? `${item.missing.length} SHORT · UNIT CHECK`
-                        : `${item.missing.length} SHORT`}
-                      tone="warning"
-                    />
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => reviewRecommendation(item)}
-                  className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white"
-                >
-              Review plan
-                </button>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="min-w-[900px] w-full text-left text-sm">
+              <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Product</th><th className="px-4 py-3 text-right">Sold · {demandPeriod} days</th><th className="px-4 py-3 text-right">Stock cover</th><th className="px-4 py-3 text-right">Open batches</th><th className="px-4 py-3 text-right">Suggested batch</th><th className="px-4 py-3">Material check</th><th className="px-5 py-3">Next step</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {recommendations.map((item, index) => (
+                  <tr key={item.formula._id} className="transition hover:bg-slate-50/70">
+                    <td className="px-5 py-4"><div className="flex items-center gap-3"><span className={`grid h-8 w-8 place-items-center rounded-lg text-xs font-black ${item.productionNeeded > 0 ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{index + 1}</span><div><strong className="block text-sm text-slate-950">{item.product.name}</strong><span className="text-[10px] text-slate-500">{item.product.code || item.formula.code} · priority {number(item.priorityScore)}/100</span></div></div></td>
+                    <td className="whitespace-nowrap px-4 py-4 text-right font-semibold">{number(item.soldQuantity)} kg</td>
+                    <td className="whitespace-nowrap px-4 py-4 text-right"><span className={`font-bold ${item.coverDays <= 7 ? "text-red-700" : "text-slate-800"}`}>{item.coverDays} days</span><span className="block text-[10px] text-slate-400">{number(item.onHandKg)} kg on hand</span></td>
+                    <td className="whitespace-nowrap px-4 py-4 text-right">{number(item.openOutputKg)} kg</td>
+                    <td className="whitespace-nowrap px-4 py-4 text-right font-extrabold">{item.productionNeeded ? `${number(item.productionNeeded)} packs` : "Covered"}</td>
+                    <td className="px-4 py-4">{item.productionNeeded <= 0 ? <Badge text="STOCK COVERED" tone="success" /> : item.ready ? <Badge text="READY TO MAKE" tone="success" /> : <Badge text={item.needsUnitReview ? "CHECK UNITS" : `${item.missing.length} MATERIAL SHORT`} tone="warning" />}</td>
+                    <td className="px-5 py-4">{item.productionNeeded > 0 ? <button type="button" onClick={() => reviewRecommendation(item)} className="whitespace-nowrap rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-red-700">Plan this batch</button> : <span className="text-xs font-semibold text-slate-400">No batch needed</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        ) : loading ? (
+          <div className="px-5 py-10 text-center text-sm text-slate-500">Loading product demand and stock…</div>
         ) : (
-          <div className="flex items-center gap-2 px-4 py-5 text-sm font-semibold text-emerald-700">
+          <div className="flex flex-col items-center gap-2 px-4 py-12 text-center text-sm font-semibold text-emerald-700">
             <CheckCircle2 size={17} />
-            No formula-linked product needs replenishment in this demand window.
+            <span>No delivered sales with an active production formula were found in this period.</span>
           </div>
         )}
       </section>
-      <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 lg:grid-cols-[2fr_1fr_1fr]">
+      <section ref={planningSectionRef} className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-col justify-between gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center"><div><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-red-700">Step 2 · Set the batch</p><h2 className="mt-1 text-base font-extrabold text-slate-950">Choose a product and batch size</h2><p className="mt-1 text-xs text-slate-500">Select a product formula, then enter how many packs or kilograms you plan to make.</p></div>{product && <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">Formula {formula?.code} · v{formula?.version}</span>}</div>
+        <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr]">
         <label className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
-          Paint / formula
+          Product and formula
           <select
             value={formulaId}
             onChange={(event) => setFormulaId(event.target.value)}
             className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900"
           >
-            <option value="">Select paint</option>
+            <option value="">Choose a product</option>
             {formulas.map((item) => {
               const name =
                 typeof item.product === "object"
@@ -511,8 +517,12 @@ export default function MaterialRequirementsPage() {
           </select>
         </label>
         <label className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
-          Planned quantity
+          Batch size
           <input
+            type="number"
+            min="0"
+            step="any"
+            aria-label="Batch size"
             value={quantity}
             onChange={(event) => setQuantity(event.target.value)}
             inputMode="decimal"
@@ -520,7 +530,7 @@ export default function MaterialRequirementsPage() {
           />
         </label>
         <label className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
-          Planning unit
+          Enter batch size in
           <select
             value={mode}
             onChange={(event) => setMode(event.target.value as InputMode)}
@@ -530,25 +540,17 @@ export default function MaterialRequirementsPage() {
             <option value="kg">Kilograms</option>
           </select>
         </label>
+        </div>
       </section>
       {formula && (
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-          <Metric
-            label="Production Store"
-            value={`${number(selectedProductionPacks)} packs`}
-          />
-          <Metric
-            label="Sales Store"
-            value={`${number(selectedSalesPacks)} packs`}
-          />
+          <Metric label="Production stock" value={`${number(selectedProductionPacks)} packs`} />
+          <Metric label="Sales stock" value={`${number(selectedSalesPacks)} packs`} />
           <Metric
             label="Planned output"
             value={`${number(plannedOutput)} kg`}
           />
-          <Metric
-            label="Finished packs"
-            value={`${number(plannedPacks)} packs`}
-          />
+          <Metric label="Batch output" value={`${number(plannedPacks)} packs`} />
           <Metric
             label="Short materials"
             value={String(shortages.length)}
@@ -559,7 +561,7 @@ export default function MaterialRequirementsPage() {
             value={String(unitReviews.length)}
             danger={unitReviews.length > 0}
           />
-          <Metric label="Proposed purchase" value={money(purchaseValue)} />
+          <Metric label="Estimated materials to buy" value={money(purchaseValue)} />
         </section>
       )}
       {formula && requirements.length > 0 && (
@@ -589,12 +591,10 @@ export default function MaterialRequirementsPage() {
           )}
         </section>
       )}
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3">
-          <ClipboardList size={16} />
-          <h2 className="text-sm font-black">
-            Material availability & purchase proposal
-          </h2>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-100 text-slate-600"><ClipboardList size={17} /></span><div><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-red-700">Step 3 · Check materials</p><h2 className="text-sm font-extrabold text-slate-950">Materials needed for this batch</h2><p className="mt-0.5 text-xs text-slate-500">Required quantities are scaled from the selected formula and batch size.</p></div></div>
+          {formula && <span className={`rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wide ${ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{ready ? "Ready to plan" : `${shortages.length} shortages · ${unitReviews.length} unit checks`}</span>}
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-[900px] w-full text-left text-xs">
@@ -704,15 +704,9 @@ function Metric({
   );
 }
 
-function StoreCell({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <span className="block text-[9px] font-bold uppercase text-slate-500">
-        {label}
-      </span>
-      <strong className="text-xs text-slate-950">{number(value)} packs</strong>
-    </div>
-  );
+function PlanningMetric({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: "slate" | "red" | "green" }) {
+  const colors = tone === "red" ? "border-red-100 bg-red-50/70 text-red-800" : tone === "green" ? "border-emerald-100 bg-emerald-50/70 text-emerald-800" : "border-slate-200 bg-white text-slate-950";
+  return <article className={`rounded-2xl border p-4 shadow-sm ${colors}`}><p className="text-[10px] font-extrabold uppercase tracking-[.13em] opacity-70">{label}</p><p className="mt-2 truncate text-xl font-extrabold" title={value}>{value}</p><p className="mt-1 truncate text-xs opacity-70" title={detail}>{detail}</p></article>;
 }
 
 function Badge({

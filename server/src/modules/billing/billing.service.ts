@@ -31,11 +31,13 @@ const nextReceiptNumber = async (session?: mongoose.ClientSession) => {
   const year = new Date().getFullYear();
   const prefix = `RCT-${year}-`;
   const latest = await Payment.findOne({ receiptNumber: new RegExp(`^${prefix}\\d+$`) })
-    .sort({ receiptNumber: -1 }).select("receiptNumber").lean();
+    .sort({ receiptNumber: -1 }).select("receiptNumber")
+    .session(session || null).lean();
   const existing = Number(String(latest?.receiptNumber || "").slice(prefix.length)) || 0;
   const counter = await BillingSequence.findOneAndUpdate(
     { _id: `RCT-${year}` },
-    [{ $set: { value: { $add: [{ $ifNull: ["$value", existing] }, 1] } } }],
+    // Recover automatically when the persisted counter lags behind receipts.
+    [{ $set: { value: { $add: [{ $max: [{ $ifNull: ["$value", 0] }, existing] }, 1] } } }],
     { upsert: true, new: true, updatePipeline: true, ...(session ? { session } : {}) },
   ).lean();
   return `${prefix}${String(counter!.value).padStart(5, "0")}`;
