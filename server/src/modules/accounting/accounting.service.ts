@@ -247,7 +247,14 @@ const postingTreasuryCode = (record: any) =>
     ? treasuryCode(record.treasuryAccount.type)
     : paymentAccount(record?.method);
 
-export async function treasuryWorkspace() {
+export async function treasuryWorkspace(from?: string, to?: string) {
+  const periodStart = from ? new Date(`${from}T00:00:00.000`).getTime() : Number.NEGATIVE_INFINITY;
+  const periodEnd = to ? new Date(`${to}T23:59:59.999`).getTime() : Number.POSITIVE_INFINITY;
+  const dateValue = (value: unknown) => new Date(value as string | number | Date).getTime();
+  const inPeriod = (value: unknown) => {
+    const timestamp = dateValue(value);
+    return Number.isFinite(timestamp) && timestamp >= periodStart && timestamp <= periodEnd;
+  };
   const [treasuryAccounts, transactions, customerReceipts, supplierSettlements, operatingExpenses, paidPayrolls, paidAdvances, loans, taxes] = await Promise.all([
     TreasuryAccount.find().sort({ status: 1, name: 1 }).lean(),
     TreasuryTransaction.find()
@@ -288,7 +295,7 @@ export async function treasuryWorkspace() {
     const accountId = String(accountItem._id);
     const openingDate = new Date(accountItem.openingDate || accountItem.createdAt || 0).getTime();
     const onOrAfterOpening = (value: unknown) =>
-      new Date(value as string | number | Date).getTime() >= openingDate;
+      dateValue(value) >= openingDate && dateValue(value) <= periodEnd;
     const movement = (transactions as any[])
       .filter((item) => item.status !== "void" && onOrAfterOpening(item.date))
       .reduce((sum, item) => {
@@ -327,7 +334,7 @@ export async function treasuryWorkspace() {
     const taxPaid = (taxes as any[]).flatMap((item) => item.payments || []).filter((item) => String(item.treasuryAccount) === accountId && onOrAfterOpening(item.paymentDate)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
     return {
       ...accountItem,
-      balance: Number(accountItem.openingBalance || 0) + movement + receipts - settlements - expensesPaid - payrollPaid - advancesPaid - loanPaid - taxPaid,
+      balance: (openingDate <= periodEnd ? Number(accountItem.openingBalance || 0) : 0) + movement + receipts - settlements - expensesPaid - payrollPaid - advancesPaid - loanPaid - taxPaid,
     };
   });
   const accountById = new Map(balances.map((item: any) => [String(item._id), item]));
@@ -416,7 +423,7 @@ export async function treasuryWorkspace() {
   ];
   return {
     accounts: balances,
-    transactions: [...(transactions as any[]), ...operationalTransactions].sort(
+    transactions: [...(transactions as any[]), ...operationalTransactions].filter((item) => inPeriod(item.date)).sort(
       (left, right) => new Date(right.date).getTime() - new Date(left.date).getTime(),
     ),
   };

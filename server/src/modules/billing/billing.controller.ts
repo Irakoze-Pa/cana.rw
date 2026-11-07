@@ -101,7 +101,7 @@ export async function reverse(req: AuthRequest, res: Response) {
   }
 }
 export async function chequeStatus(req: AuthRequest, res: Response) {
-  try { res.json({ data: await updateCustomerCheque(String(req.params.paymentId), String(req.body.status || "")) }); }
+  try { res.json({ data: await updateCustomerCheque(String(req.params.paymentId), String(req.body.status || ""), String(req.body.treasuryAccount || "")) }); }
   catch (error) { res.status(400).json({ error: { message: message(error) } }); }
 }
 export async function editCheque(req: AuthRequest, res: Response) {

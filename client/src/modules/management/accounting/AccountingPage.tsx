@@ -3,9 +3,11 @@ import {
   ArrowRightLeft,
   BookOpen,
   CheckCircle2,
+  ChevronLeft,
   ChevronDown,
   ChevronRight,
   CircleDollarSign,
+  CalendarDays,
   ClipboardList,
   Factory,
   Landmark,
@@ -202,6 +204,21 @@ const monthStart = () => {
     .toISOString()
     .slice(0, 10);
 };
+const localDate = (value: Date) =>
+  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+const monthValueFromDate = (value: string) => value.slice(0, 7);
+const monthRange = (month: string) => {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const first = new Date(year, monthNumber - 1, 1);
+  const last = new Date(year, monthNumber, 0);
+  const now = new Date();
+  return {
+    from: localDate(first),
+    to: year === now.getFullYear() && monthNumber === now.getMonth() + 1
+      ? localDate(now)
+      : localDate(last),
+  };
+};
 const money = (value: number) =>
   `${Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 })} RWF`;
 const buildBalanceSheet = (rows: TrialRow[]): BalanceSheetData => {
@@ -300,6 +317,7 @@ export default function AccountingPage() {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
+  const [customPeriod, setCustomPeriod] = useState(false);
   const [summary, setSummary] = useState<Summary>(emptySummary);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
@@ -379,6 +397,20 @@ export default function AccountingPage() {
     if (nextTab === "overview") setSearchParams({}, { replace: true });
     else setSearchParams({ tab: nextTab }, { replace: true });
   };
+  const selectedMonth = monthValueFromDate(from);
+  const currentMonth = today().slice(0, 7);
+  const chooseMonth = (month: string) => {
+    if (!/^\d{4}-\d{2}$/.test(month)) return;
+    const range = monthRange(month);
+    setFrom(range.from);
+    setTo(range.to);
+    setCustomPeriod(false);
+  };
+  const moveMonth = (offset: number) => {
+    const [year, monthNumber] = selectedMonth.split("-").map(Number);
+    const target = new Date(year, monthNumber - 1 + offset, 1);
+    chooseMonth(`${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}`);
+  };
 
   const periodDebit = useMemo(
     () =>
@@ -390,20 +422,6 @@ export default function AccountingPage() {
   const trialDebit = trial.reduce((sum, item) => sum + item.debitBalance, 0);
   const trialCredit = trial.reduce((sum, item) => sum + item.creditBalance, 0);
   const balanceSheet = useMemo(() => buildBalanceSheet(trial), [trial]);
-  const groupedAccounts = useMemo(
-    () =>
-      Object.entries(
-        accounts.reduce<Record<string, Account[]>>(
-          (groups, item) => ({
-            ...groups,
-            [item.group]: [...(groups[item.group] || []), item],
-          }),
-          {},
-        ),
-      ),
-    [accounts],
-  );
-
   const printReport = () => {
     if (tab === "treasury") {
       printCanaDocument({
@@ -928,13 +946,28 @@ export default function AccountingPage() {
         </section>
       )}
 
-      <section className="flex flex-col gap-2 border border-slate-200 bg-white p-2 xl:flex-row xl:items-center xl:justify-between">
+      <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm shadow-slate-900/[.02]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-col gap-1.5 lg:flex-row lg:items-center">
           <AccountingTabs items={workspaceTabs} active={tab} select={selectTab} />
           <span className="hidden h-5 w-px bg-slate-200 lg:block" />
           <AccountingTabs items={reportTabs} active={tab} select={selectTab} />
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+        <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+          <button type="button" onClick={() => moveMonth(-1)} aria-label="Previous month" className="rounded-md p-2 text-slate-600 hover:bg-white hover:text-slate-950"><ChevronLeft size={16}/></button>
+          <label className="relative">
+            <span className="sr-only">Accounting month</span>
+            <CalendarDays size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"/>
+            <input type="month" value={selectedMonth} max={currentMonth} onChange={(event) => chooseMonth(event.target.value)} className="h-9 rounded-md border-0 bg-white pl-8 pr-2 text-xs font-extrabold text-slate-800 shadow-sm outline-none ring-1 ring-slate-200"/>
+          </label>
+          <button type="button" disabled={selectedMonth >= currentMonth} onClick={() => moveMonth(1)} aria-label="Next month" className="rounded-md p-2 text-slate-600 hover:bg-white hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-30"><ChevronRight size={16}/></button>
+          {selectedMonth !== currentMonth && <button type="button" onClick={() => chooseMonth(currentMonth)} className="rounded-md bg-slate-950 px-2.5 py-2 text-[10px] font-bold text-white">This month</button>}
+          <button type="button" onClick={() => setCustomPeriod((value) => !value)} className={`rounded-md px-2.5 py-2 text-[10px] font-bold ${customPeriod?"bg-red-50 text-red-700":"text-slate-500 hover:bg-white"}`}>Custom</button>
+        </div>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2">
+          <p className="text-[10px] font-semibold text-slate-500"><b className="text-slate-800">Showing:</b> {displayDate(from)} — {displayDate(to)}{selectedMonth < currentMonth && !customPeriod ? " · Historical month" : ""}</p>
+          {customPeriod && <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
           <label className="text-[10px] font-extrabold uppercase text-slate-500">
             From
             <input
@@ -953,6 +986,7 @@ export default function AccountingPage() {
               className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs font-semibold text-slate-800 sm:ml-2 sm:mt-0 sm:inline-block sm:w-auto"
             />
           </label>
+          </div>}
         </div>
       </section>
 
@@ -962,7 +996,6 @@ export default function AccountingPage() {
           loading={loading}
           from={from}
           to={to}
-          groupedAccounts={groupedAccounts}
           treasuryAccounts={treasury.accounts}
           canSetup={canPostJournal}
           onAddAccount={() => setAccountOpen(true)}
@@ -1142,7 +1175,6 @@ function Overview({
   loading,
   from,
   to,
-  groupedAccounts,
   treasuryAccounts,
   canSetup,
   onAddAccount,
@@ -1151,26 +1183,22 @@ function Overview({
   loading: boolean;
   from: string;
   to: string;
-  groupedAccounts: [string, Account[]][];
   treasuryAccounts: TreasuryAccount[];
   canSetup: boolean;
   onAddAccount: () => void;
 }) {
   const turnover = Number(summary.revenue || 0);
-  const netMargin = turnover > 0 ? (summary.netProfit / turnover) * 100 : 0;
-  const costRatio = turnover > 0 ? (summary.expenses / turnover) * 100 : 0;
   const primaryMetrics = [
-    { label: "Turnover", value: turnover, icon: CircleDollarSign },
-    { label: "Available funds", value: summary.cashAndBank, icon: Landmark },
+    { label: "Income", value: turnover, icon: CircleDollarSign },
+    { label: "Cash available", value: summary.cashAndBank, icon: Landmark },
     {
       label: "Customers owe",
       value: summary.receivables,
       icon: WalletCards,
     },
-    { label: "Period result", value: summary.netProfit, icon: CircleDollarSign },
+    { label: "Profit / loss", value: summary.netProfit, icon: CircleDollarSign },
   ];
   const supportingMetrics = [
-    { label: "Operating costs", value: summary.expenses },
     { label: "Owed to suppliers", value: summary.payables },
     { label: "Equipment value", value: summary.fixedAssets },
     { label: "Outstanding loans", value: summary.ownerLoans },
@@ -1184,7 +1212,7 @@ function Overview({
           return (
             <article
               key={metric.label}
-              className={`min-w-0 border px-4 py-3.5 ${index === 0 ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white"}`}
+              className={`min-w-0 rounded-xl border px-4 py-3.5 ${index === 0 ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white"}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <p className={`text-[10px] font-extrabold uppercase tracking-wide ${index === 0 ? "text-slate-300" : "text-slate-500"}`}>
@@ -1193,7 +1221,7 @@ function Overview({
                 <Icon size={15} className={index === 0 ? "text-white" : "text-slate-400"} />
               </div>
               <p
-                className={`mt-2 truncate text-xl font-black tracking-tight ${metric.label === "Period result" && metric.value < 0 ? "text-red-600" : index === 0 ? "text-white" : "text-slate-950"}`}
+                className={`mt-2 truncate text-xl font-black tracking-tight ${metric.label === "Profit / loss" && metric.value < 0 ? "text-red-600" : index === 0 ? "text-white" : "text-slate-950"}`}
                 title={money(metric.value)}
               >
                 {loading ? "—" : compactMoney(metric.value)}
@@ -1202,29 +1230,26 @@ function Overview({
           );
         })}
       </section>
-      <section className="grid overflow-hidden border border-slate-200 bg-white lg:grid-cols-[1.15fr_.85fr]">
-        <div className="border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="p-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[.14em] text-red-700">Commercial performance</p>
-              <h2 className="mt-1 text-sm font-extrabold text-slate-950">Turnover for the selected period</h2>
+              <p className="text-[10px] font-black uppercase tracking-[.14em] text-red-700">Selected period</p>
+              <h2 className="mt-1 text-sm font-extrabold text-slate-950">How the result was calculated</h2>
             </div>
             <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">{displayDate(from)} – {displayDate(to)}</span>
           </div>
-          <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden border border-slate-200 bg-slate-200">
-            <PerformanceValue label="Turnover" value={loading ? "—" : money(turnover)} />
-            <PerformanceValue label="Recognised costs" value={loading ? "—" : money(summary.expenses)} />
-            <PerformanceValue label="Net result" value={loading ? "—" : money(summary.netProfit)} negative={summary.netProfit < 0} />
+          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
+            <PerformanceValue label="Income invoiced" value={loading ? "—" : money(turnover)} />
+            <span className="hidden text-lg font-black text-slate-300 sm:block">−</span>
+            <PerformanceValue label="Business costs" value={loading ? "—" : money(summary.expenses)} />
+            <span className="hidden text-lg font-black text-slate-300 sm:block">=</span>
+            <PerformanceValue label="Profit / loss" value={loading ? "—" : money(summary.netProfit)} negative={summary.netProfit < 0} />
           </div>
-          <p className="mt-3 text-[10px] leading-4 text-slate-500">Turnover is recognised from issued customer invoices in this period, excluding output tax. It is not the same as cash collected.</p>
-        </div>
-        <div className="p-4">
-          <p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-500">Performance ratios</p>
-          <Ratio label="Net margin" value={netMargin} tone={netMargin < 0 ? "negative" : "positive"} />
-          <Ratio label="Cost to turnover" value={costRatio} tone={costRatio > 100 ? "negative" : "neutral"} />
+          <p className="mt-3 text-[10px] leading-4 text-slate-500">Income is based on posted invoices for this period. Cash available is shown separately because an invoice may still be unpaid.</p>
         </div>
       </section>
-      <section className="grid grid-cols-2 gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-5">
+      <section className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
         {supportingMetrics.map((metric) => (
           <article key={metric.label} className="min-w-0 bg-white px-3 py-2.5">
             <p className="truncate text-[9px] font-extrabold uppercase tracking-wide text-slate-500 sm:text-[10px]">
@@ -1257,7 +1282,7 @@ function Overview({
           )}
         </section>
       )}
-      <section className="grid gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-5">
+      <section className="grid gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-5">
         <FinanceLink
           to="/management/billing"
           icon={WalletCards}
@@ -1289,12 +1314,10 @@ function Overview({
           detail={`${money(summary.fixedAssets)} recognised`}
         />
       </section>
-      <section className="grid gap-3 xl:grid-cols-[1.2fr_.8fr]">
-        <div className="border border-slate-200 bg-white">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div>
           <div className="border-b border-slate-200 px-4 py-3">
-            <h2 className="font-extrabold text-slate-950">
-              Management accounts
-            </h2>
+            <h2 className="font-extrabold text-slate-950">Financial summary</h2>
           </div>
           <div className="grid sm:grid-cols-2">
             <Statement
@@ -1313,31 +1336,6 @@ function Overview({
                 ["Equity & current result", summary.equity],
               ]}
             />
-          </div>
-        </div>
-        <div className="border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 px-4 py-3">
-            <h2 className="font-extrabold text-slate-950">Chart of accounts</h2>
-          </div>
-          <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
-            {groupedAccounts.map(([group, items]) => (
-              <div key={group} className="px-4 py-3">
-                <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
-                  {group}
-                </p>
-                <div className="mt-1.5 grid gap-1 sm:grid-cols-2">
-                  {items.map((item) => (
-                    <p
-                      key={item.code}
-                      className="truncate text-xs text-slate-600"
-                    >
-                      <b className="mr-2 text-slate-950">{item.code}</b>
-                      {item.name}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </section>

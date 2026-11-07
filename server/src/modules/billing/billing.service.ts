@@ -469,7 +469,7 @@ export async function listPayments() {
     .lean();
 }
 
-export async function updateCustomerCheque(paymentId: string, nextStatus: string) {
+export async function updateCustomerCheque(paymentId: string, nextStatus: string, treasuryAccountId = "") {
   if (!mongoose.Types.ObjectId.isValid(paymentId)) throw new Error("Invalid customer cheque.");
   if (!["deposited", "cleared", "bounced", "cancelled"].includes(nextStatus)) throw new Error("Select a valid cheque action.");
   return mongoose.connection.transaction(async (session) => {
@@ -477,11 +477,20 @@ export async function updateCustomerCheque(paymentId: string, nextStatus: string
     if (!payment || payment.method !== "bank_cheque") throw new Error("Customer cheque not found.");
     const group: any[] = payment.allocationGroup
       ? await Payment.find({ allocationGroup: payment.allocationGroup }).session(session)
-      : [payment];
+      : await Payment.find({
+          customer: payment.customer,
+          method: "bank_cheque",
+          chequeNumber: payment.chequeNumber,
+          chequeDate: payment.chequeDate,
+          chequeStatus: { $in: ["received", "due", "deposited"] },
+        }).session(session);
     if (!group.length || group.some((item) => !["received", "due", "deposited"].includes(item.chequeStatus))) throw new Error("This cheque has already been processed.");
     if (nextStatus === "deposited" && group.some((item) => !["received", "due"].includes(item.chequeStatus))) throw new Error("Only a received or due cheque can be deposited.");
     const now = new Date();
     if (nextStatus === "cleared") {
+      if (!mongoose.Types.ObjectId.isValid(treasuryAccountId)) throw new Error("Select the CANAN bank account that received this cheque.");
+      const treasuryAccount = await TreasuryAccount.findOne({ _id: treasuryAccountId, type: "bank", status: "active" }).session(session);
+      if (!treasuryAccount) throw new Error("Select an active CANAN bank account for this cheque.");
       for (const allocation of group) {
         const receivable: any = allocation.invoice ? await Invoice.findById(allocation.invoice).session(session) : await CustomerOpeningBalance.findById(allocation.openingBalance).session(session);
         if (!receivable || receivable.status === "void") throw new Error("A receivable linked to this cheque is unavailable.");
@@ -491,7 +500,7 @@ export async function updateCustomerCheque(paymentId: string, nextStatus: string
         receivable.balance = Number((total - receivable.amountPaid).toFixed(2));
         receivable.status = receivable.balance <= 0 ? "paid" : "partially_paid";
         await receivable.save({ session });
-        allocation.status = "received"; allocation.clearedAt = now;
+        allocation.status = "received"; allocation.clearedAt = now; allocation.treasuryAccount = treasuryAccount._id;
       }
     }
     for (const allocation of group) {

@@ -27,6 +27,7 @@ type Cheque = {
   status: string;
   notes?: string;
 };
+type BankAccount = {_id:string;name:string;institution?:string;accountNumber?:string;balance?:number;type:string;status:string};
 const money = (value: number) =>
   Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 });
 const tone = (status: string) =>
@@ -45,9 +46,12 @@ export default function ChequeRegisterPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [direction, setDirection] = useState("all");
-  const [status, setStatus] = useState("active");
+  const [status, setStatus] = useState("all");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Cheque | null>(null);
+  const [clearing, setClearing] = useState<Cheque | null>(null);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [clearingAccount, setClearingAccount] = useState("");
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({
     chequeNumber: "",
@@ -59,11 +63,15 @@ export default function ChequeRegisterPage() {
     setLoading(true);
     setError("");
     try {
-      const [customers, suppliers, expenses] = await Promise.all([
+      const [customers, suppliers, expenses, accounts] = await Promise.all([
         api.get<{ data: any[] }>("/billing/payments"),
         api.get<{ data: any[] }>("/supplier-payments"),
         api.get<{ data: any[] }>("/expenses"),
+        api.get<{ data: {accounts:BankAccount[]} }>("/accounting/treasury-accounts"),
       ]);
+      const banks=(accounts.data.data?.accounts||[]).filter((account)=>account.type==="bank"&&account.status==="active");
+      setBankAccounts(banks);
+      setClearingAccount((current)=>current||banks[0]?._id||"");
       const incomingGroups = new Map<string, Cheque>();
       (customers.data.data || [])
         .filter((x) => x.method === "bank_cheque")
@@ -173,7 +181,7 @@ export default function ChequeRegisterPage() {
       ),
     [rows, direction, status, search],
   );
-  const update = async (row: Cheque, next: string) => {
+  const update = async (row: Cheque, next: string, treasuryAccount = "") => {
     if (
       !(await confirm({
         title: `Mark cheque ${next}`,
@@ -185,18 +193,19 @@ export default function ChequeRegisterPage() {
       return;
     try {
       if (row.source === "customer")
-        for (const id of row.ids || [row.id])
-          await api.patch(`/billing/payments/${id}/cheque-status`, {
-            status: next,
-          });
+        await api.patch(`/billing/payments/${row.id}/cheque-status`, {
+          status: next,
+          ...(treasuryAccount?{treasuryAccount}:{}),
+        });
       else if (row.source === "supplier")
         await api.patch(`/supplier-payments/${row.id}/cheque-status`, {
           status: next,
+          ...(treasuryAccount?{treasuryAccount}:{}),
         });
       else
         await api.patch(
           `/expenses/cheques/${encodeURIComponent(row.id)}/status`,
-          { status: next },
+          { status: next, ...(treasuryAccount?{treasuryAccount}:{}) },
         );
       await load();
       toast(`Cheque marked ${next}.`, "success");
@@ -205,6 +214,8 @@ export default function ChequeRegisterPage() {
       await load();
     }
   };
+  const openClear=(row:Cheque)=>{setClearing(row);setClearingAccount(bankAccounts[0]?._id||"");};
+  const confirmClear=async()=>{if(!clearing||!clearingAccount){setError("Select the CANAN bank account used for this cheque.");return;}setSaving(true);try{await update(clearing,"cleared",clearingAccount);setClearing(null);}finally{setSaving(false);}};
   const openEdit = (row: Cheque) => {
     setEditing(row);
     setEditForm({
@@ -366,8 +377,8 @@ export default function ChequeRegisterPage() {
           onChange={(e) => setStatus(e.target.value)}
           className="rounded-lg border px-3 py-2 text-sm"
         >
-          <option value="active">Active cheques</option>
           <option value="all">All statuses</option>
+          <option value="active">Active cheques only</option>
           <option value="due">Due</option>
           <option value="cleared">Cleared</option>
           <option value="bounced">Bounced</option>
@@ -450,7 +461,7 @@ export default function ChequeRegisterPage() {
                         )}
                         <button
                           title="Mark cleared"
-                          onClick={() => void update(x, "cleared")}
+                          onClick={() => openClear(x)}
                           className="rounded bg-emerald-700 p-1.5 text-white"
                         >
                           <CheckCircle2 size={12} />
@@ -499,6 +510,7 @@ export default function ChequeRegisterPage() {
           </div>
         </div>
       )}
+      {clearing&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4"><div className="w-full max-w-md rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Cheque clearance</p><h2 className="text-lg font-extrabold text-slate-950">Select bank account</h2></div><button onClick={()=>setClearing(null)} className="rounded-lg border p-2 text-slate-500"><X size={16}/></button></div><div className="space-y-4 p-5"><div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600"><strong className="block text-slate-950">{clearing.number} · {clearing.party}</strong><span>{clearing.source==="customer"?"Incoming":"Outgoing"} cheque · {money(clearing.amount)} RWF</span></div><label className="block text-xs font-bold text-slate-700">{clearing.source==="customer"?"Received into":"Paid from"}<select value={clearingAccount} onChange={(event)=>setClearingAccount(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"><option value="">Select CANAN bank account</option>{bankAccounts.map((account)=><option key={account._id} value={account._id}>{account.name}{account.accountNumber?` · ${account.accountNumber}`:""}</option>)}</select></label>{!bankAccounts.length&&<p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Create an active bank account in Finance & Accounting before clearing this cheque.</p>}<p className="text-[11px] leading-5 text-slate-500">Clearing an incoming cheque increases the selected bank balance and settles its invoice allocations. Clearing an outgoing cheque reduces the selected bank balance.</p></div><div className="flex justify-end gap-2 border-t px-5 py-4"><button onClick={()=>setClearing(null)} className="rounded-lg border px-4 py-2 text-sm font-bold">Cancel</button><button disabled={saving||!clearingAccount} onClick={()=>void confirmClear()} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving?"Clearing…":"Confirm clearance"}</button></div></div></div>}
     </div>
   );
 }

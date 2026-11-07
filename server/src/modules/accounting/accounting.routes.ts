@@ -72,7 +72,7 @@ router.get("/workspace", async (req, res, next) => {
         trialBalance: trialBalance(asAt),
         journals,
         configuration,
-        treasury: await treasuryWorkspace(),
+        treasury: await treasuryWorkspace(from, to),
         fixedAssets: await FixedAsset.find().populate("createdBy updatedBy", "fullName").sort({ assetCode: 1 }).lean(),
         ownerLoans: await OwnerLoan.find({ status: { $ne: "void" } }).populate("createdBy repayments.treasuryAccount", "fullName name type").sort({ openingDate: -1 }).lean(),
         taxLiabilities: await TaxLiability.find({ status: { $ne: "void" } }).populate("createdBy payments.treasuryAccount", "fullName name type").sort({ dueDate: 1 }).lean(),
