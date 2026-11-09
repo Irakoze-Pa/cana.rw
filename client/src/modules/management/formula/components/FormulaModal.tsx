@@ -521,7 +521,7 @@ export default function FormulaModal({
     // -----------------------------------------------
 
     if (!product) {
-      alert("Please select a product.");
+      alert(outputs.length > 0 ? "Please select the first finished output." : "Please select a product.");
       return;
     }
 
@@ -863,7 +863,7 @@ export default function FormulaModal({
 
                   {/* PRODUCT */}
 
-                  <div className="lg:col-span-2">
+                  {outputs.length === 0 ? <div className="lg:col-span-2">
                     <label className="text-xs font-semibold text-gray-600">
                       Product *
                     </label>
@@ -905,7 +905,12 @@ export default function FormulaModal({
                           )
                         )}
                     </select>
-                  </div>
+                  </div> : <div className="lg:col-span-2">
+                    <label className="text-xs font-semibold text-gray-600">Formula type</label>
+                    <div className="mt-1.5 flex h-11 items-center rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-800">
+                      Shared mixture · primary product follows the first output
+                    </div>
+                  </div>}
 
                   {/* NAME */}
 
@@ -1038,7 +1043,7 @@ export default function FormulaModal({
                       <p className="mt-1 text-xs text-gray-500">Use shared outputs when one mixture is divided into different finished products.</p>
                     </div>
                     {outputs.length === 0 ? (
-                      <button type="button" disabled={!product} onClick={enableSharedOutputs} className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-xs font-bold text-gray-800 disabled:opacity-40">
+                      <button type="button" onClick={enableSharedOutputs} className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-xs font-bold text-gray-800">
                         Combine finished products
                       </button>
                     ) : (
@@ -1054,11 +1059,12 @@ export default function FormulaModal({
                         <div key={`${index}-${output.product}`} className="grid gap-3 rounded-xl border border-gray-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_130px_130px_110px_auto] md:items-end">
                           <div>
                             <label className="text-[11px] font-semibold text-gray-600">Finished product</label>
-                            <select value={output.product} disabled={index === 0} onChange={(event) => {
+                            <select value={output.product} onChange={(event) => {
                               const nextProduct = event.target.value;
                               const selected = products.find((item) => item._id === nextProduct);
+                              if (index === 0) setProduct(nextProduct);
                               updateOutput(index, { product: nextProduct, packSizeKg: Number(selected?.packSizeKg || 30) });
-                            }} className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50">
+                            }} className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm">
                               <option value="">Select product</option>
                               {products.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}
                             </select>
