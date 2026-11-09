@@ -42,6 +42,19 @@ export interface IProductionBatch
   productName: string;
   productCode: string;
 
+  outputs: Array<{
+    product: mongoose.Types.ObjectId;
+    productName: string;
+    productCode: string;
+    plannedQuantity: number;
+    actualQuantity: number;
+    packSizeKg: number;
+    plannedPacks: number;
+    actualPacks: number;
+    allocatedCost: number;
+    costPerPack: number;
+  }>;
+
   // ---------------------------------------------------
   // FORMULA SNAPSHOT
   // ---------------------------------------------------
@@ -54,6 +67,7 @@ export interface IProductionBatch
     rawMaterial: mongoose.Types.ObjectId;
     rawMaterialName: string;
     rawMaterialCode: string;
+    appliesToProduct?: mongoose.Types.ObjectId;
     quantity: number;
     unit: string;
     wastePercentage: number;
@@ -194,6 +208,25 @@ const productionBatchSchema =
         trim: true,
       },
 
+      outputs: {
+        type: [new Schema(
+          {
+            product: { type: Schema.Types.ObjectId, ref: "Product", required: true },
+            productName: { type: String, required: true, trim: true },
+            productCode: { type: String, default: "", trim: true },
+            plannedQuantity: { type: Number, required: true, min: 0.0001 },
+            actualQuantity: { type: Number, default: 0, min: 0 },
+            packSizeKg: { type: Number, required: true, min: 0.0001 },
+            plannedPacks: { type: Number, required: true, min: 0.0001 },
+            actualPacks: { type: Number, default: 0, min: 0 },
+            allocatedCost: { type: Number, default: 0, min: 0 },
+            costPerPack: { type: Number, default: 0, min: 0 },
+          },
+          { _id: false },
+        )],
+        default: [],
+      },
+
       // -------------------------------------------------
       // FORMULA
       // -------------------------------------------------
@@ -232,6 +265,7 @@ const productionBatchSchema =
               rawMaterial: { type: Schema.Types.ObjectId, ref: "RawMaterial", required: true },
               rawMaterialName: { type: String, required: true, trim: true },
               rawMaterialCode: { type: String, required: true, trim: true, uppercase: true },
+              appliesToProduct: { type: Schema.Types.ObjectId, ref: "Product", required: false },
               quantity: { type: Number, required: true, min: 0 },
               unit: { type: String, required: true, trim: true },
               wastePercentage: { type: Number, default: 0, min: 0, max: 100 },

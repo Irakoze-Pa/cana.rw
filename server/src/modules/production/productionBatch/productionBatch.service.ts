@@ -120,6 +120,27 @@ async function snapshotCompletedBatchCost(
         ),
     0,
   );
+  const costByRawMaterial = new Map<string, number>();
+  transactions.forEach((transaction: any) => {
+    const signedCost = (transaction.type === "Production Return" ? -1 : 1) *
+      (Number(transaction.totalCost || 0) > 0
+        ? Number(transaction.totalCost || 0)
+        : Number(transaction.quantity || 0) * Number(inventoryCostByMaterial.get(String(transaction.rawMaterial)) || 0));
+    const key = String(transaction.rawMaterial);
+    costByRawMaterial.set(key, Number(costByRawMaterial.get(key) || 0) + signedCost);
+  });
+  const targetByRawMaterial = new Map<string, string>(
+    ((batch as any).formulaSnapshot || [])
+      .filter((item: any) => item.appliesToProduct)
+      .map((item: any) => [String(item.rawMaterial?._id || item.rawMaterial), String(item.appliesToProduct?._id || item.appliesToProduct)]),
+  );
+  const targetedMaterialCost = new Map<string, number>();
+  let sharedMaterialCost = 0;
+  costByRawMaterial.forEach((cost, rawMaterialId) => {
+    const target = targetByRawMaterial.get(rawMaterialId);
+    if (target) targetedMaterialCost.set(target, Number(targetedMaterialCost.get(target) || 0) + cost);
+    else sharedMaterialCost += cost;
+  });
   const orderQuantity = Number(productionOrder?.quantity || 0);
   const allocation =
     orderQuantity > 0 ? Number(batch.plannedQuantity || 0) / orderQuantity : 1;
@@ -142,6 +163,19 @@ async function snapshotCompletedBatchCost(
   batch.totalActualCost = roundNumber(total);
   batch.costPerKg = roundNumber(perKg);
   batch.costPerPack = roundNumber(packSizeKg > 0 ? perKg * packSizeKg : 0);
+  if (Array.isArray(batch.outputs) && batch.outputs.length > 0) {
+    const sharedProductionCost = Math.max(0, sharedMaterialCost + labor + energy + other);
+    batch.outputs.forEach((item: any) => {
+      const quantity = Number(item.actualQuantity || item.plannedQuantity || 0);
+      const outputPackSize = Number(item.packSizeKg || 30);
+      const weightShare = output > 0 ? quantity / output : 0;
+      const allocatedCost = sharedProductionCost * weightShare + Number(targetedMaterialCost.get(String(item.product?._id || item.product)) || 0);
+      const outputCostPerKg = quantity > 0 ? allocatedCost / quantity : 0;
+      item.allocatedCost = roundNumber(allocatedCost);
+      item.costPerPack = roundNumber(outputPackSize * outputCostPerKg);
+      item.actualPacks = roundNumber(quantity / outputPackSize);
+    });
+  }
   batch.costedAt = new Date();
   await batch.save();
 }
@@ -332,8 +366,9 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
     validateObjectId(String(data.formula || ""), "formula ID");
 
     const formula: any = await Formula.findById(data.formula)
-      .select("product name code version batchSize batchUnit status items")
+      .select("product name code version batchSize batchUnit status items outputs")
       .populate("items.rawMaterial", "name code unit")
+      .populate("outputs.product", "name code sku packSizeKg unit baseUnit")
       .lean();
 
     if (!formula) {
@@ -384,11 +419,20 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
         rawMaterial: item.rawMaterial?._id || item.rawMaterial,
         rawMaterialName: item.rawMaterial?.name || "Raw material",
         rawMaterialCode: item.rawMaterial?.code || "RM",
+        ...(item.appliesToProduct ? { appliesToProduct: item.appliesToProduct } : {}),
         quantity: Number(item.quantity || 0) *
           (1 + Number(item.wastePercentage || 0) / 100),
         unit: item.rawMaterial?.unit || item.unit || "kg",
         wastePercentage: Number(item.wastePercentage || 0),
         notes: item.notes || "",
+      })),
+      outputs: (formula.outputs || []).map((output: any) => ({
+        product: output.product?._id || output.product,
+        productName: output.product?.name || "Finished product",
+        productCode: output.product?.code || output.product?.sku || "",
+        quantity: Number(output.quantity || 0),
+        packSizeKg: Number(output.packSizeKg || output.product?.packSizeKg || 30),
+        packs: Number(output.packs || 0),
       })),
       unit: formula.batchUnit || product.baseUnit || product.unit || "kg",
       items: [{}],
@@ -540,6 +584,26 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
           }))
         : [],
 
+      outputs: Array.isArray(productionOrder.outputs)
+        ? productionOrder.outputs.map((output: any) => {
+            const scale = plannedQuantity / Number(productionOrder.quantity || plannedQuantity);
+            const outputQuantity = Number((Number(output.quantity || 0) * scale).toFixed(4));
+            const packSizeKg = Number(output.packSizeKg || 30);
+            return {
+              product: output.product,
+              productName: output.productName,
+              productCode: output.productCode,
+              plannedQuantity: outputQuantity,
+              actualQuantity: 0,
+              packSizeKg,
+              plannedPacks: Number((outputQuantity / packSizeKg).toFixed(4)),
+              actualPacks: 0,
+              allocatedCost: 0,
+              costPerPack: 0,
+            };
+          })
+        : [],
+
       plannedQuantity,
 
       actualQuantity: 0,
@@ -622,6 +686,7 @@ export async function getProductionBatches() {
       "productionOrderNo productName productCode quantity unit status",
     )
     .populate("product", "name code category unit baseUnit packSizeKg")
+    .populate("outputs.product", "name code category unit baseUnit packSizeKg")
     .populate("formula", "name code version batchSize batchUnit")
     .sort({
       createdAt: -1,
@@ -641,6 +706,7 @@ export async function getProductionBatchById(id: string) {
       "productionOrderNo productName productCode quantity unit status",
     )
     .populate("product", "name code category unit baseUnit packSizeKg")
+    .populate("outputs.product", "name code category unit baseUnit packSizeKg")
     .populate("formula", "name code version batchSize batchUnit")
     .lean();
   if (!batch) return null;
@@ -703,6 +769,7 @@ export async function getActiveProductionBatches() {
       "productionOrderNo productName productCode quantity unit status",
     )
     .populate("product", "name code category unit")
+    .populate("outputs.product", "name code category unit baseUnit packSizeKg")
     .sort({
       createdAt: -1,
     });
@@ -869,6 +936,16 @@ export async function updateProductionBatch(
           quantity: roundNumber(Number(item.quantity || 0) * scale),
         }),
       );
+      if (Array.isArray((batch as any).outputs)) {
+        (batch as any).outputs = (batch as any).outputs.map((output: any) => {
+          const plannedOutput = roundNumber(Number(output.plannedQuantity || 0) * scale);
+          return {
+            ...(typeof output?.toObject === "function" ? output.toObject() : output),
+            plannedQuantity: plannedOutput,
+            plannedPacks: roundNumber(plannedOutput / Number(output.packSizeKg || 30)),
+          };
+        });
+      }
 
       const draftConsumption: any = await RawMaterialConsumption.findOne({
         productionBatch: batch._id,
@@ -964,6 +1041,12 @@ export async function updateProductionBatch(
     }
 
     batch.actualQuantity = finalActual;
+    if (Array.isArray((batch as any).outputs)) {
+      (batch as any).outputs.forEach((output: any) => {
+        output.actualQuantity = Number(output.plannedQuantity || 0);
+        output.actualPacks = roundNumber(Number(output.actualQuantity || 0) / Number(output.packSizeKg || 30));
+      });
+    }
     batch.endDate = new Date();
   }
 
@@ -1187,25 +1270,36 @@ export async function updateProductionBatch(
         );
         if (!markedBatch) return;
 
-        const productUpdate = await Product.updateOne(
-          { _id: product._id },
-          { $inc: { stock: Number(batch.actualQuantity) } },
-          { session: postingSession },
-        );
-        if (productUpdate.matchedCount !== 1) {
-          throw new Error("Finished product could not be updated.");
-        }
+        const outputLines = Array.isArray((batch as any).outputs) && (batch as any).outputs.length > 0
+          ? (batch as any).outputs.map((output: any) => ({
+              product: output.product,
+              quantity: Number(output.actualQuantity || output.plannedQuantity || 0),
+            }))
+          : [{ product: product._id, quantity: Number(batch.actualQuantity) }];
 
-        await FinishedGoodsStoreBalance.findOneAndUpdate(
-          { product: product._id, store: "production" },
-          { $inc: { quantity: Number(batch.actualQuantity) } },
-          {
-            upsert: true,
-            new: true,
-            setDefaultsOnInsert: true,
-            session: postingSession,
-          },
-        );
+        for (const output of outputLines) {
+          if (!Number.isFinite(output.quantity) || output.quantity <= 0) {
+            throw new Error("Every finished output must have a quantity greater than zero.");
+          }
+          const productUpdate = await Product.updateOne(
+            { _id: output.product },
+            { $inc: { stock: output.quantity } },
+            { session: postingSession },
+          );
+          if (productUpdate.matchedCount !== 1) {
+            throw new Error("A finished output product could not be updated.");
+          }
+          await FinishedGoodsStoreBalance.findOneAndUpdate(
+            { product: output.product, store: "production" },
+            { $inc: { quantity: output.quantity } },
+            {
+              upsert: true,
+              new: true,
+              setDefaultsOnInsert: true,
+              session: postingSession,
+            },
+          );
+        }
         batch.finishedGoodsPostedAt = postingMarker;
       });
     } catch (error) {

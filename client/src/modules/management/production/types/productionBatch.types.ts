@@ -62,6 +62,19 @@ export interface ProductionBatch {
   productName: string;
   productCode: string;
 
+  outputs?: Array<{
+    product: string | ProductSummary;
+    productName: string;
+    productCode: string;
+    plannedQuantity: number;
+    actualQuantity: number;
+    packSizeKg: number;
+    plannedPacks: number;
+    actualPacks: number;
+    allocatedCost?: number;
+    costPerPack?: number;
+  }>;
+
   formula: string | FormulaSummary;
 
   formulaName: string;
@@ -71,6 +84,7 @@ export interface ProductionBatch {
     rawMaterial: string | { _id?: string };
     rawMaterialName: string;
     rawMaterialCode: string;
+    appliesToProduct?: string | { _id?: string; name?: string };
     quantity: number;
     unit: string;
     wastePercentage?: number;

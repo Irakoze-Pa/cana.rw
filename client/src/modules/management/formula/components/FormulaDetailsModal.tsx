@@ -76,6 +76,16 @@ export default function FormulaDetails({
     "string"
       ? null
       : formula.product;
+  const outputs = Array.isArray(formula.outputs) ? formula.outputs : [];
+  const outputName = (output: NonNullable<Formula["outputs"]>[number]) =>
+    typeof output.product === "string" ? output.product : output.product.name;
+  const targetName = (target?: string | { _id: string; name: string }) => {
+    if (!target) return "Shared base";
+    const targetId = typeof target === "string" ? target : target._id;
+    return outputs.find((output) => String(typeof output.product === "string" ? output.product : output.product._id) === String(targetId))
+      ? `${outputName(outputs.find((output) => String(typeof output.product === "string" ? output.product : output.product._id) === String(targetId))!)} only`
+      : typeof target === "object" ? `${target.name} only` : "Output-specific";
+  };
 
   const printFormulaCostSheet = () => {
     const materialRows = (formula.items || []).map((item, index) => {
@@ -90,6 +100,7 @@ export default function FormulaDetails({
         material
           ? `${material.name}${material.code ? ` · ${material.code}` : ""}`
           : "Material unavailable",
+        targetName(item.appliesToProduct as any),
         `${quantity.toLocaleString("en-RW")} ${item.unit}`,
         `${waste.toLocaleString("en-RW")} %`,
         `${costQuantity.toLocaleString("en-RW", { maximumFractionDigits: 3 })} ${item.unit}`,
@@ -101,6 +112,7 @@ export default function FormulaDetails({
     materialRows.push([
       "",
       "MATERIALS SUBTOTAL",
+      "",
       "",
       "",
       "",
@@ -144,10 +156,28 @@ export default function FormulaDetails({
           value: formula.costingComplete === false ? "Incomplete pricing" : "All materials priced",
         },
       ],
-      table: {
-        headers: ["#", "Raw material", "Formula qty", "Waste", "Cost qty", "Unit price", "Line cost"],
-        rows: materialRows,
-      },
+      tables: [
+        ...(outputs.length ? [{
+          title: "Finished outputs",
+          table: {
+            headers: ["Finished product", "Packs", "Pack size", "Output quantity", "Weight share"],
+            rows: outputs.map((output) => [
+              outputName(output),
+              Number(output.packs).toLocaleString("en-RW"),
+              `${Number(output.packSizeKg).toLocaleString("en-RW")} kg`,
+              `${Number(output.quantity).toLocaleString("en-RW")} kg`,
+              `${((Number(output.quantity) / Number(formula.batchSize || 1)) * 100).toLocaleString("en-RW", { maximumFractionDigits: 2 })}%`,
+            ]),
+          },
+        }] : []),
+        {
+          title: "Raw-material formula",
+          table: {
+            headers: ["#", "Raw material", "Used for", "Formula qty", "Waste", "Cost qty", "Unit price", "Line cost"],
+            rows: materialRows,
+          },
+        },
+      ],
       notes: [
         "Formula quantities include the stated waste allowance when calculating cost.",
         "Prices are the current inventory weighted-average costs, with the latest active supplier offer used when valued stock is unavailable.",
@@ -178,6 +208,21 @@ export default function FormulaDetails({
                 size={22}
               />
             </div>
+
+            {outputs.length > 0 && (
+              <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <h3 className="text-sm font-bold text-gray-900">Shared-mixture outputs</h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {outputs.map((output) => (
+                    <div key={String(typeof output.product === "string" ? output.product : output.product._id)} className="rounded-xl border border-gray-200 bg-white p-3">
+                      <p className="text-sm font-bold text-gray-950">{outputName(output)}</p>
+                      <p className="mt-1 text-xs text-gray-500">{Number(output.packs).toLocaleString("en-RW")} packs × {Number(output.packSizeKg).toLocaleString("en-RW")} kg</p>
+                      <p className="mt-2 text-lg font-black text-gray-950">{Number(output.quantity).toLocaleString("en-RW")} kg</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
@@ -463,6 +508,7 @@ export default function FormulaDetails({
                                     Material unavailable
                                   </span>
                                 )}
+                                <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-red-700">{targetName(item.appliesToProduct as any)}</p>
                               </td>
 
                               <td className="px-5 py-4">

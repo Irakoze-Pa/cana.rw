@@ -6,6 +6,14 @@ export interface Product {
   code: string;
   category: string;
   unit: string;
+  packSizeKg?: number;
+}
+
+export interface FormulaOutput {
+  product: string | Product;
+  quantity: number;
+  packSizeKg: number;
+  packs: number;
 }
 
 export interface RawMaterial {
@@ -25,6 +33,7 @@ export interface FormulaItem {
     | string
     | RawMaterial;
   quantity: number;
+  appliesToProduct?: string | Product;
   unit: string;
   wastePercentage: number;
   notes?: string;
@@ -44,6 +53,8 @@ export interface Formula {
 
   batchSize: number;
   batchUnit: string;
+
+  outputs?: FormulaOutput[];
 
   items: FormulaItem[];
 
@@ -74,8 +85,16 @@ export interface CreateFormulaData {
   batchSize: number;
   batchUnit: string;
 
+  outputs?: {
+    product: string;
+    quantity: number;
+    packSizeKg: number;
+    packs: number;
+  }[];
+
   items: {
     rawMaterial: string;
+    appliesToProduct?: string;
     quantity: number;
     unit: string;
     wastePercentage: number;

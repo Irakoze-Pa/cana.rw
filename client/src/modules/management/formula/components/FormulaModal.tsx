@@ -25,10 +25,17 @@ interface FormulaModalProps {
 
 interface FormulaItemForm {
   rawMaterial: string;
+  appliesToProduct: string;
   quantity: number;
   unit: string;
   wastePercentage: number;
   notes: string;
+}
+
+interface FormulaOutputForm {
+  product: string;
+  packs: number;
+  packSizeKg: number;
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || "/api/v1");
@@ -62,6 +69,7 @@ export default function FormulaModal({
 
   const [batchSize, setBatchSize] = useState(1000);
   const [batchUnit, setBatchUnit] = useState("kg");
+  const [outputs, setOutputs] = useState<FormulaOutputForm[]>([]);
 
   const [items, setItems] = useState<FormulaItemForm[]>([]);
 
@@ -219,6 +227,7 @@ export default function FormulaModal({
 
     setBatchSize(1000);
     setBatchUnit("kg");
+    setOutputs([]);
 
     setItems([]);
 
@@ -275,6 +284,16 @@ export default function FormulaModal({
 
     setBatchUnit("kg");
 
+    setOutputs(
+      Array.isArray(editingFormula.outputs)
+        ? editingFormula.outputs.map((output) => ({
+            product: typeof output.product === "string" ? output.product : output.product?._id || "",
+            packs: Number(output.packs || 0),
+            packSizeKg: Number(output.packSizeKg || 30),
+          }))
+        : [],
+    );
+
     const formulaItems =
       Array.isArray(editingFormula.items)
         ? editingFormula.items
@@ -294,6 +313,11 @@ export default function FormulaModal({
 
         return {
           rawMaterial: rawMaterialId,
+
+          appliesToProduct:
+            typeof item.appliesToProduct === "string"
+              ? item.appliesToProduct
+              : item.appliesToProduct?._id || "",
 
           quantity: Number(
             item.quantity || 0
@@ -346,6 +370,27 @@ export default function FormulaModal({
     createNewVersion,
   ]);
 
+  const combinedOutputKg = useMemo(
+    () => outputs.reduce((sum, output) => sum + Number(output.packs || 0) * Number(output.packSizeKg || 0), 0),
+    [outputs],
+  );
+
+  useEffect(() => {
+    if (outputs.length > 0 && combinedOutputKg > 0) setBatchSize(combinedOutputKg);
+  }, [combinedOutputKg, outputs.length]);
+
+  const enableSharedOutputs = () => {
+    const selected = products.find((item) => item._id === product);
+    setOutputs([
+      { product, packs: 0, packSizeKg: Number(selected?.packSizeKg || 30) },
+      { product: "", packs: 0, packSizeKg: 30 },
+    ]);
+  };
+
+  const updateOutput = (index: number, patch: Partial<FormulaOutputForm>) => {
+    setOutputs((previous) => previous.map((output, outputIndex) => outputIndex === index ? { ...output, ...patch } : output));
+  };
+
   // =====================================================
   // ADD ITEM
   // =====================================================
@@ -355,6 +400,7 @@ export default function FormulaModal({
       ...previous,
       {
         rawMaterial: "",
+        appliesToProduct: "",
         quantity: 0,
         unit: batchUnit || "kg",
         wastePercentage: 0,
@@ -522,6 +568,18 @@ export default function FormulaModal({
       return;
     }
 
+    if (outputs.length > 0) {
+      const invalidOutput = outputs.some((output) => !output.product || Number(output.packs) <= 0 || Number(output.packSizeKg) <= 0);
+      if (invalidOutput || outputs[0]?.product !== product) {
+        alert("Complete every finished output. The first output must be the selected primary product.");
+        return;
+      }
+      if (new Set(outputs.map((output) => output.product)).size !== outputs.length) {
+        alert("A finished product can only appear once in the shared output list.");
+        return;
+      }
+    }
+
     // -----------------------------------------------
     // RAW MATERIALS
     // -----------------------------------------------
@@ -637,10 +695,22 @@ export default function FormulaModal({
         batchUnit:
           batchUnit.trim(),
 
+        outputs: outputs.length > 0
+          ? outputs.map((output) => ({
+              product: output.product,
+              packs: Number(output.packs),
+              packSizeKg: Number(output.packSizeKg),
+              quantity: Number(output.packs) * Number(output.packSizeKg),
+            }))
+          : undefined,
+
         items: items.map(
           (item) => ({
             rawMaterial:
               item.rawMaterial,
+
+            appliesToProduct:
+              item.appliesToProduct || undefined,
 
             quantity:
               Number(item.quantity),
@@ -800,11 +870,14 @@ export default function FormulaModal({
 
                     <select
                       value={product}
-                      onChange={(event) =>
-                        setProduct(
-                          event.target.value
-                        )
-                      }
+                      onChange={(event) => {
+                        const nextProduct = event.target.value;
+                        setProduct(nextProduct);
+                        if (outputs.length > 0) {
+                          const selected = products.find((item) => item._id === nextProduct);
+                          updateOutput(0, { product: nextProduct, packSizeKg: Number(selected?.packSizeKg || 30) });
+                        }
+                      }}
                       className="mt-1.5 h-11 w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
                     >
                       <option value="">
@@ -909,6 +982,7 @@ export default function FormulaModal({
                           )
                         )
                       }
+                      readOnly={outputs.length > 0}
                       className="mt-1.5 h-11 w-full rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
                     />
                   </div>
@@ -957,6 +1031,61 @@ export default function FormulaModal({
                   </div>
                 </div>
 
+                <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900">Finished outputs</h3>
+                      <p className="mt-1 text-xs text-gray-500">Use shared outputs when one mixture is divided into different finished products.</p>
+                    </div>
+                    {outputs.length === 0 ? (
+                      <button type="button" disabled={!product} onClick={enableSharedOutputs} className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-xs font-bold text-gray-800 disabled:opacity-40">
+                        Combine finished products
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => { setOutputs([]); setItems((previous) => previous.map((item) => ({ ...item, appliesToProduct: "" }))); }} className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-xs font-bold text-gray-600">
+                        Use single output
+                      </button>
+                    )}
+                  </div>
+
+                  {outputs.length > 0 && (
+                    <div className="mt-4 space-y-3">
+                      {outputs.map((output, index) => (
+                        <div key={`${index}-${output.product}`} className="grid gap-3 rounded-xl border border-gray-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_130px_130px_110px_auto] md:items-end">
+                          <div>
+                            <label className="text-[11px] font-semibold text-gray-600">Finished product</label>
+                            <select value={output.product} disabled={index === 0} onChange={(event) => {
+                              const nextProduct = event.target.value;
+                              const selected = products.find((item) => item._id === nextProduct);
+                              updateOutput(index, { product: nextProduct, packSizeKg: Number(selected?.packSizeKg || 30) });
+                            }} className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50">
+                              <option value="">Select product</option>
+                              {products.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-gray-600">Packs</label>
+                            <input type="number" min="0.01" step="0.01" value={output.packs} onChange={(event) => updateOutput(index, { packs: Number(event.target.value) })} className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-gray-600">Kg per pack</label>
+                            <input type="number" min="0.01" step="0.01" value={output.packSizeKg} onChange={(event) => updateOutput(index, { packSizeKg: Number(event.target.value) })} className="mt-1 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm" />
+                          </div>
+                          <div className="rounded-lg bg-gray-100 px-3 py-2.5 text-right">
+                            <span className="block text-[10px] font-bold uppercase text-gray-400">Output</span>
+                            <b className="text-sm text-gray-950">{(Number(output.packs || 0) * Number(output.packSizeKg || 0)).toLocaleString()} kg</b>
+                          </div>
+                          {index > 1 && <button type="button" onClick={() => setOutputs((previous) => previous.filter((_, itemIndex) => itemIndex !== index))} className="grid h-10 w-10 place-items-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={16}/></button>}
+                        </div>
+                      ))}
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-3">
+                        <button type="button" onClick={() => setOutputs((previous) => [...previous, { product: "", packs: 0, packSizeKg: 30 }])} className="inline-flex items-center gap-2 text-xs font-bold text-red-700"><Plus size={15}/>Add output</button>
+                        <p className="text-sm font-bold text-gray-950">Combined batch: {combinedOutputKg.toLocaleString()} kg</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* =================================================
                     RAW MATERIALS
                 ================================================= */}
@@ -992,11 +1121,15 @@ export default function FormulaModal({
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[900px]">
+                        <table className="w-full min-w-[1080px]">
                           <thead>
                             <tr className="border-b border-gray-200 bg-gray-50">
                               <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
                                 Material
+                              </th>
+
+                              <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
+                                Used for
                               </th>
 
                               <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
@@ -1157,6 +1290,21 @@ export default function FormulaModal({
                                               </option>
                                             )
                                           )}
+                                      </select>
+                                    </td>
+
+                                    <td className="px-4 py-3">
+                                      <select
+                                        value={item.appliesToProduct}
+                                        disabled={outputs.length < 2}
+                                        onChange={(event) => updateItem(index, "appliesToProduct", event.target.value)}
+                                        className="h-10 w-full min-w-40 rounded-lg border border-gray-200 px-3 text-xs outline-none disabled:bg-gray-50"
+                                      >
+                                        <option value="">Shared base</option>
+                                        {outputs.map((output) => {
+                                          const outputProduct = products.find((entry) => entry._id === output.product);
+                                          return output.product ? <option key={output.product} value={output.product}>{outputProduct?.name || "Output product"} only</option> : null;
+                                        })}
                                       </select>
                                     </td>
 

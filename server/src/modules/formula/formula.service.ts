@@ -14,10 +14,18 @@ import ProductionBatch from "../production/productionBatch/productionBatch.model
 
 interface FormulaItemInput {
   rawMaterial: string;
+  appliesToProduct?: string;
   quantity: number;
   unit?: string;
   wastePercentage?: number;
   notes?: string;
+}
+
+interface FormulaOutputInput {
+  product: string;
+  quantity: number;
+  packSizeKg?: number;
+  packs?: number;
 }
 
 interface CreateFormulaData {
@@ -27,6 +35,7 @@ interface CreateFormulaData {
   version?: number;
   batchSize: number;
   batchUnit: string;
+  outputs?: FormulaOutputInput[];
   items: FormulaItemInput[];
   laborCost?: number;
   energyCost?: number;
@@ -40,6 +49,7 @@ interface CreateNewVersionData {
   code?: string;
   batchSize?: number;
   batchUnit?: string;
+  outputs?: FormulaOutputInput[];
   items?: FormulaItemInput[];
   laborCost?: number;
   energyCost?: number;
@@ -173,6 +183,9 @@ async function prepareFormulaItems(
       "raw material ID"
     );
   }
+  items.forEach((item) => {
+    if (item.appliesToProduct) validateObjectId(item.appliesToProduct, "material output product ID");
+  });
 
   const rawMaterials =
     await RawMaterial.find({
@@ -282,6 +295,10 @@ async function prepareFormulaItems(
         rawMaterial:
           rawMaterial._id,
 
+        ...(item.appliesToProduct
+          ? { appliesToProduct: new mongoose.Types.ObjectId(item.appliesToProduct) }
+          : {}),
+
         quantity,
 
         unit:
@@ -300,6 +317,64 @@ async function prepareFormulaItems(
     preparedItems,
     estimatedMaterialCost,
   };
+}
+
+function validateFormulaItemTargets(items: any[], outputs: any[]) {
+  const outputIds = new Set((outputs || []).map((output) => String(output.product?._id || output.product)));
+  const targetedItems = (items || []).filter((item) => item.appliesToProduct);
+  if (targetedItems.length > 0 && outputIds.size < 2) {
+    throw new Error("Product-specific raw materials require a shared formula with multiple outputs.");
+  }
+  targetedItems.forEach((item) => {
+    if (!outputIds.has(String(item.appliesToProduct))) {
+      throw new Error("A product-specific raw material must target one of the formula outputs.");
+    }
+  });
+}
+
+async function prepareFormulaOutputs(
+  primaryProductId: string,
+  batchSize: number,
+  outputs?: FormulaOutputInput[],
+) {
+  if (!Array.isArray(outputs) || outputs.length === 0) return [];
+
+  const productIds = outputs.map((item) => String(item.product));
+  if (new Set(productIds).size !== productIds.length) {
+    throw new Error("A finished product cannot be added more than once to formula outputs.");
+  }
+  productIds.forEach((id) => validateObjectId(id, "formula output product ID"));
+  if (!productIds.includes(String(primaryProductId))) {
+    throw new Error("Formula outputs must include the primary finished product.");
+  }
+
+  const products = await Product.find({ _id: { $in: productIds } })
+    .select("name packSizeKg baseUnit unit")
+    .lean();
+  if (products.length !== productIds.length) {
+    throw new Error("One or more formula output products were not found.");
+  }
+
+  const prepared = outputs.map((item) => {
+    const product = products.find((entry) => String(entry._id) === String(item.product));
+    const packSizeKg = Number(item.packSizeKg || (product as any)?.packSizeKg || 30);
+    const packs = Number(item.packs || 0);
+    const suppliedQuantity = Number(item.quantity || 0);
+    const quantity = suppliedQuantity > 0 ? suppliedQuantity : packs * packSizeKg;
+    if (!Number.isFinite(packSizeKg) || packSizeKg <= 0 || !Number.isFinite(packs) || packs <= 0) {
+      throw new Error(`Enter a valid pack size and number of packs for ${(product as any)?.name || "each output"}.`);
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0 || Math.abs(quantity - packs * packSizeKg) > 0.01) {
+      throw new Error(`Output quantity for ${(product as any)?.name || "finished product"} must equal packs × pack size.`);
+    }
+    return { product: new mongoose.Types.ObjectId(item.product), quantity, packSizeKg, packs };
+  });
+
+  const outputTotal = prepared.reduce((sum, item) => sum + item.quantity, 0);
+  if (Math.abs(outputTotal - Number(batchSize)) > 0.01) {
+    throw new Error(`Combined output is ${outputTotal.toLocaleString("en-RW")} kg, so the formula batch size must match it.`);
+  }
+  return prepared;
 }
 
 // =====================================================
@@ -324,6 +399,7 @@ export async function createFormula(
     code,
     batchSize,
     batchUnit,
+    outputs,
     items,
     laborCost = 0,
     energyCost = 0,
@@ -387,6 +463,8 @@ export async function createFormula(
     );
   }
 
+  const preparedOutputs = await prepareFormulaOutputs(product, Number(batchSize), outputs);
+
   // ---------------------------------------------------
   // NORMALIZE CODE
   // ---------------------------------------------------
@@ -425,6 +503,7 @@ export async function createFormula(
     estimatedMaterialCost,
   } =
     await prepareFormulaItems(items);
+  validateFormulaItemTargets(preparedItems, preparedOutputs);
 
   // ---------------------------------------------------
   // COSTS
@@ -512,6 +591,8 @@ export async function createFormula(
 
       batchUnit: "kg",
 
+      outputs: preparedOutputs,
+
       items: preparedItems,
 
       laborCost:
@@ -544,8 +625,9 @@ export async function createFormula(
   )
     .populate(
       "product",
-      "name code category unit"
+      "name code category unit packSizeKg"
     )
+    .populate("outputs.product", "name code category unit packSizeKg")
     .populate(
       "items.rawMaterial",
       "name code unit costPerUnit category"
@@ -636,6 +718,8 @@ export async function createNewFormulaVersion(
           String(
             item.rawMaterial
           ),
+
+        appliesToProduct: item.appliesToProduct ? String(item.appliesToProduct) : undefined,
 
         quantity:
           item.quantity,
@@ -754,6 +838,15 @@ export async function createNewFormulaVersion(
     );
   }
 
+  const sourceOutputs = data.outputs ?? (oldFormula.outputs || []).map((item: any) => ({
+    product: String(item.product),
+    quantity: Number(item.quantity),
+    packSizeKg: Number(item.packSizeKg),
+    packs: Number(item.packs),
+  }));
+  const preparedOutputs = await prepareFormulaOutputs(productId, batchSize, sourceOutputs);
+  validateFormulaItemTargets(preparedItems, preparedOutputs);
+
   // ---------------------------------------------------
   // IMPORTANT:
   // DEACTIVATE OTHER ACTIVE FORMULAS
@@ -787,6 +880,8 @@ export async function createNewFormulaVersion(
       batchSize,
 
       batchUnit: "kg",
+
+      outputs: preparedOutputs,
 
       items: preparedItems,
 
@@ -825,12 +920,14 @@ export async function createNewFormulaVersion(
   )
     .populate(
       "product",
-      "name code category unit"
+      "name code category unit packSizeKg"
     )
+    .populate("outputs.product", "name code category unit packSizeKg")
     .populate(
       "items.rawMaterial",
       "name code unit costPerUnit category"
-    );
+    )
+    .populate("items.appliesToProduct", "name code packSizeKg");
 }
 
 // =====================================================
@@ -955,12 +1052,14 @@ export async function getFormulas() {
   const formulas = await Formula.find()
     .populate(
       "product",
-      "name code category unit"
+      "name code category unit packSizeKg"
     )
+    .populate("outputs.product", "name code category unit packSizeKg")
     .populate(
       "items.rawMaterial",
       "name code unit costPerUnit category"
     )
+    .populate("items.appliesToProduct", "name code packSizeKg")
     .sort({
       createdAt: -1,
     });
@@ -983,12 +1082,14 @@ export async function getFormulaById(
     await Formula.findById(id)
       .populate(
         "product",
-        "name code category unit"
+        "name code category unit packSizeKg"
       )
+      .populate("outputs.product", "name code category unit packSizeKg")
       .populate(
         "items.rawMaterial",
         "name code unit costPerUnit category"
       );
+  if (formula) await formula.populate("items.appliesToProduct", "name code packSizeKg");
 
   if (!formula) {
     throw new Error(
@@ -1027,12 +1128,14 @@ export async function getFormulasByProduct(
   })
     .populate(
       "product",
-      "name code category unit"
+      "name code category unit packSizeKg"
     )
+    .populate("outputs.product", "name code category unit packSizeKg")
     .populate(
       "items.rawMaterial",
       "name code unit costPerUnit category"
     )
+    .populate("items.appliesToProduct", "name code packSizeKg")
     .sort({
       version: -1,
       createdAt: -1,
@@ -1073,12 +1176,14 @@ export async function getActiveFormulaByProduct(
       })
       .populate(
         "product",
-        "name code category unit"
+        "name code category unit packSizeKg"
       )
+      .populate("outputs.product", "name code category unit packSizeKg")
       .populate(
         "items.rawMaterial",
         "name code unit costPerUnit category"
-      );
+      )
+      .populate("items.appliesToProduct", "name code packSizeKg");
 
   if (!formula) {
     throw new Error(
@@ -1319,6 +1424,29 @@ export async function updateFormula(
       batchSize;
   }
 
+  if (data.outputs !== undefined) {
+    data.outputs = await prepareFormulaOutputs(
+      productId,
+      Number(data.batchSize ?? formula.batchSize),
+      data.outputs,
+    );
+  } else if (data.batchSize !== undefined && formula.outputs?.length) {
+    data.outputs = await prepareFormulaOutputs(
+      productId,
+      Number(data.batchSize),
+      formula.outputs.map((item: any) => ({
+        product: String(item.product),
+        quantity: Number(item.quantity),
+        packSizeKg: Number(item.packSizeKg),
+        packs: Number(item.packs),
+      })),
+    );
+  }
+  validateFormulaItemTargets(
+    data.items ?? formula.items,
+    data.outputs ?? formula.outputs,
+  );
+
   // ---------------------------------------------------
   // COSTS
   // ---------------------------------------------------
@@ -1396,14 +1524,17 @@ export async function updateFormula(
     const materials = await RawMaterial.find({ _id: { $in: materialIds } })
       .select("name code unit")
       .lean();
+    const outputProductIds = (formula.outputs || []).map((output: any) => output.product);
+    const outputProducts = await Product.find({ _id: { $in: outputProductIds } })
+      .select("name code sku packSizeKg")
+      .lean();
     const materialById = new Map(
       materials.map((material: any) => [String(material._id), material]),
     );
 
     for (const consumption of draftConsumptions) {
       const batch = await ProductionBatch.findById(consumption.productionBatch)
-        .select("plannedQuantity")
-        .lean();
+        .select("plannedQuantity formulaSnapshot outputs");
       if (!batch) continue;
 
       const scale = Number(batch.plannedQuantity || 0) / Number(formula.batchSize || 1);
@@ -1447,6 +1578,38 @@ export async function updateFormula(
       consumption.totalReturnQuantity = 0;
       consumption.totalVarianceQuantity = -Number(totalStandardQuantity.toFixed(4));
       await consumption.save();
+
+      (batch as any).formulaSnapshot = formula.items.map((formulaItem: any) => {
+        const material = materialById.get(String(formulaItem.rawMaterial));
+        return {
+          rawMaterial: formulaItem.rawMaterial,
+          rawMaterialName: material?.name || "Raw material",
+          rawMaterialCode: material?.code || "RM",
+          ...(formulaItem.appliesToProduct ? { appliesToProduct: formulaItem.appliesToProduct } : {}),
+          quantity: Number((Number(formulaItem.quantity || 0) * (1 + Number(formulaItem.wastePercentage || 0) / 100) * scale).toFixed(4)),
+          unit: material?.unit || formulaItem.unit || "kg",
+          wastePercentage: Number(formulaItem.wastePercentage || 0),
+          notes: formulaItem.notes || "",
+        };
+      });
+      (batch as any).outputs = (formula.outputs || []).map((formulaOutput: any) => {
+        const outputProduct: any = outputProducts.find((item: any) => String(item._id) === String(formulaOutput.product));
+        const quantity = Number((Number(formulaOutput.quantity || 0) * scale).toFixed(4));
+        const packSizeKg = Number(formulaOutput.packSizeKg || outputProduct?.packSizeKg || 30);
+        return {
+          product: formulaOutput.product,
+          productName: outputProduct?.name || "Finished product",
+          productCode: outputProduct?.code || outputProduct?.sku || "",
+          plannedQuantity: quantity,
+          actualQuantity: 0,
+          packSizeKg,
+          plannedPacks: Number((quantity / packSizeKg).toFixed(4)),
+          actualPacks: 0,
+          allocatedCost: 0,
+          costPerPack: 0,
+        };
+      });
+      await batch.save();
     }
   }
 
@@ -1455,12 +1618,14 @@ export async function updateFormula(
   )
     .populate(
       "product",
-      "name code category unit"
+      "name code category unit packSizeKg"
     )
+    .populate("outputs.product", "name code category unit packSizeKg")
     .populate(
       "items.rawMaterial",
       "name code unit costPerUnit category"
-    );
+    )
+    .populate("items.appliesToProduct", "name code packSizeKg");
 }
 
 // =====================================================

@@ -176,6 +176,12 @@ async function printBatchRecord(batch: ProductionBatch) {
         100
       : 0;
   const plannedPacks = getPackBreakdown(batch.plannedQuantity, packSizeKg);
+  const batchOutputs = Array.isArray(batch.outputs) ? batch.outputs : [];
+  const outputTargetName = (target: unknown) => {
+    if (!target) return "Shared base";
+    const id = typeof target === "object" && target && "_id" in target ? String((target as { _id?: string })._id) : String(target);
+    return batchOutputs.find((output) => String(typeof output.product === "object" ? output.product._id : output.product) === id)?.productName || "Output-specific";
+  };
   let printableMaterialSubtotal = 0;
   const materialRows = (consumption?.items || []).map((item, index) => {
     const movements = costTransactions.filter(
@@ -238,6 +244,7 @@ async function printBatchRecord(batch: ProductionBatch) {
     return [
       index + 1,
       `${item.rawMaterialName}${item.rawMaterialCode ? ` · ${item.rawMaterialCode}` : ""}`,
+      outputTargetName(formulaItem?.appliesToProduct),
       `${formatNumber(quantity)} ${item.unit}`,
       unitCost > 0 ? formatMoney(unitCost) : "—",
       totalCost > 0 ? formatMoney(totalCost) : "—",
@@ -262,6 +269,7 @@ async function printBatchRecord(batch: ProductionBatch) {
       "MATERIALS SUBTOTAL",
       "",
       "",
+      "",
       formatMoney(effectiveMaterialCost),
     ]);
   }
@@ -279,7 +287,7 @@ async function printBatchRecord(batch: ProductionBatch) {
     details: [
       {
         label: "Product",
-        value: `${batch.productName} · ${batch.productCode}`,
+        value: batchOutputs.length ? batchOutputs.map((output) => output.productName).join(" + ") : `${batch.productName} · ${batch.productCode}`,
       },
       {
         label: "Formula",
@@ -353,18 +361,36 @@ async function printBatchRecord(batch: ProductionBatch) {
           ]
         : []),
     ],
-    table: materialRows.length
-      ? {
-          headers: [
-            "#",
-            "Raw material",
-            "Quantity consumed",
-            "Unit cost",
-            "Total cost",
-          ],
-          rows: materialRows,
-        }
-      : undefined,
+    tables: [
+      ...(batchOutputs.length ? [{
+        title: "Finished-output posting",
+        table: {
+          headers: ["Finished product", "Packs", "Pack size", "Quantity", "Allocated cost", "Cost / pack"],
+          rows: batchOutputs.map((output) => [
+            output.productName,
+            formatNumber(output.actualPacks || output.plannedPacks),
+            `${formatNumber(output.packSizeKg)} kg`,
+            `${formatNumber(output.actualQuantity || output.plannedQuantity)} kg`,
+            Number(output.allocatedCost || 0) > 0 ? formatMoney(output.allocatedCost || 0) : "Pending completion",
+            Number(output.costPerPack || 0) > 0 ? formatMoney(output.costPerPack || 0) : "Pending completion",
+          ]),
+        },
+      }] : []),
+      ...(materialRows.length ? [{
+          title: "Raw-material consumption and cost",
+          table: {
+            headers: [
+              "#",
+              "Raw material",
+              "Used for",
+              "Quantity consumed",
+              "Unit cost",
+              "Total cost",
+            ],
+            rows: materialRows,
+          },
+        }] : []),
+    ],
     notes: [
       batch.notes?.trim(),
       batch.costedAt
@@ -880,11 +906,15 @@ const ProductionBatchesPage = () => {
 
                       <td className="px-5 py-4">
                         <p className="font-semibold text-gray-900">
-                          {batch.productName}
+                          {batch.outputs?.length
+                            ? `${batch.outputs.length} finished outputs`
+                            : batch.productName}
                         </p>
 
                         <p className="mt-1 text-xs text-gray-500">
-                          {batch.productCode}
+                          {batch.outputs?.length
+                            ? batch.outputs.map((output) => output.productName).join(" · ")
+                            : batch.productCode}
                         </p>
                       </td>
 
@@ -913,6 +943,11 @@ const ProductionBatchesPage = () => {
                           Actual: {formatNumber(batch.actualQuantity)}{" "}
                           {batch.unit}
                         </p>
+                        {Boolean(batch.outputs?.length) && (
+                          <p className="mt-1 text-xs font-extrabold text-slate-900">
+                            {batch.outputs?.map((output) => `${formatNumber(output.actualPacks || output.plannedPacks)} × ${output.productName}`).join(" · ")}
+                          </p>
+                        )}
                         {Number(batch.actualQuantity) > 0 && (
                           <p className="mt-1 text-xs font-extrabold text-slate-900">
                             {formatPackOutput(batch.actualQuantity, Number(typeof batch.product === "object" ? batch.product.packSizeKg || 30 : 30))} · {typeof batch.product === "object" ? batch.product.unit || `${batch.product.packSizeKg || 30} kg` : "30 kg"}/pack

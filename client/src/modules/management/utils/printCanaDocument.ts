@@ -12,6 +12,7 @@ type PrintDocumentOptions = {
   status?: string;
   details?: PrintDetail[];
   table?: PrintTable;
+  tables?: Array<{ title?: string; table: PrintTable }>;
   notes?: string;
   company?: "CANA" | "CANA Paints" | "CANA Services" | "CANAN Business Group Ltd";
   brandLine?: string;
@@ -44,6 +45,7 @@ export function printCanaDocument({
   status,
   details = [],
   table,
+  tables,
   notes,
   company = "CANAN Business Group Ltd",
   brandLine,
@@ -69,9 +71,11 @@ export function printCanaDocument({
   const recipientHtml = recipient
     ? `<section class="parties"><div class="party"><p class="section-title">From / issuer</p><strong>${escapeHtml(company)}</strong><p>Kigali, Rwanda<br>+250 789 408 367</p></div><div class="party"><p class="section-title">${escapeHtml(recipient.label)}</p><strong>${escapeHtml(recipient.name)}</strong><p>${(recipient.lines || []).filter(Boolean).map((line) => escapeHtml(line)).join("<br>") || "—"}</p></div></section>`
     : "";
-  const tableHtml = table
-    ? `<section class="section"><table><thead><tr>${table.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${table.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></section>`
-    : "";
+  const renderTable = (item: PrintTable, heading?: string) => `<section class="section">${heading ? `<p class="section-title">${escapeHtml(heading)}</p>` : ""}<table><thead><tr>${item.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${item.rows.length ? item.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${item.headers.length}">No records in this period.</td></tr>`}</tbody></table></section>`;
+  const tableHtml = [
+    ...(table ? [{ table }] : []),
+    ...(tables || []),
+  ].map((item) => renderTable(item.table, item.title)).join("");
   const approvalHtml = "";
 
   popup.document.write(`<!doctype html><html><head><title>${escapeHtml(title)} · ${escapeHtml(reference)}</title><style>

@@ -9,10 +9,18 @@ import mongoose, {
 
 export interface IFormulaItem {
   rawMaterial: mongoose.Types.ObjectId;
+  appliesToProduct?: mongoose.Types.ObjectId;
   quantity: number;
   unit: string;
   wastePercentage: number;
   notes?: string;
+}
+
+export interface IFormulaOutput {
+  product: mongoose.Types.ObjectId;
+  quantity: number;
+  packSizeKg: number;
+  packs: number;
 }
 
 // =====================================================
@@ -31,6 +39,8 @@ export interface IFormula extends Document {
   batchSize: number;
 
   batchUnit: string;
+
+  outputs: IFormulaOutput[];
 
   items: IFormulaItem[];
 
@@ -66,6 +76,13 @@ const formulaItemSchema =
         required: true,
       },
 
+      appliesToProduct: {
+        type: Schema.Types.ObjectId,
+        ref: "Product",
+        required: false,
+        default: undefined,
+      },
+
       quantity: {
         type: Number,
         required: true,
@@ -95,6 +112,20 @@ const formulaItemSchema =
       _id: false,
     }
   );
+
+const formulaOutputSchema = new Schema<IFormulaOutput>(
+  {
+    product: {
+      type: Schema.Types.ObjectId,
+      ref: "Product",
+      required: true,
+    },
+    quantity: { type: Number, required: true, min: 0.0001 },
+    packSizeKg: { type: Number, required: true, min: 0.0001, default: 30 },
+    packs: { type: Number, required: true, min: 0.0001 },
+  },
+  { _id: false },
+);
 
 // =====================================================
 // FORMULA SCHEMA
@@ -157,6 +188,11 @@ const formulaSchema =
         type: String,
         required: true,
         trim: true,
+      },
+
+      outputs: {
+        type: [formulaOutputSchema],
+        default: [],
       },
 
       items: {

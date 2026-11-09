@@ -424,19 +424,22 @@ export default function AccountingPage() {
   const balanceSheet = useMemo(() => buildBalanceSheet(trial), [trial]);
   const printReport = () => {
     if (tab === "treasury") {
+      const deposits = treasury.transactions.filter((item) => item.type === "deposit").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const withdrawals = treasury.transactions.filter((item) => item.type === "withdrawal").reduce((sum, item) => sum + Number(item.amount || 0), 0);
       printCanaDocument({
         title: "Cash, bank & Mobile Money register",
         reference: `TR-${to.replaceAll("-", "")}`,
         status: "Treasury register",
+        orientation: "landscape",
         details: [
-          { label: "As at", value: to },
+          { label: "Period", value: `${displayDate(from)} — ${displayDate(to)}` },
           {
             label: "Active accounts",
             value: treasury.accounts.filter((item) => item.status === "active")
               .length,
           },
           {
-            label: "Combined balance",
+            label: "Closing combined balance",
             value: money(
               treasury.accounts.reduce(
                 (sum, item) => sum + Number(item.balance || 0),
@@ -444,27 +447,29 @@ export default function AccountingPage() {
               ),
             ),
           },
+          { label: "Money received", value: money(deposits) },
+          { label: "Money paid", value: money(withdrawals) },
+          { label: "Transactions", value: treasury.transactions.length },
         ],
-        table: {
-          headers: [
-            "Account",
-            "Type",
-            "Institution / number",
-            "Status",
-            "Balance",
-          ],
-          rows: treasury.accounts.map((item) => [
-            item.name,
-            title(item.type),
-            [item.institution, item.accountNumber]
-              .filter(Boolean)
-              .join(" · ") || "—",
-            title(item.status),
-            money(item.balance),
-          ]),
-        },
+        tables: [
+          { title: "Account balances as at period end", table: {
+            headers: ["Account", "Type", "Institution / number", "Status", "Closing balance"],
+            rows: treasury.accounts.map((item) => [item.name, title(item.type), [item.institution, item.accountNumber].filter(Boolean).join(" · ") || "—", title(item.status), money(item.balance)]),
+          } },
+          { title: "Treasury transactions in selected period", table: {
+            headers: ["Date", "Reference", "Description", "Account", "Movement", "Amount"],
+            rows: treasury.transactions.map((item) => [
+              displayDate(item.date),
+              item.transactionNumber || item.reference || "—",
+              item.description,
+              item.type === "transfer" ? `${item.account?.name || "—"} → ${item.destinationAccount?.name || "—"}` : item.account?.name || "—",
+              title(item.type),
+              `${item.type === "withdrawal" ? "−" : item.type === "deposit" ? "+" : ""}${money(item.amount)}`,
+            ]),
+          } },
+        ],
         notes:
-          "Balances include the opening balance and all posted deposits, withdrawals and internal account transfers.",
+          "Closing balances include opening balances and all posted movements up to the period end. The transaction register contains only movements within the selected period.",
       });
       return;
     }
@@ -3285,9 +3290,14 @@ function TreasuryPanel({
                     </td>
                     <td className="px-3 py-3">
                       <b className="capitalize text-slate-800">{item.type}</b>
-                      <span className="block max-w-56 truncate text-slate-500">
+                      <span className="block text-slate-500">
                         {item.description}
                       </span>
+                      {item.reference && (
+                        <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-wide text-slate-400">
+                          Ref: {item.reference}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-3 text-slate-600">
                       {item.account?.name || "Account"}

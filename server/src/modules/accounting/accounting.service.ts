@@ -273,7 +273,8 @@ export async function treasuryWorkspace(from?: string, to?: string) {
         { status: null },
       ],
     })
-      .select("treasuryAccount amount receivedAt clearedAt receiptNumber method")
+      .select("treasuryAccount customer amount receivedAt clearedAt receiptNumber method chequeNumber")
+      .populate("customer", "fullName businessName")
       .lean(),
     SupplierPayment.find({ treasuryAccount: { $exists: true }, includedInOpeningBalance: { $ne: true }, $or: [{ chequeStatus: "cleared" }, { chequeStatus: { $exists: false } }] })
       .select("treasuryAccount amount paidAt paymentNumber method")
@@ -345,8 +346,8 @@ export async function treasuryWorkspace(from?: string, to?: string) {
       date: item.method === "bank_cheque" ? item.clearedAt || item.receivedAt : item.receivedAt,
       type: "deposit",
       amount: item.amount,
-      description: "Customer receipt",
-      reference: item.method,
+      description: `${item.customer?.businessName || item.customer?.fullName || "Customer"} · ${item.method === "bank_cheque" ? "cheque received" : "payment received"} → ${accountById.get(String(item.treasuryAccount))?.name || "treasury account"}`,
+      reference: item.method === "bank_cheque" ? item.chequeNumber || item.method : item.method,
       account: accountById.get(String(item.treasuryAccount)),
       source: "customer_receipt",
     })),
