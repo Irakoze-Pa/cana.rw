@@ -35,12 +35,6 @@ interface ProductionBatchModalProps {
   initialProductionOrder?: string;
 }
 
-type DirectProduct = {
-  _id: string;
-  name: string;
-  code?: string;
-  unit?: string;
-};
 type DirectFormula = {
   _id: string;
   name: string;
@@ -48,7 +42,13 @@ type DirectFormula = {
   version?: number;
   batchSize?: number;
   status?: string;
-  product: string | { _id?: string };
+  product: string | { _id?: string; name?: string; code?: string };
+  outputs?: Array<{
+    product: string | { _id?: string; name?: string; code?: string };
+    quantity: number;
+    packSizeKg: number;
+    packs: number;
+  }>;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -240,7 +240,6 @@ export default function ProductionBatchModal({
 
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
 
-  const [directProducts, setDirectProducts] = useState<DirectProduct[]>([]);
   const [directFormulas, setDirectFormulas] = useState<DirectFormula[]>([]);
   const [directProductId, setDirectProductId] = useState("");
   const [directFormulaId, setDirectFormulaId] = useState("");
@@ -295,19 +294,12 @@ export default function ProductionBatchModal({
       ? numberValue(plannedQuantity) / formulaReferenceOutput
       : null;
 
-  const directFormulasForProduct = useMemo(
-    () =>
-      directFormulas.filter((formula) => {
-        const formulaProduct =
-          typeof formula.product === "string"
-            ? formula.product
-            : formula.product?._id;
-        return (
-          formula.status === "Active" && formulaProduct === directProductId
-        );
-      }),
-    [directFormulas, directProductId],
+  const activeDirectFormulas = useMemo(
+    () => directFormulas.filter((formula) => formula.status === "Active"),
+    [directFormulas],
   );
+  const selectedOutputs = selectedDirectFormula?.outputs || [];
+  const isSharedOutputFormula = selectedOutputs.length > 1;
 
   /* ------------------------------------------------------------------------ */
   /* CURRENT STATUS                                                           */
@@ -368,11 +360,7 @@ export default function ProductionBatchModal({
     if (isEdit) return;
     try {
       setLoadingDirectOptions(true);
-      const [productsResponse, formulasResponse] = await Promise.all([
-        api.get<{ data: DirectProduct[] }>("/products"),
-        api.get<{ data: DirectFormula[] }>("/formulas"),
-      ]);
-      setDirectProducts(productsResponse.data.data || []);
+      const formulasResponse = await api.get<{ data: DirectFormula[] }>("/formulas");
       setDirectFormulas(formulasResponse.data.data || []);
     } catch (err) {
       setError(
@@ -515,6 +503,7 @@ export default function ProductionBatchModal({
 
   useEffect(() => {
     if (!selectedDirectFormula || isEdit) return;
+    setDirectProductId(getReferenceId(selectedDirectFormula.product));
     setPlannedQuantity(String(numberValue(selectedDirectFormula.batchSize)));
     setUnit("kg");
   }, [selectedDirectFormula, isEdit]);
@@ -828,73 +817,69 @@ export default function ProductionBatchModal({
             {/* ============================================================ */}
 
             {!isEdit ? (
-              <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div>
                   <p className="text-sm font-bold text-slate-950">
                     Start production batch
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    Select what you are producing and its formula. You will
-                    enter the real finished quantity only after production is
-                    complete.
+                    Select the approved formula. Its product and finished outputs are loaded automatically.
                   </p>
                 </div>
-                <label className="text-sm font-semibold text-slate-800">
-                  Product
+                <label className="mt-4 block text-sm font-semibold text-slate-800">
+                  Formula
                   <select
-                    value={directProductId}
+                    value={directFormulaId}
                     onChange={(event) => {
-                      setDirectProductId(event.target.value);
-                      setDirectFormulaId("");
+                      const formulaId = event.target.value;
+                      const formula = directFormulas.find((item) => item._id === formulaId);
+                      setDirectFormulaId(formulaId);
+                      setDirectProductId(formula ? getReferenceId(formula.product) : "");
                     }}
                     disabled={loadingDirectOptions || submitting}
                     className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
                   >
                     <option value="">
-                      {loadingDirectOptions
-                        ? "Loading products..."
-                        : "Select product"}
+                      {loadingDirectOptions ? "Loading formulas..." : "Select active formula"}
                     </option>
-                    {directProducts.map((product) => (
-                      <option key={product._id} value={product._id}>
-                        {product.name}
-                        {product.code ? ` · ${product.code}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-semibold text-slate-800">
-                  Formula
-                  <select
-                    value={directFormulaId}
-                    onChange={(event) => setDirectFormulaId(event.target.value)}
-                    disabled={
-                      !directProductId || loadingDirectOptions || submitting
-                    }
-                    className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                  >
-                    <option value="">
-                      {directProductId
-                        ? "Select active formula"
-                        : "Select product first"}
-                    </option>
-                    {directFormulasForProduct.map((formula) => (
+                    {activeDirectFormulas.map((formula) => (
                       <option key={formula._id} value={formula._id}>
                         {formula.name}
                         {formula.code ? ` · ${formula.code}` : ""} · V
-                        {formula.version || 1}
+                        {formula.version || 1}{formula.outputs?.length ? ` · ${formula.outputs.length} outputs` : ""}
                       </option>
                     ))}
                   </select>
                 </label>
-                {directProductId &&
-                  !loadingDirectOptions &&
-                  !directFormulasForProduct.length && (
-                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:col-span-2">
-                      No active formula exists for this product. Create or
-                      activate a formula before starting production.
-                    </p>
-                  )}
+                {selectedDirectFormula && (
+                  <div className="mt-4">
+                    {isSharedOutputFormula ? (
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-black uppercase tracking-wide text-slate-500">Finished-output plan</p>
+                          <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-bold text-white">Shared mixture</span>
+                        </div>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {selectedOutputs.map((output) => {
+                            const outputProduct = typeof output.product === "object" ? output.product : undefined;
+                            return (
+                              <div key={getReferenceId(output.product)} className="rounded-xl border border-slate-200 bg-white p-3">
+                                <p className="text-sm font-extrabold text-slate-950">{outputProduct?.name || "Finished product"}</p>
+                                <p className="mt-1 text-xs text-slate-500">{numberValue(output.packs).toLocaleString()} packs × {numberValue(output.packSizeKg).toLocaleString()} kg</p>
+                                <p className="mt-2 text-lg font-black text-slate-950">{numberValue(output.quantity).toLocaleString()} kg</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-slate-200 bg-white p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Finished product</p>
+                        <p className="mt-1 text-sm font-extrabold text-slate-950">{typeof selectedDirectFormula.product === "object" ? selectedDirectFormula.product.name || "Product" : "Product"}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -919,7 +904,9 @@ export default function ProductionBatchModal({
                 <label className="block text-sm font-semibold text-gray-800">
                   {isEdit
                     ? "Planned Batch Quantity"
-                    : "Batch formula output"}
+                    : isSharedOutputFormula
+                      ? "Combined formula output"
+                      : "Batch formula output"}
                   <span className="ml-1 text-red-600">*</span>
                 </label>
 
@@ -945,7 +932,8 @@ export default function ProductionBatchModal({
                   disabled={
                     submitting ||
                     loadingBatches ||
-                    plannedQuantityLocked
+                    plannedQuantityLocked ||
+                    isSharedOutputFormula
                   }
                   className="h-12 min-w-0 flex-1 rounded-xl border border-gray-200 px-4 text-sm text-gray-900 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
                   placeholder="Enter batch quantity"
@@ -976,6 +964,11 @@ export default function ProductionBatchModal({
               {plannedQuantityLocked && (
                 <p className="mt-1.5 text-xs font-medium text-slate-500">
                   Locked after production starts.
+                </p>
+              )}
+              {!isEdit && isSharedOutputFormula && (
+                <p className="mt-1.5 text-xs font-medium text-slate-500">
+                  Calculated from the finished-output pack plan. Edit the formula to change this distribution.
                 </p>
               )}
               {!isEdit && (

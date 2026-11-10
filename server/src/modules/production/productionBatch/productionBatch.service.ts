@@ -156,16 +156,15 @@ async function snapshotCompletedBatchCost(
   const packSizeKg =
     product?.baseUnit === "kg" ? Number(product.packSizeKg || 0) : 0;
 
-  batch.actualMaterialCost = roundNumber(Math.max(0, materialCost));
-  batch.allocatedLaborCost = roundNumber(labor);
-  batch.allocatedEnergyCost = roundNumber(energy);
-  batch.allocatedOtherCost = roundNumber(other);
-  batch.totalActualCost = roundNumber(total);
-  batch.costPerKg = roundNumber(perKg);
-  batch.costPerPack = roundNumber(packSizeKg > 0 ? perKg * packSizeKg : 0);
-  if (Array.isArray(batch.outputs) && batch.outputs.length > 0) {
+  const costedAt = new Date();
+  const outputs = Array.isArray(batch.outputs)
+    ? batch.outputs.map((item: any) =>
+        typeof item?.toObject === "function" ? item.toObject() : { ...item },
+      )
+    : [];
+  if (outputs.length > 0) {
     const sharedProductionCost = Math.max(0, sharedMaterialCost + labor + energy + other);
-    batch.outputs.forEach((item: any) => {
+    outputs.forEach((item: any) => {
       const quantity = Number(item.actualQuantity || item.plannedQuantity || 0);
       const outputPackSize = Number(item.packSizeKg || 30);
       const weightShare = output > 0 ? quantity / output : 0;
@@ -176,8 +175,23 @@ async function snapshotCompletedBatchCost(
       item.actualPacks = roundNumber(quantity / outputPackSize);
     });
   }
-  batch.costedAt = new Date();
-  await batch.save();
+  const costSnapshot = {
+    actualMaterialCost: roundNumber(Math.max(0, materialCost)),
+    allocatedLaborCost: roundNumber(labor),
+    allocatedEnergyCost: roundNumber(energy),
+    allocatedOtherCost: roundNumber(other),
+    totalActualCost: roundNumber(total),
+    costPerKg: roundNumber(perKg),
+    costPerPack: roundNumber(packSizeKg > 0 ? perKg * packSizeKg : 0),
+    outputs,
+    costedAt,
+  };
+  // Stock posting updates the batch through a separate transaction. Use an
+  // atomic cost update instead of saving the earlier in-memory document,
+  // otherwise Mongoose can reject a valid completion with VersionError.
+  await ProductionBatch.updateOne({ _id: batch._id }, { $set: costSnapshot });
+  Object.assign(batch, costSnapshot);
+  return batch;
 }
 
 export async function revalueProductionBatchCost(id: string) {
@@ -800,6 +814,18 @@ export async function updateProductionBatch(
   // TERMINAL STATES
   // ---------------------------------------------------
 
+  if (
+    currentStatus === "Completed" &&
+    data.status === "Completed" &&
+    batch.finishedGoodsPostedAt
+  ) {
+    if (!batch.costedAt) await snapshotCompletedBatchCost(batch);
+    return ProductionBatch.findById(batch._id)
+      .populate("product", "name code category unit baseUnit packSizeKg")
+      .populate("outputs.product", "name code category unit baseUnit packSizeKg")
+      .populate("formula", "name code version batchSize batchUnit");
+  }
+
   if (currentStatus === "Completed" || currentStatus === "Cancelled") {
     throw new ProductionBatchServiceError(
       `A ${currentStatus} production batch cannot be modified.`,
@@ -1328,7 +1354,10 @@ export async function updateProductionBatch(
     await syncProductionOrderFromBatches(String(batch.productionOrder));
   }
 
-  return batch;
+  return ProductionBatch.findById(batch._id)
+    .populate("product", "name code category unit baseUnit packSizeKg")
+    .populate("outputs.product", "name code category unit baseUnit packSizeKg")
+    .populate("formula", "name code version batchSize batchUnit");
 }
 
 // =====================================================

@@ -38,6 +38,9 @@ import {
   deleteFormula,
 } from "../services/formula.service";
 
+const formulaErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
+
 export default function FormulasPage() {
   const { confirm } = useConfirmation();
   // =====================================================
@@ -260,8 +263,7 @@ export default function FormulasPage() {
       );
 
       throw new Error(
-        error?.response?.data?.message ||
-          "Failed to create formula."
+        formulaErrorMessage(error, "Failed to create formula.")
       );
     }
   };
@@ -295,8 +297,7 @@ export default function FormulasPage() {
       );
 
       throw new Error(
-        error?.response?.data?.message ||
-          "Failed to create new formula version."
+        formulaErrorMessage(error, "Failed to create new formula version.")
       );
     }
   };
@@ -315,7 +316,7 @@ export default function FormulasPage() {
     } catch (error: any) {
       console.error("Update Formula Error:", error);
       throw new Error(
-        error?.response?.data?.message || "Failed to update formula."
+        formulaErrorMessage(error, "Failed to update formula.")
       );
     }
   };
@@ -405,8 +406,7 @@ export default function FormulasPage() {
       );
 
       alert(
-        error?.response?.data?.message ||
-          "Failed to deactivate formula."
+        formulaErrorMessage(error, "Failed to deactivate formula.")
       );
     } finally {
       setActionLoading(null);
@@ -454,8 +454,7 @@ export default function FormulasPage() {
       );
 
       alert(
-        error?.response?.data?.message ||
-          "Failed to delete formula."
+        formulaErrorMessage(error, "Failed to delete formula.")
       );
     } finally {
       setActionLoading(null);

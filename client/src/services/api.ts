@@ -55,10 +55,15 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<{ error?: { code?: string; message?: string }; message?: string }>) => {
     const body = error.response?.data;
+    const status = error.response?.status;
+    const gatewayMessage =
+      status === 502 || status === 503 || status === 504
+        ? "The CANA API server is unavailable. Start or restart the server and confirm MongoDB is connected."
+        : undefined;
     return Promise.reject(
       new ApiError(
-        body?.error?.message || body?.message || error.message || "The request could not be completed.",
-        error.response?.status,
+        body?.error?.message || body?.message || gatewayMessage || error.message || "The request could not be completed.",
+        status,
         body?.error?.code
       )
     );
