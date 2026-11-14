@@ -5,6 +5,7 @@ import {
   Pencil,
   Printer,
   RefreshCw,
+  RotateCcw,
   X,
   XCircle,
 } from "lucide-react";
@@ -474,6 +475,15 @@ export default function ChequeRegisterPage() {
                           <XCircle size={12} />
                         </button>
                       </div>
+                    )}
+                    {x.source === "supplier" && x.status === "bounced" && (
+                      <button
+                        title="Reactivate cheque"
+                        onClick={() => void update(x, "due")}
+                        className="mt-1 inline-flex items-center gap-1 rounded border border-amber-200 px-2 py-1 text-[10px] font-bold text-amber-800 hover:bg-amber-50"
+                      >
+                        <RotateCcw size={12} /> Reactivate
+                      </button>
                     )}
                   </td>
                 </tr>

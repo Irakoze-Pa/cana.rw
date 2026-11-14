@@ -183,10 +183,20 @@ router.patch("/:id/cheque-status", async (req, res, next) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) throw new Error("Invalid cheque record.");
     const status = String(req.body?.status || ""); const note = String(req.body?.note || "").trim();
-    if (!["deposited", "cleared", "bounced", "cancelled"].includes(status)) throw new Error("Select a valid cheque action.");
+    if (!["due", "deposited", "cleared", "bounced", "cancelled"].includes(status)) throw new Error("Select a valid cheque action.");
     const payment = await SupplierPayment.findById(req.params.id);
     if (!payment || payment.method !== "bank_cheque") throw new Error("Cheque record not found.");
     const current = payment.chequeStatus || "cleared";
+    if (status === "due") {
+      if (current !== "bounced") throw new Error("Only a bounced cheque can be reactivated.");
+      payment.clearedAt = undefined;
+      payment.depositedAt = undefined;
+      payment.chequeStatus = "due";
+      payment.statusHistory.push({ status: "due", at: new Date(), note: note || "Bounced cheque reactivated; awaiting clearance" });
+      await payment.save();
+      res.json({ data: await populatedPayment(payment._id) });
+      return;
+    }
     if (["cleared", "bounced", "cancelled"].includes(current)) throw new Error(`A ${current} cheque cannot be changed.`);
     if (status === "deposited" && !["issued", "due"].includes(current)) throw new Error("Only an issued or due cheque can be deposited.");
     if (status === "cleared") {
