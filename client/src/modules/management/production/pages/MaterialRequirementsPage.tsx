@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  BarChart3,
+  CalendarRange,
   CheckCircle2,
   ClipboardList,
   PackageSearch,
@@ -23,6 +25,7 @@ type Product = {
   unit?: string;
   baseUnit?: "kg" | "pcs";
   packSizeKg?: number;
+  category?: string;
 };
 type FinishedBalance = {
   _id: string;
@@ -32,7 +35,7 @@ type FinishedBalance = {
   minimumQuantity?: number;
 };
 type InputMode = "kg" | "packs";
-type SalesOrder = { status?: string; createdAt?: string; deliveredAt?: string; statusHistory?: { status?: string; at?: string }[]; items?: { product?: string | { _id?: string }; itemType?: string; productName?: string; quantity?: number; stockQuantity?: number; packSizeKg?: number }[] };
+type SalesOrder = { status?: string; createdAt?: string; deliveredAt?: string; statusHistory?: { status?: string; at?: string }[]; items?: { product?: string | { _id?: string }; itemType?: string; productName?: string; quantity?: number; stockQuantity?: number; packSizeKg?: number; total?: number }[] };
 type Batch = { product?: string | { _id?: string }; productName?: string; status?: string; plannedQuantity?: number; actualQuantity?: number };
 type Requirement = {
   id: string;
@@ -59,6 +62,15 @@ const materialId = (value: string | RawMaterial) =>
   typeof value === "string" ? value : value._id;
 const normalizeUnit = (value: unknown) =>
   String(value || "").trim().toLowerCase().replace(/\s+/g, "");
+const dateInput = (value = new Date()) => {
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+};
+const beginningOfMonth = () => {
+  const value = new Date();
+  value.setDate(1);
+  return dateInput(value);
+};
 
 const calculateRequirements = (
   formula: Formula,
@@ -141,6 +153,8 @@ export default function MaterialRequirementsPage() {
   const [demandPeriod, setDemandPeriod] = useState<30 | 90 | 180>(90);
   const [targetCoverDays, setTargetCoverDays] = useState<15 | 30 | 45 | 60>(30);
   const [safetyPacks, setSafetyPacks] = useState(30);
+  const [salesFrom, setSalesFrom] = useState(beginningOfMonth);
+  const [salesTo, setSalesTo] = useState(dateInput);
   const [formulaId, setFormulaId] = useState("");
   const [quantity, setQuantity] = useState("");
   const [mode, setMode] = useState<InputMode>("kg");
@@ -318,6 +332,54 @@ export default function MaterialRequirementsPage() {
       })
       .sort((a, b) => b.priorityScore - a.priorityScore || b.soldQuantity - a.soldQuantity);
   }, [formulas, products, finishedGoods, inventory, salesOrders, batches, demandPeriod, safetyPacks, targetCoverDays]);
+
+  const salesByPaint = useMemo(() => {
+    const from = salesFrom ? new Date(`${salesFrom}T00:00:00`) : null;
+    const to = salesTo ? new Date(`${salesTo}T23:59:59.999`) : null;
+    const rows = new Map<string, { product: string; code: string; packs: number; quantityKg: number; value: number }>();
+    salesOrders.forEach((order) => {
+      const deliveredAt = order.deliveredAt || [...(order.statusHistory || [])].reverse().find((entry) => entry.status?.toLowerCase() === "delivered")?.at || order.createdAt;
+      if (order.status?.toLowerCase() !== "delivered" || !deliveredAt) return;
+      const delivered = new Date(deliveredAt);
+      if (Number.isNaN(delivered.getTime()) || (from && delivered < from) || (to && delivered > to)) return;
+      (order.items || []).forEach((line) => {
+        if (line.itemType === "raw_material") return;
+        const productId = typeof line.product === "string" ? line.product : line.product?._id;
+        const catalogue = products.find((item) => item._id === productId);
+        const name = catalogue?.name || line.productName || "Paint product";
+        if (/scaffold/i.test(`${catalogue?.category || ""} ${name}`)) return;
+        const key = productId || name.toLowerCase();
+        const packSizeKg = Number(line.packSizeKg || catalogue?.packSizeKg || 0);
+        const packs = Math.max(0, Number(line.quantity || 0));
+        const quantityKg = Math.max(0, Number(line.stockQuantity ?? (packSizeKg > 0 ? packs * packSizeKg : 0)));
+        const current = rows.get(key) || { product: name, code: catalogue?.code || "—", packs: 0, quantityKg: 0, value: 0 };
+        current.packs += packs;
+        current.quantityKg += quantityKg;
+        current.value += Math.max(0, Number(line.total || 0));
+        rows.set(key, current);
+      });
+    });
+    return [...rows.values()].sort((a, b) => b.packs - a.packs || b.quantityKg - a.quantityKg);
+  }, [products, salesFrom, salesOrders, salesTo]);
+
+  const stockOutRawMaterials = useMemo(() => inventory
+    .filter((item) => Number(item.availableQuantity ?? item.quantity ?? 0) <= 0)
+    .sort((a, b) => String(a.rawMaterialName || "").localeCompare(String(b.rawMaterialName || ""))), [inventory]);
+  const formulaProductIds = useMemo(() => new Set(formulas.flatMap((item) => [
+    typeof item.product === "string" ? item.product : item.product._id,
+    ...(item.outputs || []).map((output) => typeof output.product === "string" ? output.product : output.product._id),
+  ]).filter(Boolean)), [formulas]);
+  const stockOutFinishedProducts = useMemo(() => products
+    .filter((item) => formulaProductIds.has(item._id))
+    .map((item) => ({
+      ...item,
+      production: Number(finishedGoods.find((stock) => stock.store === "production" && stock.product?._id === item._id)?.quantity || 0),
+      sales: Number(finishedGoods.find((stock) => stock.store === "sales" && stock.product?._id === item._id)?.quantity || 0),
+    }))
+    .filter((item) => item.production + item.sales <= 0)
+    .sort((a, b) => a.name.localeCompare(b.name)), [finishedGoods, formulaProductIds, products]);
+  const totalPaintPacks = salesByPaint.reduce((sum, item) => sum + item.packs, 0);
+  const totalPaintKg = salesByPaint.reduce((sum, item) => sum + item.quantityKg, 0);
 
   const portfolioRequirements = useMemo(() => {
     const combined = new Map<string, Requirement>();
@@ -544,6 +606,21 @@ export default function MaterialRequirementsPage() {
         <PlanningMetric label="Batches to plan" value={String(prioritySummary.action)} detail="Finished stock and open batches already deducted" tone={prioritySummary.action ? "red" : "green"} />
         <PlanningMetric label="Ready to make" value={String(prioritySummary.ready)} detail="Suggested batches have required materials" tone="green" />
         <PlanningMetric label="Highest priority" value={prioritySummary.top?.product.name || "Stock covered"} detail={prioritySummary.top ? `${number(prioritySummary.top.productionNeeded)} packs suggested` : "No production required"} tone="slate" />
+      </section>
+      <section className="grid gap-3 xl:grid-cols-2">
+        <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-red-700">Live raw-material inventory</p><h2 className="mt-0.5 font-extrabold text-slate-950">Unavailable raw materials</h2></div><Badge text={`${stockOutRawMaterials.length} OUT`} tone={stockOutRawMaterials.length ? "warning" : "success"}/></div>
+          <div className="max-h-52 divide-y divide-slate-100 overflow-y-auto">{stockOutRawMaterials.map((item)=><div key={item._id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs"><div><strong className="text-slate-950">{item.rawMaterialName}</strong><span className="ml-2 text-slate-400">{item.rawMaterialCode}</span></div><span className="font-extrabold text-red-700">0 {item.unit}</span></div>)}{!stockOutRawMaterials.length&&<p className="px-4 py-8 text-center text-xs font-semibold text-emerald-700">All active raw materials have available stock.</p>}</div>
+        </article>
+        <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-red-700">Production + Sales stores</p><h2 className="mt-0.5 font-extrabold text-slate-950">Unavailable finished products</h2></div><Badge text={`${stockOutFinishedProducts.length} OUT`} tone={stockOutFinishedProducts.length ? "warning" : "success"}/></div>
+          <div className="max-h-52 divide-y divide-slate-100 overflow-y-auto">{stockOutFinishedProducts.map((item)=><div key={item._id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs"><div><strong className="text-slate-950">{item.name}</strong><span className="ml-2 text-slate-400">{item.code}</span></div><span className="font-extrabold text-red-700">0 packs</span></div>)}{!stockOutFinishedProducts.length&&<p className="px-4 py-8 text-center text-xs font-semibold text-emerald-700">Every formula product has finished stock.</p>}</div>
+        </article>
+      </section>
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-col justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-end"><div className="flex items-center gap-2"><BarChart3 size={18} className="text-red-700"/><div><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-red-700">Delivered sales only</p><h2 className="mt-0.5 font-extrabold text-slate-950">Paint quantity sold by period</h2></div></div><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-extrabold uppercase text-slate-500">From<input type="date" value={salesFrom} max={salesTo||undefined} onChange={(event)=>setSalesFrom(event.target.value)} className="mt-1 block h-9 rounded-lg border border-slate-200 px-2 text-xs font-semibold text-slate-800"/></label><label className="text-[9px] font-extrabold uppercase text-slate-500">To<input type="date" value={salesTo} min={salesFrom||undefined} onChange={(event)=>setSalesTo(event.target.value)} className="mt-1 block h-9 rounded-lg border border-slate-200 px-2 text-xs font-semibold text-slate-800"/></label></div></div>
+        <div className="grid grid-cols-3 gap-px border-b bg-slate-200"><Metric label="Paint products" value={String(salesByPaint.length)}/><Metric label="Packs sold" value={number(totalPaintPacks)}/><Metric label="Equivalent weight" value={`${number(totalPaintKg)} kg`}/></div>
+        <div className="max-h-72 overflow-y-auto"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-slate-50 text-[9px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2.5">Paint</th><th className="px-4 py-2.5 text-right">Packs sold</th><th className="px-4 py-2.5 text-right">Equivalent kg</th><th className="px-4 py-2.5 text-right">Sales value</th></tr></thead><tbody className="divide-y divide-slate-100">{salesByPaint.map((item)=><tr key={`${item.code}-${item.product}`}><td className="px-4 py-2.5"><strong className="text-slate-950">{item.product}</strong><span className="ml-2 text-[10px] text-slate-400">{item.code}</span></td><td className="px-4 py-2.5 text-right font-extrabold">{number(item.packs)}</td><td className="px-4 py-2.5 text-right">{number(item.quantityKg)} kg</td><td className="px-4 py-2.5 text-right font-bold">{money(item.value)}</td></tr>)}{!salesByPaint.length&&<tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500"><CalendarRange size={18} className="mx-auto mb-2"/>No delivered paint sales in this period.</td></tr>}</tbody></table></div>
       </section>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center">
