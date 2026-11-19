@@ -176,6 +176,14 @@ const groups: Group[] = [
         permissions: ["production", "procurement", "inventory"],
       },
       {
+        label: "Production cost register",
+        to: "/management/production/cost-register",
+        icon: FileBarChart,
+        category: "Production operations",
+        departments: ["production", "finance", "management"],
+        permissions: ["production", "reports", "finance"],
+      },
+      {
         label: "Formulas",
         to: "/management/production/formulas",
         icon: FlaskConical,

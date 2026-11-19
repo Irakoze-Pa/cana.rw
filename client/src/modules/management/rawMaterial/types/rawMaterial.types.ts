@@ -48,9 +48,29 @@ export interface RawMaterial {
   minimumStock: number;
 
   /**
-   * Cost per unit.
+   * Current/replacement purchase price. Retained for compatibility with
+   * existing forms; new code should prefer currentPurchasePrice.
    */
   costPerUnit: number;
+
+  currentPurchasePrice?: number;
+
+  currentPriceSource?:
+    | "supplier_offer"
+    | "inventory_average"
+    | "material_setup"
+    | "unpriced";
+
+  currentSupplier?: SupplierSummary;
+
+  currentPriceUpdatedAt?: string;
+
+  /** Weighted-average stock cost used for inventory valuation. */
+  inventoryAverageCostPerUnit?: number;
+
+  valuationCostPerUnit?: number;
+
+  valuationCostSource?: string;
 
   /**
    * Populated supplier.

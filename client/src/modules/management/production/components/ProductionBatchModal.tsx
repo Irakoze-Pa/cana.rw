@@ -42,6 +42,7 @@ type DirectFormula = {
   version?: number;
   batchSize?: number;
   status?: string;
+  updatedAt?: string;
   product: string | { _id?: string; name?: string; code?: string };
   outputs?: Array<{
     product: string | { _id?: string; name?: string; code?: string };
@@ -294,10 +295,29 @@ export default function ProductionBatchModal({
       ? numberValue(plannedQuantity) / formulaReferenceOutput
       : null;
 
-  const activeDirectFormulas = useMemo(
-    () => directFormulas.filter((formula) => formula.status === "Active"),
-    [directFormulas],
-  );
+  const activeDirectFormulas = useMemo(() => {
+    const latestByFamily = new Map<string, DirectFormula>();
+    directFormulas
+      .filter((formula) => formula.status === "Active")
+      .forEach((formula) => {
+        const productId = getReferenceId(formula.product);
+        if (!productId) return;
+        const familyKey = `${productId}:${String(formula.code || "").trim().toUpperCase()}`;
+        const current = latestByFamily.get(familyKey);
+        const formulaVersion = numberValue(formula.version);
+        const currentVersion = numberValue(current?.version);
+        const formulaDate = new Date(formula.updatedAt || 0).getTime();
+        const currentDate = new Date(current?.updatedAt || 0).getTime();
+        if (!current || formulaVersion > currentVersion || (formulaVersion === currentVersion && formulaDate > currentDate)) {
+          latestByFamily.set(familyKey, formula);
+        }
+      });
+    return [...latestByFamily.values()].sort((left, right) => {
+      const leftName = typeof left.product === "object" ? left.product.name || left.name : left.name;
+      const rightName = typeof right.product === "object" ? right.product.name || right.name : right.name;
+      return leftName.localeCompare(rightName);
+    });
+  }, [directFormulas]);
   const selectedOutputs = selectedDirectFormula?.outputs || [];
   const isSharedOutputFormula = selectedOutputs.length > 1;
 
@@ -507,6 +527,13 @@ export default function ProductionBatchModal({
     setPlannedQuantity(String(numberValue(selectedDirectFormula.batchSize)));
     setUnit("kg");
   }, [selectedDirectFormula, isEdit]);
+
+  useEffect(() => {
+    if (isEdit || !isOpen || directFormulaId || activeDirectFormulas.length !== 1) return;
+    const formula = activeDirectFormulas[0];
+    setDirectFormulaId(formula._id);
+    setDirectProductId(getReferenceId(formula.product));
+  }, [activeDirectFormulas, directFormulaId, isEdit, isOpen]);
 
   /* ------------------------------------------------------------------------ */
   /* ORDER / UNIT                                                              */
@@ -823,11 +850,11 @@ export default function ProductionBatchModal({
                     Start production batch
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    Select the approved formula. Its product and finished outputs are loaded automatically.
+                    Select a product formula. The newest approved version is used automatically.
                   </p>
                 </div>
                 <label className="mt-4 block text-sm font-semibold text-slate-800">
-                  Formula
+                  Latest approved formula
                   <select
                     value={directFormulaId}
                     onChange={(event) => {
@@ -840,13 +867,13 @@ export default function ProductionBatchModal({
                     className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
                   >
                     <option value="">
-                      {loadingDirectOptions ? "Loading formulas..." : "Select active formula"}
+                      {loadingDirectOptions ? "Loading formulas..." : "Select latest formula"}
                     </option>
                     {activeDirectFormulas.map((formula) => (
                       <option key={formula._id} value={formula._id}>
                         {formula.name}
                         {formula.code ? ` · ${formula.code}` : ""} · V
-                        {formula.version || 1}{formula.outputs?.length ? ` · ${formula.outputs.length} outputs` : ""}
+                        {formula.version || 1} · current{formula.outputs?.length ? ` · ${formula.outputs.length} outputs` : ""}
                       </option>
                     ))}
                   </select>

@@ -128,6 +128,51 @@ export interface ProductionBatch {
   costPerKg?: number;
   costPerPack?: number;
   costedAt?: string;
+  costingBasis?: "current_supplier_offer" | "actual_issue_cost";
+  costPriceAsOf?: string;
+  costPriceFallbackMaterials?: string[];
+  costFormula?: string | FormulaSummary;
+  costFormulaName?: string;
+  costFormulaCode?: string;
+  costFormulaVersion?: number;
+  materialCostLines?: Array<{
+    rawMaterial: string | { _id?: string };
+    rawMaterialName: string;
+    rawMaterialCode: string;
+    appliesToProduct?: string | { _id?: string; name?: string };
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    totalCost: number;
+    priceSource: "production_issue" | "historical_receipt" | "supplier_offer" | "inventory_average" | "material_setup";
+    quantitySource?: "actual_issue" | "pack_output";
+    supplier?: string | { _id?: string; name?: string };
+    supplierName?: string;
+    offerUpdatedAt?: string;
+  }>;
+  /**
+   * Replacement valuation from the latest active formula and current purchase
+   * prices. Historical issue-cost fields above remain the accounting record.
+   */
+  currentMaterialCost?: number;
+  currentTotalCost?: number;
+  currentCostPerKg?: number;
+  currentCostPerPack?: number;
+  currentCostedAt?: string;
+  currentMaterialCostLines?: Array<{
+    rawMaterial: string | { _id?: string };
+    rawMaterialName: string;
+    rawMaterialCode: string;
+    appliesToProduct?: string | { _id?: string; name?: string };
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    totalCost: number;
+    priceSource: "supplier_offer" | "inventory_average" | "material_setup";
+    supplier?: string | { _id?: string; name?: string };
+    supplierName?: string;
+    offerUpdatedAt?: string;
+  }>;
 
   createdAt: string;
   updatedAt: string;

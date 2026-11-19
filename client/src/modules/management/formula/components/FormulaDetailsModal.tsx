@@ -79,12 +79,20 @@ export default function FormulaDetails({
   const outputs = Array.isArray(formula.outputs) ? formula.outputs : [];
   const outputName = (output: NonNullable<Formula["outputs"]>[number]) =>
     typeof output.product === "string" ? output.product : output.product.name;
-  const targetName = (target?: string | { _id: string; name: string }) => {
-    if (!target) return "Shared base";
-    const targetId = typeof target === "string" ? target : target._id;
-    return outputs.find((output) => String(typeof output.product === "string" ? output.product : output.product._id) === String(targetId))
-      ? `${outputName(outputs.find((output) => String(typeof output.product === "string" ? output.product : output.product._id) === String(targetId))!)} only`
-      : typeof target === "object" ? `${target.name} only` : "Output-specific";
+  const priceBasis = (material: RawMaterial | null) => {
+    if (!material) return "Not priced";
+    if (material.currentPriceSource === "supplier_offer") {
+      return material.currentSupplier
+        ? `Supplier offer · ${material.currentSupplier}`
+        : "Supplier offer";
+    }
+    if (material.currentPriceSource === "inventory_average") {
+      return "Inventory average fallback";
+    }
+    if (material.currentPriceSource === "material_setup") {
+      return "Material setup fallback";
+    }
+    return "Current purchase price";
   };
 
   const printFormulaCostSheet = () => {
@@ -100,11 +108,11 @@ export default function FormulaDetails({
         material
           ? `${material.name}${material.code ? ` · ${material.code}` : ""}`
           : "Material unavailable",
-        targetName(item.appliesToProduct as any),
         `${quantity.toLocaleString("en-RW")} ${item.unit}`,
         `${waste.toLocaleString("en-RW")} %`,
         `${costQuantity.toLocaleString("en-RW", { maximumFractionDigits: 3 })} ${item.unit}`,
         unitCost > 0 ? formatMoney(unitCost) : "Not priced",
+        priceBasis(material),
         unitCost > 0 ? formatMoney(costQuantity * unitCost) : "Not priced",
       ];
     });
@@ -173,14 +181,23 @@ export default function FormulaDetails({
         {
           title: "Raw-material formula",
           table: {
-            headers: ["#", "Raw material", "Used for", "Formula qty", "Waste", "Cost qty", "Unit price", "Line cost"],
+            headers: [
+              "#",
+              "Raw material",
+              "Formula qty",
+              "Waste",
+              "Cost qty",
+              "Unit price",
+              "Price basis",
+              "Line cost",
+            ],
             rows: materialRows,
           },
         },
       ],
       notes: [
         "Formula quantities include the stated waste allowance when calculating cost.",
-        "Prices are the current inventory weighted-average costs, with the latest active supplier offer used when valued stock is unavailable.",
+        "Prices use the most recently updated active supplier offer. Inventory weighted-average and material setup prices are fallbacks only when no active offer exists.",
         formula.costingComplete === false
           ? `Unpriced materials: ${(formula.unpricedMaterials || []).join(", ") || "review the material lines marked Not priced"}.`
           : "All raw-material lines have a price for this estimate.",
@@ -327,7 +344,7 @@ export default function FormulaDetails({
               </div>
 
               <p className="mt-1 text-xs text-gray-500">
-                Materials use the current inventory weighted-average cost, or the latest active supplier offer when no valued stock is available.
+                Materials use the most recently updated active supplier offer. Inventory average and setup prices are fallbacks only when no active offer exists.
               </p>
 
               {formula.costingComplete === false && (
@@ -508,7 +525,6 @@ export default function FormulaDetails({
                                     Material unavailable
                                   </span>
                                 )}
-                                <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-red-700">{targetName(item.appliesToProduct as any)}</p>
                               </td>
 
                               <td className="px-5 py-4">
@@ -555,6 +571,9 @@ export default function FormulaDetails({
                                   {formatMoney(
                                     unitCost
                                   )}
+                                </span>
+                                <span className="mt-1 block text-[10px] font-medium text-gray-400">
+                                  {priceBasis(material)}
                                 </span>
                               </td>
 

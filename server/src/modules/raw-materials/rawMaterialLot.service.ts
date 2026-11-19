@@ -17,7 +17,15 @@ export async function createLot(rawMaterialId: string, input: { supplier: string
   const hasActualCost = Number.isFinite(unitCost) && unitCost > 0;
   if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) throw new Error(`Received quantity must be greater than zero ${material.unit}. Example: 10000 for 10,000 ${material.unit}.`);
   if (!Number.isFinite(unitCost) || unitCost < 0) throw new Error("Unit cost cannot be negative.");
-  if (unitCost === 0) unitCost = Number(material.costPerUnit || 0);
+  if (unitCost === 0) {
+    const supplierOffer = await SupplierMaterial.findOne({
+      supplier: input.supplier,
+      rawMaterial: material._id,
+      status: "Active",
+      unitPrice: { $gt: 0 },
+    }).select("unitPrice").lean();
+    unitCost = Number(supplierOffer?.unitPrice || material.costPerUnit || 0);
+  }
   if (input.expiresAt && new Date(input.expiresAt) < new Date(input.receivedAt || Date.now())) throw new Error("Expiry date must be after the received date.");
   let purchaseOrder: any = null;
   if (input.purchaseOrder) {

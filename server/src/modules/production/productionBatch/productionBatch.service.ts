@@ -6,7 +6,9 @@ import Formula from "../../formula/formula.model";
 import Product from "../../product/product.model";
 import FinishedGoodsStoreBalance from "../../finishedGoods/storeBalance.model";
 import InventoryTransaction from "../../inventory/inventoryTransaction.model";
-import Inventory from "../../inventory/inventory.model";
+import { resolveCurrentMaterialPrices } from "../../raw-materials/materialPrice.service";
+import RawMaterialLot from "../../raw-materials/rawMaterialLot.model";
+import { getPackagingMaterialsForProduct } from "../productionPackaging.service";
 import RawMaterialConsumption from "../materialConsumption/materialConsumption.model";
 import {
   completeMaterialConsumption,
@@ -92,47 +94,163 @@ async function snapshotCompletedBatchCost(
       productionBatch: batch._id,
       type: { $in: ["Production Issue", "Production Return"] },
     })
-      .select("type rawMaterial quantity unitCost totalCost")
+      .select("type rawMaterial rawMaterialName rawMaterialCode quantity unit unitCost totalCost lotNumber transactionDate")
       .lean(),
-    Product.findById(batch.product).select("packSizeKg baseUnit").lean(),
+    Product.findById(batch.product).select("name packSizeKg baseUnit").lean(),
   ]);
-  const materialIds = [...new Set(
+  const movementMaterialIds = [...new Set(
     transactions.map((transaction: any) => String(transaction.rawMaterial)),
   )].filter((id) => mongoose.Types.ObjectId.isValid(id));
-  const inventories = await Inventory.find({ rawMaterial: { $in: materialIds } })
-    .select("rawMaterial averageCostPerUnit")
-    .lean();
-  const inventoryCostByMaterial = new Map(
-    inventories.map((inventory: any) => [
-      String(inventory.rawMaterial),
-      Number(inventory.averageCostPerUnit || 0),
-    ]),
-  );
-  const materialCost = transactions.reduce(
-    (total, transaction) =>
-      total +
-      (transaction.type === "Production Return" ? -1 : 1) *
-        (
-          Number(transaction.totalCost || 0) > 0
-            ? Number(transaction.totalCost || 0)
-            : Number(transaction.quantity || 0) *
-              Number(inventoryCostByMaterial.get(String(transaction.rawMaterial)) || 0)
-        ),
-    0,
-  );
-  const costByRawMaterial = new Map<string, number>();
-  transactions.forEach((transaction: any) => {
-    const signedCost = (transaction.type === "Production Return" ? -1 : 1) *
-      (Number(transaction.totalCost || 0) > 0
-        ? Number(transaction.totalCost || 0)
-        : Number(transaction.quantity || 0) * Number(inventoryCostByMaterial.get(String(transaction.rawMaterial)) || 0));
-    const key = String(transaction.rawMaterial);
-    costByRawMaterial.set(key, Number(costByRawMaterial.get(key) || 0) + signedCost);
+  const batchOutputs = Array.isArray(batch.outputs) ? batch.outputs : [];
+  const rawPackCount = batchOutputs.length
+    ? batchOutputs.reduce((sum: number, item: any) => {
+        const packSize = Number(item.packSizeKg || 0);
+        return sum + Number(item.actualPacks || (packSize > 0 ? Number(item.actualQuantity || item.plannedQuantity || 0) / packSize : 0));
+      }, 0)
+    : Number(product?.packSizeKg || 0) > 0
+      ? Number(batch.actualQuantity || 0) / Number(product?.packSizeKg || 1)
+      : 0;
+  const finishedPackCount = Math.max(0, Math.round(rawPackCount));
+  const packaging = await getPackagingMaterialsForProduct(String(product?.name || batch.productName || ""));
+  const packagingMaterialIds = packaging.required.map((item: any) => String(item._id));
+  const packagingMaterialIdSet = new Set(packagingMaterialIds);
+  const materialIds = [...new Set([...movementMaterialIds, ...packagingMaterialIds])];
+  const transactionDates = transactions
+    .map((transaction: any) => new Date(transaction.transactionDate || 0).getTime())
+    .filter((value: number) => Number.isFinite(value) && value > 0);
+  const historicalAsOf = new Date(transactionDates.length
+    ? Math.max(...transactionDates)
+    : new Date(batch.endDate || batch.createdAt || Date.now()).getTime());
+  const [pricingByMaterial, historicalPurchases, historicalLots] = await Promise.all([
+    resolveCurrentMaterialPrices(materialIds),
+    InventoryTransaction.find({
+      rawMaterial: { $in: materialIds },
+      type: { $in: ["Purchase", "Opening Balance"] },
+      transactionDate: { $lte: historicalAsOf },
+      $or: [{ unitCost: { $gt: 0 } }, { totalCost: { $gt: 0 } }],
+    }).sort({ transactionDate: -1, _id: -1 }).lean(),
+    RawMaterialLot.find({
+      rawMaterial: { $in: materialIds },
+      receivedAt: { $lte: historicalAsOf },
+      unitCost: { $gt: 0 },
+    }).sort({ receivedAt: -1, _id: -1 }).lean(),
+  ]);
+  const historicalPriceByMaterial = new Map<string, { unitPrice: number; supplier?: any }>();
+  historicalPurchases.forEach((transaction: any) => {
+    const id = String(transaction.rawMaterial);
+    if (historicalPriceByMaterial.has(id)) return;
+    const unitPrice = Number(transaction.unitCost || 0) > 0
+      ? Number(transaction.unitCost)
+      : Number(transaction.quantity || 0) > 0
+        ? Number(transaction.totalCost || 0) / Number(transaction.quantity)
+        : 0;
+    if (unitPrice > 0) historicalPriceByMaterial.set(id, { unitPrice });
+  });
+  historicalLots.forEach((lot: any) => {
+    const id = String(lot.rawMaterial);
+    if (!historicalPriceByMaterial.has(id) && Number(lot.unitCost || 0) > 0) {
+      historicalPriceByMaterial.set(id, { unitPrice: Number(lot.unitCost), supplier: lot.supplier });
+    }
   });
   const targetByRawMaterial = new Map<string, string>(
     ((batch as any).formulaSnapshot || [])
       .filter((item: any) => item.appliesToProduct)
       .map((item: any) => [String(item.rawMaterial?._id || item.rawMaterial), String(item.appliesToProduct?._id || item.appliesToProduct)]),
+  );
+  const fallbackMaterials = new Set<string>();
+  const netQuantityByRawMaterial = new Map<string, number>();
+  const netValueByRawMaterial = new Map<string, number>();
+  const transactionSnapshotByRawMaterial = new Map<string, any>();
+  transactions.forEach((transaction: any) => {
+    const key = String(transaction.rawMaterial);
+    const sign = transaction.type === "Production Return" ? -1 : 1;
+    const transactionQuantity = Number(transaction.quantity || 0);
+    const transactionValue = Number(transaction.totalCost || 0) > 0
+      ? Number(transaction.totalCost)
+      : transactionQuantity * Number(transaction.unitCost || 0);
+    const signedQuantity = sign * transactionQuantity;
+    netQuantityByRawMaterial.set(key, Number(netQuantityByRawMaterial.get(key) || 0) + signedQuantity);
+    netValueByRawMaterial.set(key, Number(netValueByRawMaterial.get(key) || 0) + sign * transactionValue);
+    if (!transactionSnapshotByRawMaterial.has(key)) transactionSnapshotByRawMaterial.set(key, transaction);
+  });
+  const missingPrices = materialIds.filter((id) => {
+    const isPackaging = packagingMaterialIdSet.has(id);
+    const issuedQuantity = Math.max(0, Number(netQuantityByRawMaterial.get(id) || 0));
+    const costQuantity = isPackaging ? finishedPackCount : issuedQuantity;
+    if (costQuantity <= 0) return false;
+    const issuedValue = Math.max(0, Number(netValueByRawMaterial.get(id) || 0));
+    const issuedPrice = issuedQuantity > 0 && issuedValue > 0 ? issuedValue / issuedQuantity : 0;
+    return issuedPrice <= 0
+      && Number(historicalPriceByMaterial.get(id)?.unitPrice || 0) <= 0
+      && Number(pricingByMaterial.get(id)?.unitPrice || 0) <= 0;
+  });
+  if (missingPrices.length) {
+    const missingNames = missingPrices.map((id) => {
+      const transaction = transactionSnapshotByRawMaterial.get(id);
+      return transaction?.rawMaterialName || transaction?.rawMaterialCode || id;
+    });
+    throw new ProductionBatchServiceError(
+      `Current cost is missing for: ${missingNames.join(", ")}. Add an active supplier offer or a fallback material price before recosting.`,
+      409,
+    );
+  }
+  const materialCostLines = materialIds
+    .map((id) => {
+      const isPackaging = packagingMaterialIdSet.has(id);
+      const issuedQuantity = Math.max(0, Number(netQuantityByRawMaterial.get(id) || 0));
+      const issuedValue = Math.max(0, Number(netValueByRawMaterial.get(id) || 0));
+      const issuedUnitPrice = issuedQuantity > 0 && issuedValue > 0
+        ? issuedValue / issuedQuantity
+        : 0;
+      const quantity = isPackaging ? finishedPackCount : issuedQuantity;
+      const pricing = pricingByMaterial.get(id);
+      const historical = historicalPriceByMaterial.get(id);
+      const transaction = transactionSnapshotByRawMaterial.get(id);
+      const usesIssuedCost = issuedUnitPrice > 0;
+      const usesHistoricalCost = !usesIssuedCost && Number(historical?.unitPrice || 0) > 0;
+      const unitPrice = usesIssuedCost
+        ? issuedUnitPrice
+        : usesHistoricalCost
+          ? Number(historical!.unitPrice)
+          : Number(pricing?.unitPrice || 0);
+      const priceSource = usesIssuedCost
+        ? "production_issue"
+        : usesHistoricalCost
+          ? "historical_receipt"
+          : pricing!.source;
+      const materialName = pricing?.materialName || transaction?.rawMaterialName || "Raw material";
+      const materialCode = pricing?.materialCode || transaction?.rawMaterialCode || "RM";
+      if (!usesIssuedCost) {
+        const source = usesHistoricalCost
+          ? "historical receipt"
+          : pricing!.source === "supplier_offer"
+            ? "current supplier offer"
+            : pricing!.source === "inventory_average"
+              ? "inventory average"
+              : "material setup";
+        fallbackMaterials.add(`${materialName} (${materialCode}) · ${source}`);
+      }
+      return {
+        rawMaterial: id,
+        rawMaterialName: materialName,
+        rawMaterialCode: materialCode,
+        ...(targetByRawMaterial.get(id) ? { appliesToProduct: targetByRawMaterial.get(id) } : {}),
+        quantity: roundNumber(quantity),
+        unit: transaction?.unit || pricing?.unit || "kg",
+        unitPrice: roundNumber(unitPrice),
+        totalCost: roundNumber(!isPackaging && usesIssuedCost ? issuedValue : quantity * unitPrice),
+        priceSource,
+        quantitySource: isPackaging ? "pack_output" : "actual_issue",
+        ...(usesHistoricalCost && historical?.supplier ? { supplier: historical.supplier } : {}),
+        ...(!usesIssuedCost && !usesHistoricalCost && pricing?.supplier ? { supplier: pricing.supplier } : {}),
+        ...(!usesIssuedCost && !usesHistoricalCost && pricing?.supplierName ? { supplierName: pricing.supplierName } : {}),
+        ...(!usesIssuedCost && !usesHistoricalCost && pricing?.offerUpdatedAt ? { offerUpdatedAt: pricing.offerUpdatedAt } : {}),
+      };
+    })
+    .filter((line) => line.quantity > 0);
+  const materialCost = materialCostLines.reduce((sum, line) => sum + Number(line.totalCost || 0), 0);
+  const costByRawMaterial = new Map<string, number>(
+    materialCostLines.map((line) => [String(line.rawMaterial), Number(line.totalCost || 0)]),
   );
   const targetedMaterialCost = new Map<string, number>();
   let sharedMaterialCost = 0;
@@ -141,24 +259,90 @@ async function snapshotCompletedBatchCost(
     if (target) targetedMaterialCost.set(target, Number(targetedMaterialCost.get(target) || 0) + cost);
     else sharedMaterialCost += cost;
   });
-  const orderQuantity = Number(productionOrder?.quantity || 0);
-  const allocation =
-    orderQuantity > 0 ? Number(batch.plannedQuantity || 0) / orderQuantity : 1;
-  const formula = await Formula.findById(batch.formula)
-    .select("laborCost energyCost otherCost")
+  // Current/replacement costing follows the newest approved version in the
+  // saved batch's formula family. The saved recipe and material quantities
+  // remain untouched for production traceability.
+  const savedFormula = await Formula.findById(batch.formula)
+    .select("product code")
     .lean();
-  const labor = Number(productionOrder?.laborCost ?? formula?.laborCost ?? 0) * allocation;
-  const energy = Number(productionOrder?.energyCost ?? formula?.energyCost ?? 0) * allocation;
-  const other = Number(productionOrder?.otherCost ?? formula?.otherCost ?? 0) * allocation;
+  const formula = await Formula.findOne({
+    product: savedFormula?.product || batch.product?._id || batch.product,
+    code: savedFormula?.code || batch.formulaCode,
+    status: "Active",
+  })
+    .sort({ version: -1, updatedAt: -1, _id: -1 })
+    .select("name code version batchSize laborCost energyCost otherCost items outputs")
+    .populate("items.rawMaterial", "name code unit status")
+    .lean()
+    || await Formula.findById(batch.formula)
+      .select("name code version batchSize laborCost energyCost otherCost items outputs")
+      .populate("items.rawMaterial", "name code unit status")
+      .lean();
+  // Production orders are legacy. Current costing is owned by the formula
+  // attached to the batch, and its overhead values apply once per batch.
+  const labor = Number(formula?.laborCost ?? productionOrder?.laborCost ?? 0);
+  const energy = Number(formula?.energyCost ?? productionOrder?.energyCost ?? 0);
+  const other = Number(formula?.otherCost ?? productionOrder?.otherCost ?? 0);
   const total = Math.max(0, materialCost + labor + energy + other);
   const output = Number(batch.actualQuantity || 0);
   const perKg = output > 0 ? total / output : 0;
-  const packSizeKg =
-    product?.baseUnit === "kg" ? Number(product.packSizeKg || 0) : 0;
+  // CANA paint and compound packs are costed from their configured kilogram
+  // weight even when an older product record still carries a legacy unit flag.
+  const packSizeKg = Number(product?.packSizeKg || 0);
+
+  const currentFormulaItems: any[] = Array.isArray(formula?.items) ? formula.items : [];
+  const currentFormulaMaterialIds = [...new Set(currentFormulaItems.map((item: any) =>
+    String(item.rawMaterial?._id || item.rawMaterial),
+  ))].filter((id) => mongoose.Types.ObjectId.isValid(id));
+  const currentFormulaPrices = await resolveCurrentMaterialPrices(currentFormulaMaterialIds);
+  const formulaOutput = Number(formula?.batchSize || output || 0);
+  const formulaScale = formulaOutput > 0 && output > 0 ? output / formulaOutput : 1;
+  const currentMaterialCostLines = currentFormulaItems.map((item: any) => {
+    const rawMaterialId = String(item.rawMaterial?._id || item.rawMaterial);
+    const price = currentFormulaPrices.get(rawMaterialId);
+    const quantity = Number(item.quantity || 0)
+      * (1 + Number(item.wastePercentage || 0) / 100)
+      * formulaScale;
+    const unitPrice = Number(price?.unitPrice || 0);
+    if (!(unitPrice > 0)) {
+      throw new ProductionBatchServiceError(
+        `Current supplier price is missing for ${item.rawMaterial?.name || rawMaterialId}.`,
+        409,
+      );
+    }
+    return {
+      rawMaterial: rawMaterialId,
+      rawMaterialName: price?.materialName || item.rawMaterial?.name || "Raw material",
+      rawMaterialCode: price?.materialCode || item.rawMaterial?.code || "RM",
+      ...(item.appliesToProduct ? { appliesToProduct: item.appliesToProduct } : {}),
+      quantity: roundNumber(quantity),
+      unit: price?.unit || item.rawMaterial?.unit || item.unit || "kg",
+      unitPrice: roundNumber(unitPrice),
+      totalCost: roundNumber(quantity * unitPrice),
+      priceSource: price!.source,
+      ...(price?.supplier ? { supplier: price.supplier } : {}),
+      ...(price?.supplierName ? { supplierName: price.supplierName } : {}),
+      ...(price?.offerUpdatedAt ? { offerUpdatedAt: price.offerUpdatedAt } : {}),
+    };
+  }).filter((line) => line.quantity > 0);
+  const currentMaterialCost = currentMaterialCostLines.reduce(
+    (sum, line) => sum + Number(line.totalCost || 0),
+    0,
+  );
+  const currentTotalCost = Math.max(0, currentMaterialCost + labor + energy + other);
+  const currentCostPerKg = output > 0 ? currentTotalCost / output : 0;
+  const currentCostPerPack = packSizeKg > 0 ? currentCostPerKg * packSizeKg : 0;
+  const currentOfferDates = currentMaterialCostLines
+    .map((line) => line.offerUpdatedAt ? new Date(line.offerUpdatedAt).getTime() : 0)
+    .filter((value) => value > 0);
+  const currentCostedAt = new Date();
+  const currentPriceAsOf = currentOfferDates.length
+    ? new Date(Math.max(...currentOfferDates))
+    : currentCostedAt;
 
   const costedAt = new Date();
-  const outputs = Array.isArray(batch.outputs)
-    ? batch.outputs.map((item: any) =>
+  const outputs = batchOutputs.length
+    ? batchOutputs.map((item: any) =>
         typeof item?.toObject === "function" ? item.toObject() : { ...item },
       )
     : [];
@@ -185,6 +369,22 @@ async function snapshotCompletedBatchCost(
     costPerPack: roundNumber(packSizeKg > 0 ? perKg * packSizeKg : 0),
     outputs,
     costedAt,
+    costingBasis: "actual_issue_cost",
+    costPriceAsOf: costedAt,
+    costPriceFallbackMaterials: [...fallbackMaterials].sort(),
+    materialCostLines,
+    currentMaterialCost: roundNumber(currentMaterialCost),
+    currentTotalCost: roundNumber(currentTotalCost),
+    currentCostPerKg: roundNumber(currentCostPerKg),
+    currentCostPerPack: roundNumber(currentCostPerPack),
+    currentCostedAt: currentPriceAsOf,
+    currentMaterialCostLines,
+    ...(formula?._id ? {
+      costFormula: formula._id,
+      costFormulaName: formula.name || "",
+      costFormulaCode: formula.code || "",
+      costFormulaVersion: Number(formula.version || 1),
+    } : {}),
   };
   // Stock posting updates the batch through a separate transaction. Use an
   // atomic cost update instead of saving the earlier in-memory document,
@@ -377,22 +577,35 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
     productionOrder = await ProductionOrder.findById(data.productionOrder);
   } else {
     validateObjectId(String(data.product || ""), "product ID");
-    validateObjectId(String(data.formula || ""), "formula ID");
+    if (data.formula) validateObjectId(String(data.formula), "formula ID");
 
-    const formula: any = await Formula.findById(data.formula)
+    // The backend is authoritative: even if a browser submits an older
+    // formula ID, a new batch is created from the newest active version in
+    // that formula family.
+    const requestedFormula: any = data.formula
+      ? await Formula.findById(data.formula).select("product code").lean()
+      : null;
+    if (requestedFormula && String(requestedFormula.product) !== String(data.product)) {
+      throw new ProductionBatchServiceError(
+        "The selected formula does not belong to this product.",
+        400,
+      );
+    }
+    const formula: any = await Formula.findOne({
+      product: data.product,
+      status: "Active",
+      ...(requestedFormula?.code ? { code: requestedFormula.code } : {}),
+    })
+      .sort({ version: -1, updatedAt: -1, _id: -1 })
       .select("product name code version batchSize batchUnit status items outputs")
       .populate("items.rawMaterial", "name code unit")
       .populate("outputs.product", "name code sku packSizeKg unit baseUnit")
       .lean();
 
     if (!formula) {
-      throw new ProductionBatchServiceError("Formula not found.", 404);
-    }
-
-    if (formula.status !== "Active") {
       throw new ProductionBatchServiceError(
-        "Select an active formula before starting production.",
-        400,
+        "No active formula is available for this product. Approve the latest formula before creating a batch.",
+        404,
       );
     }
 
@@ -404,12 +617,6 @@ export async function createProductionBatch(data: CreateProductionBatchData) {
       );
     }
 
-    if (formula.product.toString() !== String(data.product)) {
-      throw new ProductionBatchServiceError(
-        "The selected formula does not belong to this product.",
-        400,
-      );
-    }
     const product = await Product.findById(data.product)
       .select("name code sku unit baseUnit")
       .lean();

@@ -106,7 +106,7 @@ function RawMaterialTable({
               </th>
 
               <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Supplier
+                Current purchase price
               </th>
 
               <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -214,25 +214,25 @@ function RawMaterialTable({
                   </td>
 
                   {/* ================================================= */}
-                  {/* SUPPLIER */}
+                  {/* CURRENT PURCHASE PRICE */}
                   {/* ================================================= */}
 
                   <td className="px-5 py-4">
-                    {material.supplier ? (
-                      <div className="min-w-[150px]">
-                        <p className="text-sm font-medium text-gray-700">
-                          {material.supplier.name}
-                        </p>
-
-                        <p className="mt-0.5 text-xs text-gray-400">
-                          {material.supplier.code}
-                        </p>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-gray-400">
-                        No supplier
-                      </span>
-                    )}
+                    <div className="min-w-[165px]">
+                      <p className="text-sm font-bold text-gray-900">
+                        {Number(material.currentPurchasePrice ?? material.costPerUnit ?? 0) > 0
+                          ? `${formatNumber(material.currentPurchasePrice ?? material.costPerUnit)} RWF / ${material.unit}`
+                          : "Not priced"}
+                      </p>
+                      <p className="mt-0.5 text-xs text-gray-400">
+                        {material.currentSupplier?.name ||
+                          (material.currentPriceSource === "inventory_average"
+                            ? "Inventory average fallback"
+                            : material.currentPriceSource === "material_setup"
+                              ? "Material setup fallback"
+                              : "No active supplier offer")}
+                      </p>
+                    </div>
                   </td>
 
                   {/* ================================================= */}
@@ -298,8 +298,8 @@ function RawMaterialTable({
                           hover:bg-gray-100
                           hover:text-gray-900
                         "
-                        title="Update material details and reference price"
-                        aria-label={`Update ${material.name} and its reference price`}
+                        title="Update material details"
+                        aria-label={`Update ${material.name}`}
                       >
                         <Edit size={17} />
                         <span className="text-xs font-semibold">

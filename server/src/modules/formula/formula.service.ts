@@ -3,10 +3,10 @@ import mongoose from "mongoose";
 import Formula from "./formula.model";
 import Product from "../product/product.model";
 import RawMaterial from "../raw-materials/rawMaterial.model";
-import Inventory from "../inventory/inventory.model";
-import SupplierMaterial from "../raw-materials/supplierMaterial.model";
+import { resolveCurrentMaterialPrices } from "../raw-materials/materialPrice.service";
 import RawMaterialConsumption from "../production/materialConsumption/materialConsumption.model";
 import ProductionBatch from "../production/productionBatch/productionBatch.model";
+import { synchronizeFormulaPackaging } from "../production/productionPackaging.service";
 
 // =====================================================
 // TYPES
@@ -194,36 +194,10 @@ async function prepareFormulaItems(
       },
     });
 
-  const [inventoryCosts, activeOffers] = await Promise.all([
-    Inventory.find({ rawMaterial: { $in: rawMaterialIds } })
-      .select("rawMaterial quantity averageCostPerUnit")
-      .lean(),
-    SupplierMaterial.find({ rawMaterial: { $in: rawMaterialIds }, status: "Active" })
-      .select("rawMaterial unitPrice updatedAt")
-      .sort({ updatedAt: -1 })
-      .lean(),
-  ]);
-  const latestOfferByMaterial = new Map<string, number>();
-  activeOffers.forEach((offer) => {
-    const id = String(offer.rawMaterial);
-    if (!latestOfferByMaterial.has(id))
-      latestOfferByMaterial.set(id, Number(offer.unitPrice || 0));
-  });
+  const currentPrices = await resolveCurrentMaterialPrices(rawMaterialIds);
   const valuationByMaterial = new Map(
-    inventoryCosts.map((item) => {
-      const id = String(item.rawMaterial);
-      const average = Number(item.averageCostPerUnit || 0);
-      return [
-        id,
-        Number(item.quantity || 0) > 0 && average > 0
-          ? average
-          : Number(latestOfferByMaterial.get(id) || 0),
-      ];
-    }),
+    [...currentPrices.entries()].map(([id, price]) => [id, Number(price.unitPrice || 0)]),
   );
-  latestOfferByMaterial.forEach((price, id) => {
-    if (!valuationByMaterial.has(id)) valuationByMaterial.set(id, price);
-  });
 
   if (
     rawMaterials.length !==
@@ -248,6 +222,12 @@ async function prepareFormulaItems(
       if (!rawMaterial) {
         throw new Error(
           "Raw material not found."
+        );
+      }
+
+      if (rawMaterial.status !== "Active") {
+        throw new Error(
+          `${rawMaterial.name} is inactive. Select the active material record before saving the formula.`
         );
       }
 
@@ -498,11 +478,17 @@ export async function createFormula(
   // PREPARE ITEMS
   // ---------------------------------------------------
 
+  const synchronizedPackaging = await synchronizeFormulaPackaging({
+    productId: product,
+    batchSize: Number(batchSize),
+    outputs: preparedOutputs,
+    items,
+  });
   const {
     preparedItems,
     estimatedMaterialCost,
   } =
-    await prepareFormulaItems(items);
+    await prepareFormulaItems(synchronizedPackaging.items);
   validateFormulaItemTargets(preparedItems, preparedOutputs);
 
   // ---------------------------------------------------
@@ -735,14 +721,6 @@ export async function createNewFormulaVersion(
       })
     );
 
-  const {
-    preparedItems,
-    estimatedMaterialCost,
-  } =
-    await prepareFormulaItems(
-      sourceItems
-    );
-
   // ---------------------------------------------------
   // COSTS
   // ---------------------------------------------------
@@ -799,12 +777,6 @@ export async function createNewFormulaVersion(
     );
   }
 
-  const estimatedTotalCost =
-    estimatedMaterialCost +
-    laborCost +
-    energyCost +
-    otherCost;
-
   // ---------------------------------------------------
   // BATCH
   // ---------------------------------------------------
@@ -845,7 +817,22 @@ export async function createNewFormulaVersion(
     packs: Number(item.packs),
   }));
   const preparedOutputs = await prepareFormulaOutputs(productId, batchSize, sourceOutputs);
+  const synchronizedPackaging = await synchronizeFormulaPackaging({
+    productId,
+    batchSize,
+    outputs: preparedOutputs,
+    items: sourceItems,
+  });
+  const {
+    preparedItems,
+    estimatedMaterialCost,
+  } = await prepareFormulaItems(synchronizedPackaging.items);
   validateFormulaItemTargets(preparedItems, preparedOutputs);
+  const estimatedTotalCost =
+    estimatedMaterialCost +
+    laborCost +
+    energyCost +
+    otherCost;
 
   // ---------------------------------------------------
   // IMPORTANT:
@@ -853,9 +840,12 @@ export async function createNewFormulaVersion(
   // FOR THIS PRODUCT
   // ---------------------------------------------------
 
-  await deactivateOtherActiveFormulas(
-    productId
-  );
+  const nextStatus = data.status ?? "Active";
+  if (nextStatus === "Active") {
+    await deactivateOtherActiveFormulas(
+      productId
+    );
+  }
 
   // ---------------------------------------------------
   // CREATE NEW VERSION
@@ -905,9 +895,7 @@ export async function createNewFormulaVersion(
           )
         ),
 
-      status:
-        data.status ??
-        "Active",
+      status: nextStatus,
 
       notes:
         data.notes !== undefined
@@ -934,7 +922,7 @@ export async function createNewFormulaVersion(
 // GET ALL
 // =====================================================
 
-async function applyCurrentInventoryValuation(formulas: any[]) {
+async function applyCurrentMaterialValuation(formulas: any[]) {
   const plain = formulas.map((formula) =>
     typeof formula?.toObject === "function" ? formula.toObject() : formula,
   );
@@ -957,40 +945,10 @@ async function applyCurrentInventoryValuation(formulas: any[]) {
       ),
     ),
   ].filter((id) => mongoose.Types.ObjectId.isValid(id));
-  const [inventories, activeOffers] = await Promise.all([
-    Inventory.find({ rawMaterial: { $in: materialIds } })
-      .select("rawMaterial quantity averageCostPerUnit")
-      .lean(),
-    SupplierMaterial.find({ rawMaterial: { $in: materialIds }, status: "Active" })
-      .select("rawMaterial unitPrice updatedAt")
-      .sort({ updatedAt: -1 })
-      .lean(),
-  ]);
-  const latestOfferByMaterial = new Map<string, number>();
-  activeOffers.forEach((offer) => {
-    const id = String(offer.rawMaterial);
-    if (!latestOfferByMaterial.has(id))
-      latestOfferByMaterial.set(id, Number(offer.unitPrice || 0));
-  });
+  const currentPrices = await resolveCurrentMaterialPrices(materialIds);
   const costByMaterial = new Map(
-    inventories.map((item) => {
-      const id = String(item.rawMaterial);
-      const average = Number(item.averageCostPerUnit || 0);
-      return [
-        id,
-        Number(item.quantity || 0) > 0 && average > 0
-          ? average
-          : Number(
-              latestOfferByMaterial.get(id) ||
-                setupCostByMaterial.get(id) ||
-                0,
-            ),
-      ];
-    }),
+    [...currentPrices.entries()].map(([id, price]) => [id, Number(price.unitPrice || 0)]),
   );
-  latestOfferByMaterial.forEach((price, id) => {
-    if (!costByMaterial.has(id)) costByMaterial.set(id, price);
-  });
   setupCostByMaterial.forEach((price, id) => {
     if (!costByMaterial.has(id) || Number(costByMaterial.get(id) || 0) <= 0) {
       costByMaterial.set(id, price);
@@ -1008,11 +966,19 @@ async function applyCurrentInventoryValuation(formulas: any[]) {
     const items = (formula.items || []).map((item: any) => {
       const id = String(item.rawMaterial?._id || item.rawMaterial);
       const currentCost = resolveMaterialCost(id, item.rawMaterial);
+      const currentPrice = currentPrices.get(id);
       return {
         ...item,
         rawMaterial:
           item.rawMaterial && typeof item.rawMaterial === "object"
-            ? { ...item.rawMaterial, costPerUnit: currentCost }
+            ? {
+                ...item.rawMaterial,
+                costPerUnit: currentCost,
+                currentPurchasePrice: currentCost,
+                currentPriceSource: currentPrice?.source,
+                currentSupplier: currentPrice?.supplierName || "",
+                currentPriceUpdatedAt: currentPrice?.offerUpdatedAt,
+              }
             : item.rawMaterial,
       };
     });
@@ -1041,7 +1007,7 @@ async function applyCurrentInventoryValuation(formulas: any[]) {
           Number(formula.otherCost || 0)
         ).toFixed(2),
       ),
-      costingBasis: "inventory_weighted_average",
+      costingBasis: "current_supplier_offer",
       costingComplete: unpricedMaterials.length === 0,
       unpricedMaterials,
     };
@@ -1063,7 +1029,7 @@ export async function getFormulas() {
     .sort({
       createdAt: -1,
     });
-  return applyCurrentInventoryValuation(formulas);
+  return applyCurrentMaterialValuation(formulas);
 }
 
 // =====================================================
@@ -1097,7 +1063,7 @@ export async function getFormulaById(
     );
   }
 
-  return (await applyCurrentInventoryValuation([formula]))[0];
+  return (await applyCurrentMaterialValuation([formula]))[0];
 }
 
 // =====================================================
@@ -1140,7 +1106,7 @@ export async function getFormulasByProduct(
       version: -1,
       createdAt: -1,
     });
-  return applyCurrentInventoryValuation(formulas);
+  return applyCurrentMaterialValuation(formulas);
 }
 
 // =====================================================
@@ -1191,7 +1157,7 @@ export async function getActiveFormulaByProduct(
     );
   }
 
-  return (await applyCurrentInventoryValuation([formula]))[0];
+  return (await applyCurrentMaterialValuation([formula]))[0];
 }
 
 // =====================================================
@@ -1441,6 +1407,40 @@ export async function updateFormula(
         packs: Number(item.packs),
       })),
     );
+  }
+  if (
+    data.items !== undefined ||
+    data.batchSize !== undefined ||
+    data.outputs !== undefined ||
+    data.product !== undefined
+  ) {
+    const sourceItems = (data.items ?? formula.items).map((item: any) => ({
+      rawMaterial: String(item.rawMaterial?._id || item.rawMaterial),
+      ...(item.appliesToProduct
+        ? { appliesToProduct: String(item.appliesToProduct?._id || item.appliesToProduct) }
+        : {}),
+      quantity: Number(item.quantity || 0),
+      unit: item.unit,
+      wastePercentage: Number(item.wastePercentage || 0),
+      notes: item.notes || "",
+    }));
+    const effectiveBatchSize = Number(data.batchSize ?? formula.batchSize);
+    const effectiveOutputs = data.outputs ?? formula.outputs;
+    const synchronizedPackaging = await synchronizeFormulaPackaging({
+      productId,
+      batchSize: effectiveBatchSize,
+      outputs: effectiveOutputs,
+      items: sourceItems,
+    });
+    const prepared = await prepareFormulaItems(synchronizedPackaging.items);
+    data.items = prepared.preparedItems;
+    data.estimatedMaterialCost = Number(prepared.estimatedMaterialCost.toFixed(2));
+    data.estimatedTotalCost = Number((
+      prepared.estimatedMaterialCost +
+      Number(data.laborCost ?? formula.laborCost ?? 0) +
+      Number(data.energyCost ?? formula.energyCost ?? 0) +
+      Number(data.otherCost ?? formula.otherCost ?? 0)
+    ).toFixed(2));
   }
   validateFormulaItemTargets(
     data.items ?? formula.items,

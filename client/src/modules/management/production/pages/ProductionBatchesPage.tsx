@@ -27,7 +27,6 @@ import {
   deleteProductionBatch,
   getProductionBatchById,
   getProductionBatches,
-  revalueProductionBatchCost,
   updateProductionBatch,
 } from "../services/productionBatch.service";
 
@@ -39,10 +38,7 @@ import type {
 import { printCanaDocument } from "../../utils/printCanaDocument";
 import { useConfirmation } from "@/context/confirmationContext";
 import { getMaterialConsumptions } from "../../rawMaterialConsumption/services/materialConsumption.service";
-import { getRawMaterials } from "../../rawMaterial/services/rawMaterialService";
 import { getFormulaById } from "../../formula/services/formula.service";
-import inventoryService from "../../inventory/services/inventoryService";
-import api from "@/services/api";
 
 // =====================================================
 // STATUS STYLE
@@ -135,30 +131,12 @@ function canDeleteBatch(batch: ProductionBatch): boolean {
 }
 
 async function printBatchRecord(batch: ProductionBatch) {
-  if (batch.status === "Completed") {
-    batch = await revalueProductionBatchCost(batch._id);
-  }
   const product = typeof batch.product === "object" ? batch.product : undefined;
   const formulaId = typeof batch.formula === "object" ? batch.formula._id : batch.formula;
   const packSizeKg = Number(product?.packSizeKg || 30);
   const packLabel = product?.unit || `${formatNumber(packSizeKg)} kg`;
-  const [consumptions, transactionResponse, rawMaterials, inventory, formula] = await Promise.all([
+  const [consumptions, formula] = await Promise.all([
     getMaterialConsumptions({ productionBatch: batch._id }),
-    api.get<{
-      data?: {
-        transactions?: Array<{
-          rawMaterialName?: string;
-          rawMaterialCode?: string;
-          type: string;
-          quantity: number;
-          unit: string;
-          unitCost: number;
-          totalCost?: number;
-        }>;
-      };
-    }>(`/inventory/transactions?productionBatch=${batch._id}&limit=200`),
-    getRawMaterials(),
-    inventoryService.getInventory(),
     formulaId
       ? getFormulaById(formulaId).catch(() => null)
       : Promise.resolve(null),
@@ -166,7 +144,6 @@ async function printBatchRecord(batch: ProductionBatch) {
   const consumption = consumptions.find(
     (record) => record.status !== "Cancelled",
   );
-  const costTransactions = transactionResponse.data?.data?.transactions || [];
   const outputVariance =
     Number(batch.actualQuantity || 0) - Number(batch.plannedQuantity || 0);
   const outputYield =
@@ -177,80 +154,29 @@ async function printBatchRecord(batch: ProductionBatch) {
       : 0;
   const plannedPacks = getPackBreakdown(batch.plannedQuantity, packSizeKg);
   const batchOutputs = Array.isArray(batch.outputs) ? batch.outputs : [];
-  const outputTargetName = (target: unknown) => {
-    if (!target) return "Shared base";
-    const id = typeof target === "object" && target && "_id" in target ? String((target as { _id?: string })._id) : String(target);
-    return batchOutputs.find((output) => String(typeof output.product === "object" ? output.product._id : output.product) === id)?.productName || "Output-specific";
-  };
   let printableMaterialSubtotal = 0;
-  const materialRows = (consumption?.items || []).map((item, index) => {
-    const movements = costTransactions.filter(
-      (transaction) =>
-        transaction.rawMaterialCode === item.rawMaterialCode ||
-        transaction.rawMaterialName === item.rawMaterialName,
-    );
-    const issuedQuantity = movements.reduce(
-      (sum, transaction) =>
-        sum +
-        (transaction.type === "Production Return" ? -1 : 1) *
-          Number(transaction.quantity || 0),
-      0,
-    );
-    const quantity = Number(item.actualQuantity || item.issuedQuantity || issuedQuantity);
-    const currentMaterial = rawMaterials.find((material) =>
-      material._id === item.rawMaterial ||
-      material.code?.trim().toLowerCase() === item.rawMaterialCode?.trim().toLowerCase() ||
-      material.name?.trim().toLowerCase() === item.rawMaterialName?.trim().toLowerCase()
-    );
-    const inventoryItem = inventory.find((entry) => {
-      const material = typeof entry.rawMaterial === "object" ? entry.rawMaterial : undefined;
-      const materialId = material?._id || entry.rawMaterial;
-      return materialId === item.rawMaterial ||
-        entry.rawMaterialCode?.trim().toLowerCase() === item.rawMaterialCode?.trim().toLowerCase() ||
-        entry.rawMaterialName?.trim().toLowerCase() === item.rawMaterialName?.trim().toLowerCase();
-    });
-    const formulaItem = formula?.items?.find((entry) => {
-      const material = typeof entry.rawMaterial === "object" ? entry.rawMaterial : undefined;
-      const materialId = material?._id || entry.rawMaterial;
-      return materialId === item.rawMaterial ||
-        material?.code?.trim().toLowerCase() === item.rawMaterialCode?.trim().toLowerCase() ||
-        material?.name?.trim().toLowerCase() === item.rawMaterialName?.trim().toLowerCase();
-    });
-    const formulaMaterial = formulaItem && typeof formulaItem.rawMaterial === "object"
-      ? formulaItem.rawMaterial
-      : undefined;
-    const fallbackUnitCost = Number(
-      inventoryItem?.averageCostPerUnit ||
-          formulaMaterial?.costPerUnit ||
-          currentMaterial?.costPerUnit ||
-          0,
-    );
-    const resolvedIssuedCost = movements.reduce((sum, transaction) => {
-      const transactionCost = Number(transaction.totalCost || 0) > 0
-        ? Number(transaction.totalCost)
-        : Number(transaction.quantity || 0) *
-          Number(transaction.unitCost || fallbackUnitCost);
-      return sum +
-        (transaction.type === "Production Return" ? -1 : 1) * transactionCost;
-    }, 0);
-    const unitCost = issuedQuantity > 0 && resolvedIssuedCost > 0
-      ? resolvedIssuedCost / issuedQuantity
-      : fallbackUnitCost;
-    const totalCost = resolvedIssuedCost > 0
-      ? resolvedIssuedCost
-      : quantity * unitCost;
-    printableMaterialSubtotal += totalCost;
-
-    return [
-      index + 1,
-      `${item.rawMaterialName}${item.rawMaterialCode ? ` · ${item.rawMaterialCode}` : ""}`,
-      outputTargetName(formulaItem?.appliesToProduct),
-      `${formatNumber(quantity)} ${item.unit}`,
-      unitCost > 0 ? formatMoney(unitCost) : "—",
-      totalCost > 0 ? formatMoney(totalCost) : "—",
-    ];
-  });
-  const effectiveMaterialCost = materialRows.length
+  const savedCostLines = Array.isArray(batch.materialCostLines) ? batch.materialCostLines : [];
+  const materialRows = savedCostLines.length
+    ? savedCostLines.map((line, index) => {
+        printableMaterialSubtotal += Number(line.totalCost || 0);
+        return [
+          index + 1,
+          `${line.rawMaterialName}${line.rawMaterialCode ? ` · ${line.rawMaterialCode}` : ""}${line.quantitySource === "pack_output" ? " · Packaging" : ""}`,
+          `${formatNumber(line.quantity)} ${line.unit}`,
+          formatMoney(line.unitPrice),
+          formatMoney(line.totalCost),
+        ];
+      })
+    : (consumption?.items || []).map((item, index) => {
+        return [
+          index + 1,
+          `${item.rawMaterialName}${item.rawMaterialCode ? ` · ${item.rawMaterialCode}` : ""}`,
+          `${formatNumber(item.actualQuantity || item.issuedQuantity)} ${item.unit}`,
+          "—",
+          "—",
+        ];
+      });
+  const effectiveMaterialCost = savedCostLines.length
     ? printableMaterialSubtotal
     : Number(batch.actualMaterialCost || 0);
   const completeProductionCost =
@@ -267,7 +193,6 @@ async function printBatchRecord(batch: ProductionBatch) {
     materialRows.push([
       "",
       "MATERIALS SUBTOTAL",
-      "",
       "",
       "",
       formatMoney(effectiveMaterialCost),
@@ -293,6 +218,12 @@ async function printBatchRecord(batch: ProductionBatch) {
         label: "Formula",
         value: `${batch.formulaName} · ${batch.formulaCode} v${batch.formulaVersion}`,
       },
+      ...(batch.costFormulaName
+        ? [{
+            label: "Latest costing formula",
+            value: `${batch.costFormulaName} · ${batch.costFormulaCode || "Formula"} v${batch.costFormulaVersion || 1}`,
+          }]
+        : []),
       {
         label: "Planned output",
         value: `${formatNumber(batch.plannedQuantity)} ${batch.unit}`,
@@ -382,7 +313,6 @@ async function printBatchRecord(batch: ProductionBatch) {
             headers: [
               "#",
               "Raw material",
-              "Used for",
               "Quantity consumed",
               "Unit cost",
               "Total cost",
@@ -394,8 +324,11 @@ async function printBatchRecord(batch: ProductionBatch) {
     notes: [
       batch.notes?.trim(),
       batch.costedAt
-        ? `Cost record dated ${formatDate(batch.costedAt)}. Material lines use the posted issue price; any legacy zero-price issue is valued using the current inventory weighted-average price, then the saved formula price as fallback.`
+        ? `Cost record updated ${formatDate(batch.costedAt)}. Material quantities and prices come from the posted production issues and returns. A current supplier offer, inventory average, or setup price is used only when an older issue has no saved cost.`
         : "Cost remains provisional until material consumption is confirmed and the batch is completed.",
+      batch.costPriceFallbackMaterials?.length
+        ? `Price fallback used for: ${batch.costPriceFallbackMaterials.join(", ")}.`
+        : "All consumed materials were valued from their saved production-issue costs.",
       !materialRows.length
         ? "No active raw-material consumption record was available for this batch."
         : `Production cost includes consumed materials, labour, energy, and all production overhead/other expenses recorded in the formula. Planned pack equivalent: ${formatNumber(plannedPacks.exactPacks)} packs. Output variance: ${outputVariance > 0 ? "+" : ""}${formatNumber(outputVariance)} ${batch.unit}; yield: ${formatNumber(outputYield)}%.`,

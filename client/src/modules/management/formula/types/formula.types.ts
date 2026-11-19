@@ -25,6 +25,11 @@ export interface RawMaterial {
   quantity: number;
   minimumStock: number;
   costPerUnit: number;
+  currentPurchasePrice?: number;
+  currentPriceSource?: "supplier_offer" | "inventory_average" | "material_setup" | "unpriced";
+  currentSupplier?: { _id: string; name: string; code?: string };
+  currentPriceUpdatedAt?: string;
+  inventoryAverageCostPerUnit?: number;
   status: "Active" | "Inactive";
 }
 
@@ -64,7 +69,7 @@ export interface Formula {
 
   estimatedMaterialCost: number;
   estimatedTotalCost: number;
-  costingBasis?: "inventory_weighted_average";
+  costingBasis?: "current_supplier_offer";
   costingComplete?: boolean;
   unpricedMaterials?: string[];
 

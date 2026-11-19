@@ -6,6 +6,7 @@ import RawMaterialLot from "./rawMaterialLot.model";
 import SupplierMaterial from "./supplierMaterial.model";
 import Formula from "../formula/formula.model";
 import RawMaterialConsumption from "../production/materialConsumption/materialConsumption.model";
+import { resolveCurrentMaterialPrices } from "./materialPrice.service";
 
 export interface CreateRawMaterialData {
   name: string;
@@ -277,14 +278,11 @@ export const getRawMaterials =
     // Setup owns the material configuration; this keeps its stock display in
     // lockstep with the Raw-material store without copying balances in UI.
     const materialIds = materials.map((material) => material._id);
-    const [inventoryRecords, activeOffers] = await Promise.all([
+    const [inventoryRecords, currentPrices] = await Promise.all([
       Inventory.find({ rawMaterial: { $in: materialIds } })
-        .select("rawMaterial quantity reservedQuantity availableQuantity averageCostPerUnit")
+        .select("rawMaterial quantity reservedQuantity availableQuantity averageCostPerUnit updatedAt")
         .lean(),
-      SupplierMaterial.find({ rawMaterial: { $in: materialIds }, status: "Active" })
-        .select("rawMaterial unitPrice updatedAt")
-        .sort({ updatedAt: -1 })
-        .lean(),
+      resolveCurrentMaterialPrices(materialIds),
     ]);
     const inventoryByMaterialId = new Map(
       inventoryRecords.map((inventory) => [
@@ -292,36 +290,37 @@ export const getRawMaterials =
         inventory,
       ])
     );
-    const latestOfferByMaterialId = new Map<string, number>();
-    activeOffers.forEach((offer) => {
-      const id = offer.rawMaterial.toString();
-      if (!latestOfferByMaterialId.has(id))
-        latestOfferByMaterialId.set(id, Number(offer.unitPrice || 0));
-    });
 
     return materials.map((material) => {
       const inventory = inventoryByMaterialId.get(material._id.toString());
-      if (!inventory) return material;
-      const inventoryCost = Number(inventory.averageCostPerUnit || 0);
-      const valuationCost =
-        Number(inventory.quantity || 0) > 0 && inventoryCost > 0
-          ? inventoryCost
-          : Number(latestOfferByMaterialId.get(material._id.toString()) || 0);
+      const inventoryCost = Number(inventory?.averageCostPerUnit || 0);
+      const currentPrice = currentPrices.get(material._id.toString());
+      const currentPurchasePrice = Number(currentPrice?.unitPrice || 0);
+      const valuationCost = Number(inventory?.quantity || 0) > 0
+        ? inventoryCost
+        : currentPurchasePrice;
 
       return {
         ...material.toObject(),
-        quantity: Number(inventory.quantity || 0),
-        reservedQuantity: Number(inventory.reservedQuantity || 0),
-        availableQuantity: Number(inventory.availableQuantity || 0),
-        // Preserve the API field while making it a read-only projection of
-        // Inventory's single authoritative weighted-average valuation.
-        costPerUnit: valuationCost,
+        quantity: Number(inventory?.quantity || 0),
+        reservedQuantity: Number(inventory?.reservedQuantity || 0),
+        availableQuantity: Number(inventory?.availableQuantity || 0),
+        // `costPerUnit` remains for existing clients, but now has one meaning
+        // everywhere: the current/replacement price resolved for production.
+        costPerUnit: currentPurchasePrice,
+        currentPurchasePrice,
+        currentPriceSource: currentPrice?.source || "unpriced",
+        currentSupplier: currentPrice?.supplier
+          ? { _id: currentPrice.supplier, name: currentPrice.supplierName || "Supplier" }
+          : undefined,
+        currentPriceUpdatedAt: currentPrice?.offerUpdatedAt,
+        inventoryAverageCostPerUnit: inventoryCost,
         valuationCostPerUnit: valuationCost,
         valuationCostSource:
-          Number(inventory.quantity || 0) > 0 && inventoryCost > 0
+          Number(inventory?.quantity || 0) > 0 && inventoryCost > 0
             ? "inventory_weighted_average"
-            : valuationCost > 0
-              ? "latest_supplier_offer"
+            : currentPurchasePrice > 0
+              ? currentPrice?.source || "current_price"
               : "unpriced",
       };
     });
@@ -335,32 +334,39 @@ export const getRawMaterials =
 export const getRawMaterialById =
   async (id: string) => {
     await Promise.all([reconcileAvailableQuantities(), standardizeWhitingPackaging()]);
-    const [material, inventory, latestOffer] = await Promise.all([
+    const [material, inventory, currentPrices] = await Promise.all([
       RawMaterial.findById(id).populate("supplier", "name code"),
-      Inventory.findOne({ rawMaterial: id }).select("quantity reservedQuantity availableQuantity averageCostPerUnit").lean(),
-      SupplierMaterial.findOne({ rawMaterial: id, status: "Active" })
-        .select("unitPrice")
-        .sort({ updatedAt: -1 })
+      Inventory.findOne({ rawMaterial: id })
+        .select("quantity reservedQuantity availableQuantity averageCostPerUnit updatedAt")
         .lean(),
+      resolveCurrentMaterialPrices([id]),
     ]);
-    if (!material || !inventory) return material;
-    const inventoryCost = Number(inventory.averageCostPerUnit || 0);
-    const valuationCost =
-      Number(inventory.quantity || 0) > 0 && inventoryCost > 0
-        ? inventoryCost
-        : Number(latestOffer?.unitPrice || 0);
+    if (!material) return material;
+    const inventoryCost = Number(inventory?.averageCostPerUnit || 0);
+    const currentPrice = currentPrices.get(String(material._id));
+    const currentPurchasePrice = Number(currentPrice?.unitPrice || 0);
+    const valuationCost = Number(inventory?.quantity || 0) > 0
+      ? inventoryCost
+      : currentPurchasePrice;
     return {
       ...material.toObject(),
-      quantity: Number(inventory.quantity || 0),
-      reservedQuantity: Number(inventory.reservedQuantity || 0),
-      availableQuantity: Number(inventory.availableQuantity || 0),
-      costPerUnit: valuationCost,
+      quantity: Number(inventory?.quantity || 0),
+      reservedQuantity: Number(inventory?.reservedQuantity || 0),
+      availableQuantity: Number(inventory?.availableQuantity || 0),
+      costPerUnit: currentPurchasePrice,
+      currentPurchasePrice,
+      currentPriceSource: currentPrice?.source || "unpriced",
+      currentSupplier: currentPrice?.supplier
+        ? { _id: currentPrice.supplier, name: currentPrice.supplierName || "Supplier" }
+        : undefined,
+      currentPriceUpdatedAt: currentPrice?.offerUpdatedAt,
+      inventoryAverageCostPerUnit: inventoryCost,
       valuationCostPerUnit: valuationCost,
       valuationCostSource:
-        Number(inventory.quantity || 0) > 0 && inventoryCost > 0
+        Number(inventory?.quantity || 0) > 0 && inventoryCost > 0
           ? "inventory_weighted_average"
-          : valuationCost > 0
-            ? "latest_supplier_offer"
+          : currentPurchasePrice > 0
+            ? currentPrice?.source || "current_price"
             : "unpriced",
     };
   };

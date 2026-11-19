@@ -166,7 +166,15 @@ router.post("/hires", async (req: any, res, next) => {
       const scaffoldQuantity = Math.floor(Number(req.body.scaffoldQuantity));
       const numberOfDays = Math.floor(Number(req.body.numberOfDays ?? 1));
       const unitPrice = n(req.body.unitPrice);
+      const siteName = String(req.body?.siteName || "").trim();
+      const siteAddress = String(req.body?.siteAddress || "").trim();
+      const contactName = String(req.body?.contactName || "").trim();
+      const contactPhone = String(req.body?.contactPhone || "").trim();
       if (!Number.isFinite(scaffoldQuantity) || scaffoldQuantity < 1 || !Number.isFinite(numberOfDays) || numberOfDays < 1 || unitPrice < 0) throw new Error("Enter valid scaffold quantity, chargeable hire days and price per scaffold per day.");
+      if (!siteName || !siteAddress || !contactName || !contactPhone) throw new Error("Enter the site, address, responsible person and contact phone.");
+      const hireSubtotal = n(scaffoldQuantity * numberOfDays * unitPrice);
+      const deposit = n(req.body.deposit);
+      if (!Number.isFinite(deposit) || deposit < 0 || deposit > hireSubtotal) throw new Error("Deposit must be between zero and the total scaffold hire charge.");
       const scaffoldStock: any = await ScaffoldItem.findOne({ code: "SCA-SCAFFOLD", status: "active" }).session(session);
       if (!scaffoldStock || scaffoldQuantity > Number(scaffoldStock.availableQuantity)) throw new Error(`Only ${scaffoldStock?.availableQuantity || 0} scaffold pair(s) are available.`);
       scaffoldStock.availableQuantity -= scaffoldQuantity; scaffoldStock.hiredQuantity += scaffoldQuantity; await scaffoldStock.save({ session });
@@ -190,7 +198,7 @@ router.post("/hires", async (req: any, res, next) => {
         items.push({ item: accessory._id, itemCode: accessory.code, itemName: accessory.name, quantity, dailyRate: 0 });
         accessoryMovements.push({ item: accessory._id, movementType: "hire_out", quantity: -quantity, balanceAfter: accessory.availableQuantity, reason: "Accessory supplied with scaffold hire", createdBy: req.user?.id });
       }
-      const [hire] = await ScaffoldHire.create([{ hireNumber: await sequence("SH", ScaffoldHire, "hireNumber"), customer: req.body.customer, siteName: req.body.siteName, siteAddress: req.body.siteAddress, contactName: req.body.contactName, contactPhone: req.body.contactPhone, startDate: start, expectedReturnDate: due, scaffoldQuantity, numberOfDays, unitPrice, hireSubtotal: n(scaffoldQuantity * numberOfDays * unitPrice), deposit: n(req.body.deposit), transportCharge: 0, items, notes: req.body.notes, createdBy: req.user?.id, history: [{ action: "dispatched", note: "Scaffolding issued to customer", by: req.user?.id }] }], { session });
+      const [hire] = await ScaffoldHire.create([{ hireNumber: await sequence("SH", ScaffoldHire, "hireNumber"), customer: req.body.customer, siteName, siteAddress, contactName, contactPhone, startDate: start, expectedReturnDate: due, scaffoldQuantity, numberOfDays, unitPrice, hireSubtotal, deposit, transportCharge: 0, items, notes: req.body.notes, createdBy: req.user?.id, history: [{ action: "dispatched", note: `Scaffolding issued to ${siteName}; ${scaffoldQuantity} pair(s), ${numberOfDays} chargeable day(s)`, by: req.user?.id }] }], { session });
       await ScaffoldStockMovement.create([{ item: scaffoldStock._id, movementType: "hire_out", quantity: -scaffoldQuantity, balanceAfter: scaffoldStock.availableQuantity, reference: hire.hireNumber, reason: "Scaffold pairs dispatched", createdBy: req.user?.id }], { session });
       if (accessoryMovements.length) await ScaffoldStockMovement.create(accessoryMovements.map((movement) => ({ ...movement, reference: hire.hireNumber })), { session });
       result = hire;

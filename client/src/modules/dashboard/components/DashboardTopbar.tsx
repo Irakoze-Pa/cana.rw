@@ -36,6 +36,7 @@ const titles: Record<string, string> = {
   "/management/inventory": "Inventory control",
   "/management/production": "Production workspace",
   "/management/production/material-planning": "Material requirements planning",
+  "/management/production/cost-register": "Production cost register",
   "/management/purchase-orders": "Procurement",
   "/management/sales": "Sales & orders",
   "/management/sales/orders": "Sales orders",

@@ -23,7 +23,7 @@ export async function revalueProductionBatchCostController(
     const batch = await revalueProductionBatchCost(String(req.params.id || "").trim());
     return res.status(200).json({
       success: true,
-      message: "Production batch cost updated from inventory valuation.",
+      message: "Production batch cost updated from actual issued-stock prices.",
       data: batch,
     });
   } catch (error: unknown) {

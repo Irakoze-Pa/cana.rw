@@ -139,7 +139,7 @@ export interface IProductionBatch
 
   finishedGoodsPostedAt?: Date;
 
-  /** Immutable actual-cost snapshot created when the batch is completed. */
+  /** Saved production-cost valuation. Stock movement values remain immutable. */
   actualMaterialCost: number;
   allocatedLaborCost: number;
   allocatedEnergyCost: number;
@@ -148,6 +148,49 @@ export interface IProductionBatch
   costPerKg: number;
   costPerPack: number;
   costedAt?: Date;
+  costingBasis?: "current_supplier_offer" | "actual_issue_cost";
+  costPriceAsOf?: Date;
+  costPriceFallbackMaterials: string[];
+  costFormula?: mongoose.Types.ObjectId;
+  costFormulaName?: string;
+  costFormulaCode?: string;
+  costFormulaVersion?: number;
+  materialCostLines: Array<{
+    rawMaterial: mongoose.Types.ObjectId;
+    rawMaterialName: string;
+    rawMaterialCode: string;
+    appliesToProduct?: mongoose.Types.ObjectId;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    totalCost: number;
+    priceSource: "production_issue" | "historical_receipt" | "supplier_offer" | "inventory_average" | "material_setup";
+    quantitySource: "actual_issue" | "pack_output";
+    supplier?: mongoose.Types.ObjectId;
+    supplierName?: string;
+    offerUpdatedAt?: Date;
+  }>;
+
+  /** Current replacement valuation from the active formula and current offers. */
+  currentMaterialCost: number;
+  currentTotalCost: number;
+  currentCostPerKg: number;
+  currentCostPerPack: number;
+  currentCostedAt?: Date;
+  currentMaterialCostLines: Array<{
+    rawMaterial: mongoose.Types.ObjectId;
+    rawMaterialName: string;
+    rawMaterialCode: string;
+    appliesToProduct?: mongoose.Types.ObjectId;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    totalCost: number;
+    priceSource: "supplier_offer" | "inventory_average" | "material_setup";
+    supplier?: mongoose.Types.ObjectId;
+    supplierName?: string;
+    offerUpdatedAt?: Date;
+  }>;
 
   // ---------------------------------------------------
   // TIMESTAMPS
@@ -399,6 +442,68 @@ const productionBatchSchema =
       costPerKg: { type: Number, default: 0, min: 0 },
       costPerPack: { type: Number, default: 0, min: 0 },
       costedAt: { type: Date },
+      costingBasis: { type: String, enum: ["current_supplier_offer", "actual_issue_cost"] },
+      costPriceAsOf: { type: Date },
+      costPriceFallbackMaterials: { type: [String], default: [] },
+      materialCostLines: {
+        type: [new Schema(
+          {
+            rawMaterial: { type: Schema.Types.ObjectId, ref: "RawMaterial", required: true },
+            rawMaterialName: { type: String, required: true, trim: true },
+            rawMaterialCode: { type: String, required: true, trim: true, uppercase: true },
+            appliesToProduct: { type: Schema.Types.ObjectId, ref: "Product", required: false },
+            quantity: { type: Number, required: true, min: 0 },
+            unit: { type: String, required: true, trim: true },
+            unitPrice: { type: Number, required: true, min: 0 },
+            totalCost: { type: Number, required: true, min: 0 },
+            priceSource: {
+              type: String,
+              enum: ["production_issue", "historical_receipt", "supplier_offer", "inventory_average", "material_setup"],
+              required: true,
+            },
+            quantitySource: {
+              type: String,
+              enum: ["actual_issue", "pack_output"],
+              default: "actual_issue",
+              required: true,
+            },
+            supplier: { type: Schema.Types.ObjectId, ref: "Supplier", required: false },
+            supplierName: { type: String, trim: true },
+            offerUpdatedAt: { type: Date },
+          },
+          { _id: false },
+        )],
+        default: [],
+      },
+      currentMaterialCost: { type: Number, default: 0, min: 0 },
+      currentTotalCost: { type: Number, default: 0, min: 0 },
+      currentCostPerKg: { type: Number, default: 0, min: 0 },
+      currentCostPerPack: { type: Number, default: 0, min: 0 },
+      currentCostedAt: Date,
+      currentMaterialCostLines: {
+        type: [new Schema(
+          {
+            rawMaterial: { type: Schema.Types.ObjectId, ref: "RawMaterial", required: true },
+            rawMaterialName: { type: String, required: true, trim: true },
+            rawMaterialCode: { type: String, required: true, trim: true, uppercase: true },
+            appliesToProduct: { type: Schema.Types.ObjectId, ref: "Product" },
+            quantity: { type: Number, required: true, min: 0 },
+            unit: { type: String, required: true, trim: true },
+            unitPrice: { type: Number, required: true, min: 0 },
+            totalCost: { type: Number, required: true, min: 0 },
+            priceSource: { type: String, enum: ["supplier_offer", "inventory_average", "material_setup"], required: true },
+            supplier: { type: Schema.Types.ObjectId, ref: "Supplier" },
+            supplierName: { type: String, trim: true },
+            offerUpdatedAt: Date,
+          },
+          { _id: false },
+        )],
+        default: [],
+      },
+      costFormula: { type: Schema.Types.ObjectId, ref: "Formula" },
+      costFormulaName: { type: String, trim: true, default: "" },
+      costFormulaCode: { type: String, trim: true, uppercase: true, default: "" },
+      costFormulaVersion: { type: Number, min: 1 },
     },
     {
       timestamps: true,

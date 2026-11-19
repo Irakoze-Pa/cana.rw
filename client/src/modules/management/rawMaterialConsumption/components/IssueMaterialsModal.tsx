@@ -126,6 +126,11 @@ export default function IssueMaterialsModal({
         return;
       }
 
+      if (item.unit.trim().toLowerCase() === "pcs" && !Number.isInteger(item.issuedQuantity)) {
+        setError(`${item.rawMaterialName} must be issued as a whole number of pieces.`);
+        return;
+      }
+
     }
 
     try {
@@ -240,14 +245,14 @@ export default function IssueMaterialsModal({
                     </td>
 
                     <td className="px-4 py-4 text-right font-medium text-slate-700">
-                      {item.standardQuantity.toLocaleString()}
+                      {item.standardQuantity.toLocaleString()} {item.unit}
                     </td>
 
                     <td className="px-4 py-4">
                       <input
                         type="number"
                         min="0"
-                        step="0.001"
+                        step={item.unit.trim().toLowerCase() === "pcs" ? "1" : "0.001"}
                         value={item.issuedQuantity}
                         onChange={(e) =>
                           updateItem(

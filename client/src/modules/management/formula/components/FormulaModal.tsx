@@ -6,6 +6,7 @@ import {
   Trash2,
   Loader2,
   Copy,
+  PackageCheck,
 } from "lucide-react";
 
 import type {
@@ -378,6 +379,53 @@ export default function FormulaModal({
   useEffect(() => {
     if (outputs.length > 0 && combinedOutputKg > 0) setBatchSize(combinedOutputKg);
   }, [combinedOutputKg, outputs.length]);
+
+  const selectedFormulaProduct = useMemo(
+    () => products.find((item) => item._id === product),
+    [product, products],
+  );
+  const formulaPackCount = useMemo(() => {
+    if (outputs.length > 0) {
+      return Math.round(outputs.reduce((sum, output) => sum + Number(output.packs || 0), 0));
+    }
+    const packSize = Number(selectedFormulaProduct?.packSizeKg || 0);
+    return packSize > 0 ? Math.round(Number(batchSize || 0) / packSize) : 0;
+  }, [batchSize, outputs, selectedFormulaProduct]);
+  const automaticPackagingNames = useMemo(() => {
+    const productName = String(selectedFormulaProduct?.name || "").toLowerCase();
+    if (!productName) return [];
+    if (productName.includes("plaster")) return ["Imifuka"];
+    if (productName.includes("wood glue")) return ["Utudobo"];
+    return ["Indobo", "Stickers"];
+  }, [selectedFormulaProduct]);
+  const packagingMaterialIds = useMemo(
+    () => new Set(rawMaterials
+      .filter((material) => ["imifuka", "utudobo", "indobo", "stickers"].includes(material.name.trim().toLowerCase()))
+      .map((material) => material._id)),
+    [rawMaterials],
+  );
+
+  useEffect(() => {
+    if (!product || formulaPackCount <= 0 || automaticPackagingNames.length === 0) return;
+    const packagingMaterials = automaticPackagingNames
+      .map((packagingName) => rawMaterials.find((material) => material.name.trim().toLowerCase() === packagingName.toLowerCase()))
+      .filter((material): material is RawMaterial => Boolean(material));
+    if (packagingMaterials.length !== automaticPackagingNames.length) return;
+    setItems((previous) => {
+      const productionItems = previous.filter((item) => !packagingMaterialIds.has(item.rawMaterial));
+      const packagingItems: FormulaItemForm[] = packagingMaterials.map((material) => ({
+        rawMaterial: material._id,
+        appliesToProduct: "",
+        quantity: formulaPackCount,
+        unit: "pcs",
+        wastePercentage: 0,
+        notes: `Automatic packaging · 1 ${material.name} per finished pack`,
+      }));
+      const next = [...productionItems, ...packagingItems];
+      const signature = (values: FormulaItemForm[]) => values.map((item) => `${item.rawMaterial}:${item.quantity}:${item.unit}:${item.appliesToProduct}`).join("|");
+      return signature(previous) === signature(next) ? previous : next;
+    });
+  }, [automaticPackagingNames, formulaPackCount, packagingMaterialIds, product, rawMaterials]);
 
   const enableSharedOutputs = () => {
     const selected = products.find((item) => item._id === product);
@@ -1092,6 +1140,25 @@ export default function FormulaModal({
                   )}
                 </div>
 
+                {product && formulaPackCount > 0 && automaticPackagingNames.length > 0 && (
+                  <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-950 text-white"><PackageCheck size={17}/></span>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-950">Automatic packaging</h3>
+                        <p className="mt-0.5 text-xs text-slate-500">One packaging item is required for every finished pack.</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {automaticPackagingNames.map((packagingName) => (
+                        <span key={packagingName} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-800">
+                          {formulaPackCount.toLocaleString()} {packagingName}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* =================================================
                     RAW MATERIALS
                 ================================================= */}
@@ -1127,15 +1194,11 @@ export default function FormulaModal({
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1080px]">
+                        <table className="w-full min-w-[920px]">
                           <thead>
                             <tr className="border-b border-gray-200 bg-gray-50">
                               <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
                                 Material
-                              </th>
-
-                              <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
-                                Used for
                               </th>
 
                               <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
@@ -1211,6 +1274,7 @@ export default function FormulaModal({
                                           0
                                       )
                                     : 0;
+                                const isPackaging = Boolean(material && packagingMaterialIds.has(material._id));
 
                                 return (
                                   <tr
@@ -1224,6 +1288,7 @@ export default function FormulaModal({
                                         value={
                                           item.rawMaterial
                                         }
+                                        disabled={isPackaging}
                                         onChange={(
                                           event
                                         ) => {
@@ -1265,7 +1330,7 @@ export default function FormulaModal({
                                             );
                                           }
                                         }}
-                                        className="h-10 w-full rounded-lg border border-gray-200 px-3 text-xs outline-none focus:border-red-500"
+                                        className="h-10 w-full rounded-lg border border-gray-200 px-3 text-xs outline-none focus:border-red-500 disabled:bg-slate-50 disabled:font-semibold disabled:text-slate-700"
                                       >
                                         <option value="">
                                           Select material
@@ -1299,21 +1364,6 @@ export default function FormulaModal({
                                       </select>
                                     </td>
 
-                                    <td className="px-4 py-3">
-                                      <select
-                                        value={item.appliesToProduct}
-                                        disabled={outputs.length < 2}
-                                        onChange={(event) => updateItem(index, "appliesToProduct", event.target.value)}
-                                        className="h-10 w-full min-w-40 rounded-lg border border-gray-200 px-3 text-xs outline-none disabled:bg-gray-50"
-                                      >
-                                        <option value="">Shared base</option>
-                                        {outputs.map((output) => {
-                                          const outputProduct = products.find((entry) => entry._id === output.product);
-                                          return output.product ? <option key={output.product} value={output.product}>{outputProduct?.name || "Output product"} only</option> : null;
-                                        })}
-                                      </select>
-                                    </td>
-
                                     {/* QUANTITY */}
 
                                     <td className="px-4 py-3">
@@ -1324,6 +1374,7 @@ export default function FormulaModal({
                                         value={
                                           item.quantity
                                         }
+                                        disabled={isPackaging}
                                         onChange={(
                                           event
                                         ) =>
@@ -1337,7 +1388,7 @@ export default function FormulaModal({
                                             )
                                           )
                                         }
-                                        className="h-10 w-28 rounded-lg border border-gray-200 px-3 text-xs outline-none focus:border-red-500"
+                                        className="h-10 w-28 rounded-lg border border-gray-200 px-3 text-xs outline-none focus:border-red-500 disabled:bg-slate-50 disabled:font-bold"
                                       />
                                     </td>
 
@@ -1348,6 +1399,7 @@ export default function FormulaModal({
                                         value={
                                           item.unit
                                         }
+                                        disabled={isPackaging}
                                         onChange={(
                                           event
                                         ) =>
@@ -1374,6 +1426,7 @@ export default function FormulaModal({
                                         value={
                                           item.wastePercentage
                                         }
+                                        disabled={isPackaging}
                                         onChange={(
                                           event
                                         ) =>
@@ -1411,7 +1464,7 @@ export default function FormulaModal({
                                     {/* DELETE */}
 
                                     <td className="px-4 py-3">
-                                      <button
+                                      {!isPackaging && <button
                                         type="button"
                                         onClick={() =>
                                           removeItem(
@@ -1426,6 +1479,7 @@ export default function FormulaModal({
                                           }
                                         />
                                       </button>
+                                      }
                                     </td>
                                   </tr>
                                 );
