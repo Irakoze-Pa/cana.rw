@@ -105,6 +105,12 @@ type ProductSalesRow = {
   salesValue: number;
 };
 type ClientSalesRow = ProductSalesRow & { client: string };
+type FinanceSummary = {
+  revenue: number;
+  expenses: number;
+  netProfit: number;
+  expenseBreakdown: Array<{ code: string; name: string; group: string; amount: number }>;
+};
 
 const money = (value: number) =>
   Number(value || 0).toLocaleString("en-RW", { maximumFractionDigits: 0 });
@@ -200,6 +206,8 @@ export default function OperationalReportsPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [balances, setBalances] = useState<FinishedBalance[]>([]);
+  const [financeSummary, setFinanceSummary] = useState<FinanceSummary | null>(null);
+  const [financeSummaryLoading, setFinanceSummaryLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const load = async () => {
@@ -241,6 +249,16 @@ export default function OperationalReportsPage() {
   useEffect(() => {
     void load();
   }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const query = new URLSearchParams({ from, to });
+    setFinanceSummaryLoading(true);
+    api.get<{ data: { summary: FinanceSummary } }>(`/accounting/workspace?${query}`)
+      .then((response) => { if (!cancelled) setFinanceSummary(response.data.data.summary); })
+      .catch(() => { if (!cancelled) setFinanceSummary(null); })
+      .finally(() => { if (!cancelled) setFinanceSummaryLoading(false); });
+    return () => { cancelled = true; };
+  }, [from, to]);
   const inside = (date?: string) => {
     const value = String(date || "").slice(0, 10);
     return Boolean(value) && (!from || value >= from) && (!to || value <= to);
@@ -384,24 +402,38 @@ export default function OperationalReportsPage() {
     const salesInventoryValue = inventoryLines
       .filter((line) => line.store === "sales")
       .reduce((sum, line) => sum + line.value, 0);
-    const revenue = delivered.reduce(
+    const deliveredRevenue = delivered.reduce(
       (sum, order) =>
         sum + Number(order.subtotal ?? Number(order.total || 0) - Number(order.tax || 0)),
       0,
     );
-    const outputTax = delivered.reduce(
-      (sum, order) => sum + Number(order.tax || 0),
+    const outputTax = issued.reduce(
+      (sum, invoice) => sum + Number(invoice.tax || 0),
       0,
     );
-    const operatingExpenses = operating.reduce(
+    const recordedExpenses = operating.reduce(
       (sum, expense) => sum + Number(expense.amount || 0),
       0,
     );
-    const grossProfit = revenue - cogs;
-    const netProfit = grossProfit - operatingExpenses;
+    const accountingRows = financeSummary?.expenseBreakdown || [];
+    const directCosts = financeSummary
+      ? accountingRows.filter((item) => item.group === "Direct costs").reduce((sum, item) => sum + item.amount, 0)
+      : cogs;
+    const operatingExpenses = financeSummary
+      ? accountingRows.filter((item) => item.group === "Operating expenses").reduce((sum, item) => sum + item.amount, 0)
+      : recordedExpenses;
+    const financeCosts = financeSummary
+      ? accountingRows.filter((item) => item.group === "Finance costs").reduce((sum, item) => sum + item.amount, 0)
+      : 0;
+    const revenue = financeSummary?.revenue ?? deliveredRevenue;
+    const totalCosts = financeSummary?.expenses ?? (directCosts + operatingExpenses + financeCosts);
+    const grossProfit = revenue - directCosts;
+    const netProfit = financeSummary?.netProfit ?? (revenue - totalCosts);
     const grossMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
     const netMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
-    const expenseByCategory = Array.from(
+    const expenseByCategory = financeSummary
+      ? accountingRows.map((item) => [`${item.name} · ${item.group}`, item.amount] as [string, number])
+      : Array.from(
       operating.reduce((groups, expense) => {
         const category = human(expense.category || "other");
         groups.set(
@@ -410,7 +442,8 @@ export default function OperationalReportsPage() {
         );
         return groups;
       }, new Map<string, number>()),
-    ).sort((a, b) => b[1] - a[1]);
+      );
+    expenseByCategory.sort((a, b) => b[1] - a[1]);
     const transactions: Transaction[] = [
       ...delivered.map((order) => ({
         date: deliveryDate(order),
@@ -461,9 +494,12 @@ export default function OperationalReportsPage() {
       received,
       transactions,
       revenue,
+      deliveredRevenue,
       outputTax,
-      cogs,
+      cogs: directCosts,
+      totalCosts,
       operatingExpenses,
+      financeCosts,
       grossProfit,
       netProfit,
       grossMargin,
@@ -490,6 +526,7 @@ export default function OperationalReportsPage() {
     balances,
     from,
     to,
+    financeSummary,
   ]);
   const printPnl = () =>
     printCanaDocument({
@@ -515,14 +552,16 @@ export default function OperationalReportsPage() {
       table: {
         headers: ["Profit & loss item", "Amount (RWF)"],
         rows: [
-          ["Turnover — delivered sales excluding tax", money(report.revenue)],
+          ["Turnover — invoiced sales excluding tax", money(report.revenue)],
           ["Less: cost of goods sold", `(${money(report.cogs)})`],
           ["Gross profit", money(report.grossProfit)],
-          ["Less: operating expenses", `(${money(report.operatingExpenses)})`],
+          ["Less: operating costs, including payroll", `(${money(report.operatingExpenses)})`],
+          ["Less: finance costs", `(${money(report.financeCosts)})`],
+          ["Total P&L costs", money(report.totalCosts)],
           ["Net profit / (loss)", money(report.netProfit)],
         ],
       },
-      notes: `Turnover excludes ${money(report.outputTax)} RWF of output tax. Profit is recognised when an order is delivered. Customer and supplier payments are cash movements, not profit. ${report.estimatedLines ? `${report.estimatedLines} historical sale line(s) use the latest recorded production cost as an estimate.` : "All costed sale lines use their delivery cost snapshot."}`,
+      notes: `${financeSummary ? "Figures follow posted accounting entries for the selected period. Costs include product costs, payroll, operating expenses, statutory costs and finance costs." : "Accounting workspace figures were unavailable; the result is provisional and excludes costs not loaded in this report."} Turnover excludes ${money(report.outputTax)} RWF of output tax. Customer and supplier payments are cash movements, not profit. ${report.estimatedLines ? `${report.estimatedLines} historical sale line(s) use the latest recorded production cost as an estimate for operational cost coverage.` : "Delivered sale lines use their delivery cost snapshot where available."}`,
     });
   const printPaintSales = () =>
     printCanaDocument({
@@ -650,25 +689,30 @@ export default function OperationalReportsPage() {
           </button>
         </div>
       </section>
-      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         <Metric
-          label="Turnover"
-          value={loading ? "—" : `${money(report.revenue)} RWF`}
+          label="Invoiced turnover"
+          value={loading || financeSummaryLoading ? "—" : `${money(report.revenue)} RWF`}
           primary
         />
         <Metric
-          label="Production cost"
-          value={loading ? "—" : `${money(report.cogs)} RWF`}
+          label="Cost of goods sold"
+          value={loading || financeSummaryLoading ? "—" : `${money(report.cogs)} RWF`}
         />
         <Metric
-          label="Operating expenses"
-          value={loading ? "—" : `${money(report.operatingExpenses)} RWF`}
+          label="Operating costs"
+          value={loading || financeSummaryLoading ? "—" : `${money(report.operatingExpenses)} RWF`}
+          tone="text-slate-950"
+        />
+        <Metric
+          label="Finance costs"
+          value={loading || financeSummaryLoading ? "—" : `${money(report.financeCosts)} RWF`}
           tone="text-slate-950"
         />
         <Metric
           label="Net result"
           value={
-            loading
+            loading || financeSummaryLoading
               ? "—"
               : `${money(report.netProfit)} RWF · ${report.netMargin.toFixed(1)}%`
           }
@@ -719,17 +763,17 @@ export default function OperationalReportsPage() {
               </h2>
             </div>
             <span
-              className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${report.unpricedLines > 0 ? "bg-amber-50 text-amber-800" : report.netProfit >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}
+              className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${!financeSummary || report.unpricedLines > 0 ? "bg-amber-50 text-amber-800" : report.netProfit >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}
             >
-              {report.unpricedLines > 0
-                ? "Provisional"
+              {!financeSummary || report.unpricedLines > 0
+                ? "Review figures"
                 : report.netProfit >= 0
                   ? "Profit"
                   : "Loss"}
             </span>
           </div>
           <div className="divide-y divide-slate-100 text-sm">
-            <PnlRow label="Turnover — delivered sales, excluding tax" value={report.revenue} />
+            <PnlRow label="Turnover — invoices, excluding tax" value={report.revenue} />
             {report.outputTax > 0 && (
               <PnlRow label="Output tax excluded from turnover" value={report.outputTax} muted />
             )}
@@ -740,11 +784,9 @@ export default function OperationalReportsPage() {
             />
             <PnlRow label="Gross profit" value={report.grossProfit} strong />
             <PercentageRow label="Gross margin" value={report.grossMargin} />
-            <PnlRow
-              label="Less: operating expenses"
-              value={-report.operatingExpenses}
-              muted
-            />
+            <PnlRow label="Less: operating costs incl. payroll" value={-report.operatingExpenses} muted />
+            <PnlRow label="Less: finance costs" value={-report.financeCosts} muted />
+            <PnlRow label="Total P&L costs" value={report.totalCosts} muted />
             <PnlRow label="Net result" value={report.netProfit} strong />
             <PercentageRow label="Net margin" value={report.netMargin} strong />
           </div>
@@ -781,7 +823,7 @@ export default function OperationalReportsPage() {
           {report.expenseByCategory.length > 0 && (
             <div className="mt-3 border-t border-slate-100 pt-3">
               <p className="text-[10px] font-extrabold uppercase tracking-[.12em] text-slate-500">
-                Operating expenses
+                P&L costs by account
               </p>
               <div className="mt-2 space-y-1.5">
                 {report.expenseByCategory.map(([category, amount]) => (
@@ -796,7 +838,7 @@ export default function OperationalReportsPage() {
                         {money(amount)} RWF
                       </span>
                       <span className="w-12 text-right text-[10px] font-bold text-slate-500">
-                        {report.operatingExpenses > 0 ? ((amount / report.operatingExpenses) * 100).toFixed(1) : "0.0"}%
+                        {report.totalCosts > 0 ? ((amount / report.totalCosts) * 100).toFixed(1) : "0.0"}%
                       </span>
                     </div>
                   ))}

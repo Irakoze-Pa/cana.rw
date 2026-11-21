@@ -119,40 +119,33 @@ const statusStyle = (status: string) =>
         ? "bg-amber-50 text-amber-800"
         : "bg-slate-100 text-slate-700";
 function printSalesOrder(order: Order) {
+  const customer = order.customer;
+  const companyName = customer?.businessName?.trim();
+  const contactName = customer?.fullName?.trim();
+  const status = order.status.replaceAll("_", " ");
+
   printCanaDocument({
-    title: "Sales order",
+    title: "Sales order & delivery receipt",
     issueDate: order.createdAt,
     reference: order.orderNumber,
-    status: order.status.replaceAll("_", " "),
+    status: status.charAt(0).toUpperCase() + status.slice(1),
+    brandLine: "CANA Paints · Customer delivery copy",
     recipient: {
-      label: "Customer",
-      name: order.customer?.fullName || "Customer",
+      label: "Deliver to",
+      name: companyName || contactName || "Customer",
       lines: [
-        order.customer?.businessName,
-        order.customer?.phone,
-        order.customer?.email,
-        order.deliveryAddress || order.customer?.address,
+        companyName && contactName?.toLowerCase() !== companyName.toLowerCase()
+          ? contactName
+          : undefined,
+        customer?.tin ? `TIN ${customer.tin}` : undefined,
+        customer?.phone,
+        customer?.email,
+        order.deliveryAddress || customer?.address,
       ],
     },
     details: [
-      { label: "Customer", value: order.customer?.fullName || "Customer" },
-      ...(order.customer?.businessName
-        ? [
-            { label: "Company", value: order.customer.businessName },
-            { label: "TIN", value: order.customer.tin || "—" },
-          ]
-        : []),
-      { label: "Phone", value: order.customer?.phone },
-      { label: "Email", value: order.customer?.email },
-      {
-        label: "Order total",
-        value: `${money(order.total)} RWF`,
-      },
-      {
-        label: "Order date",
-        value: new Date(order.createdAt).toLocaleDateString("en-RW"),
-      },
-      { label: "Items", value: `${order.items.length}` },
+      { label: "Order total", value: `${money(order.total)} RWF` },
+      { label: "Line items", value: order.items.length },
     ],
     table: {
       headers: [
@@ -166,11 +159,13 @@ function printSalesOrder(order: Order) {
         item.productName,
         item.productCode,
         orderQuantity(item),
-        `${money(item.unitPrice || 0)} RWF`,
-        `${money(item.total ?? Number(item.unitPrice || 0) * item.quantity)} RWF`,
+        money(item.unitPrice || 0),
+        money(item.total ?? Number(item.unitPrice || 0) * item.quantity),
       ]),
     },
     notes: order.notes,
+    centerDetails: true,
+    deliveryReceipt: true,
   });
 }
 function OrderActions({

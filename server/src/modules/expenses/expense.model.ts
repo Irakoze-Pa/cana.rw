@@ -3,7 +3,7 @@ import mongoose, { Schema } from "mongoose";
 const expenseSchema = new Schema({
   expenseNumber: { type: String, required: true, unique: true, index: true },
   date: { type: Date, required: true, default: Date.now, index: true },
-  category: { type: String, required: true, enum: ["transport", "utilities", "rent", "maintenance", "packaging", "labour", "office", "marketing", "taxes_fees", "other"] },
+  category: { type: String, required: true, enum: ["transport", "utilities", "rent", "maintenance", "packaging", "labour", "office", "marketing", "taxes_fees", "communication", "insurance", "security", "cleaning", "professional_fees", "licenses_fees", "bank_charges", "other"] },
   description: { type: String, required: true, trim: true },
   payee: { type: String, trim: true, default: "" },
   amount: { type: Number, required: true, min: 0.01 },

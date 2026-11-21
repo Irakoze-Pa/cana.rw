@@ -12,7 +12,9 @@ import {
   RefreshCw,
   Settings2,
   ShoppingCart,
+  ShieldCheck,
   TriangleAlert,
+  Truck,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -26,7 +28,7 @@ type Notice = {
   description: string;
   to: string;
   tone: "red" | "amber" | "blue" | "green";
-  kind: "quote" | "order" | "production" | "stock" | "billing";
+  kind: "quote" | "order" | "production" | "stock" | "billing" | "procurement" | "compliance";
 };
 type RecordData = Record<string, unknown>;
 const titles: Record<string, string> = {
@@ -64,6 +66,8 @@ const icons = {
   production: Settings2,
   stock: TriangleAlert,
   billing: ReceiptText,
+  procurement: Truck,
+  compliance: ShieldCheck,
 };
 const tones = {
   red: "bg-red-50 text-red-700",
@@ -215,6 +219,7 @@ export default function DashboardTopbar() {
         api.get("/raw-materials"),
         api.get("/billing/invoices"),
         api.get("/finished-goods/balances"),
+        api.get("/dashboard/summary"),
       ]);
       const [
         quotes,
@@ -226,6 +231,9 @@ export default function DashboardTopbar() {
       ] = results.map((result) =>
         result.status === "fulfilled" ? rows(result.value.data) : [],
       );
+      const dashboardSummary = results[6].status === "fulfilled"
+        ? ((results[6].value.data as { data?: RecordData }).data || {})
+        : {};
       const pendingQuotes = quotes.filter(
         (quote) => quote.status === "Pending",
       );
@@ -264,6 +272,10 @@ export default function DashboardTopbar() {
           Number(invoice.balance || 0) > 0 &&
           String(invoice.status).toLowerCase() !== "void",
       );
+      const purchaseOrderCount = Number(dashboardSummary.purchaseOrders || 0);
+      const lowFinishedGoodsCount = Number(dashboardSummary.lowFinishedGoods || 0);
+      const openComplianceCount = Number(dashboardSummary.openCompliance || 0);
+      const overdueComplianceCount = Number(dashboardSummary.overdueCompliance || 0);
       setNotices([
         ...(pendingQuotes.length
           ? [
@@ -347,6 +359,26 @@ export default function DashboardTopbar() {
               },
             ]
           : []),
+        ...(lowFinishedGoodsCount
+          ? [{
+              id: `finished-stock-${lowFinishedGoodsCount}`,
+              title: "Finished goods below minimum",
+              description: `${countText(lowFinishedGoodsCount, "product")} in the store is at or below its minimum balance.`,
+              to: "/management/inventory/finished-goods",
+              tone: "red" as const,
+              kind: "stock" as const,
+            }]
+          : []),
+        ...(purchaseOrderCount
+          ? [{
+              id: `procurement-${purchaseOrderCount}`,
+              title: "Purchase orders to receive",
+              description: `${countText(purchaseOrderCount, "purchase order")} is awaiting receipt or completion.`,
+              to: "/management/purchase-orders",
+              tone: "amber" as const,
+              kind: "procurement" as const,
+            }]
+          : []),
         ...(unpaidInvoices.length
           ? [
               {
@@ -358,6 +390,16 @@ export default function DashboardTopbar() {
                 kind: "billing" as const,
               },
             ]
+          : []),
+        ...((user?.role === "admin" || user?.role === "superadmin") && openComplianceCount
+          ? [{
+              id: `factory-records-${openComplianceCount}-${overdueComplianceCount}`,
+              title: "Factory records need follow-up",
+              description: `${countText(openComplianceCount, "open factory record")}${overdueComplianceCount ? ` · ${overdueComplianceCount} overdue` : ""}.`,
+              to: "/management/compliance",
+              tone: overdueComplianceCount ? "red" as const : "amber" as const,
+              kind: "compliance" as const,
+            }]
           : []),
       ]);
     } finally {

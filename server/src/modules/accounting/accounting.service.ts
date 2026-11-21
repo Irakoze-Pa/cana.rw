@@ -155,13 +155,13 @@ export const accounts: Account[] = [
   },
   {
     code: "5240",
-    name: "Packaging expense",
+    name: "Operating packaging expense",
     type: "expense",
     group: "Operating expenses",
   },
   {
     code: "5250",
-    name: "Labour expense",
+    name: "Casual labour expense",
     type: "expense",
     group: "Operating expenses",
   },
@@ -179,7 +179,7 @@ export const accounts: Account[] = [
   },
   {
     code: "5280",
-    name: "Taxes and fees",
+    name: "Taxes and statutory fees",
     type: "expense",
     group: "Operating expenses",
   },
@@ -191,6 +191,13 @@ export const accounts: Account[] = [
   },
   { code: "5300", name: "Finance and interest expense", type: "expense", group: "Finance costs" },
   { code: "5310", name: "Bad debt expense", type: "expense", group: "Operating expenses" },
+  { code: "5320", name: "Communication expense", type: "expense", group: "Operating expenses" },
+  { code: "5330", name: "Insurance expense", type: "expense", group: "Operating expenses" },
+  { code: "5340", name: "Security expense", type: "expense", group: "Operating expenses" },
+  { code: "5350", name: "Cleaning and sanitation expense", type: "expense", group: "Operating expenses" },
+  { code: "5360", name: "Professional fees", type: "expense", group: "Operating expenses" },
+  { code: "5370", name: "Licences and permits expense", type: "expense", group: "Operating expenses" },
+  { code: "5380", name: "Bank charges", type: "expense", group: "Finance costs" },
 ];
 
 const account = (code: string) => {
@@ -217,6 +224,13 @@ const expenseAccount: Record<string, string> = {
   office: "5260",
   marketing: "5270",
   taxes_fees: "5280",
+  communication: "5320",
+  insurance: "5330",
+  security: "5340",
+  cleaning: "5350",
+  professional_fees: "5360",
+  licenses_fees: "5370",
+  bank_charges: "5380",
   other: "5290",
 };
 const text = (value: unknown, fallback: string) => String(value || fallback);
@@ -1051,6 +1065,16 @@ export function accountingSummary(
       );
   const revenue = total(period, "revenue", "credit");
   const expenses = total(period, "expense", "debit");
+  const expenseBreakdown = period
+    .filter((item) => item.type === "expense")
+    .map((item) => ({
+      code: item.code,
+      name: item.name,
+      group: item.group,
+      amount: Number((item.debitMovement - item.creditMovement).toFixed(2)),
+    }))
+    .filter((item) => item.amount !== 0)
+    .sort((left, right) => left.code.localeCompare(right.code));
   const assets = total(asAt, "asset", "debit");
   const liabilities = total(asAt, "liability", "credit");
   const cumulativeRevenue = total(asAt, "revenue", "credit");
@@ -1063,6 +1087,7 @@ export function accountingSummary(
   return {
     revenue,
     expenses,
+    expenseBreakdown,
     netProfit: revenue - expenses,
     assets,
     liabilities,
