@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   CreditCard,
   Eye,
+  Pencil,
   Plus,
   Printer,
   RefreshCw,
@@ -15,6 +16,7 @@ import { useAuth } from "@/context/authContext";
 import { useToast } from "@/context/toastContext";
 import { useConfirmation } from "@/context/confirmationContext";
 import { printCanaDocument } from "@/modules/management/utils/printCanaDocument";
+import CustomerForm, { type Customer as CustomerProfile } from "@/modules/management/users/CustomerForm";
 
 type Line = {
   productName: string;
@@ -36,6 +38,8 @@ type Invoice = {
   amountPaid: number;
   balance: number;
   writtenOffAmount?: number;
+  writtenOffAt?: string;
+  writeOffReason?: string;
   status: string;
   customer?: { _id?: string; fullName?: string };
   salesOrder?: { _id?: string; orderNumber?: string };
@@ -74,12 +78,7 @@ const requiredTreasuryType = (method: string): TreasuryAccount["type"] =>
       : "bank";
 const treasuryTypeLabel = (type: TreasuryAccount["type"]) =>
   type === "mobile_money" ? "Mobile Money" : type === "cash" ? "Cash" : "Bank";
-type Customer = {
-  _id: string;
-  fullName: string;
-  phone?: string;
-  businessName?: string;
-};
+type Customer = CustomerProfile;
 type OpeningBalance = {
   _id: string;
   openingNumber: string;
@@ -99,6 +98,8 @@ type CustomerAccount = {
   openingTotal: number;
   amountPaid: number;
   balance: number;
+  pendingPayment: number;
+  projectedBalance: number;
 };
 const money = (amount: number) =>
   Number(amount || 0).toLocaleString("en-RW", { maximumFractionDigits: 2 });
@@ -166,6 +167,7 @@ export default function BillingPage() {
   const [invoiceDetails, setInvoiceDetails] = useState<Invoice | null>(null);
   const [selectedCustomerAccount, setSelectedCustomerAccount] =
     useState<CustomerAccount | null>(null);
+  const [customerToEdit, setCustomerToEdit] = useState<CustomerProfile | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     invoice: "",
     openingBalance: "",
@@ -738,6 +740,21 @@ export default function BillingPage() {
           debit: Number(invoice.total || 0),
           credit: 0,
         })),
+      ...invoices
+        .filter(
+          (invoice) =>
+            invoice.status !== "void" &&
+            invoice.customer?._id === customerId &&
+            Number(invoice.writtenOffAmount || 0) > 0,
+        )
+        .map((invoice) => ({
+          date: invoice.writtenOffAt || invoice.issueDate,
+          type: "Write-off",
+          reference: invoice.invoiceNumber,
+          description: invoice.writeOffReason || "Invoice balance written off",
+          debit: 0,
+          credit: Number(invoice.writtenOffAmount || 0),
+        })),
       ...payments
         .filter(
           (payment) =>
@@ -799,7 +816,11 @@ export default function BillingPage() {
       0,
     );
     const receipts = periodEntries.reduce(
-      (sum, entry) => sum + entry.credit,
+      (sum, entry) => sum + (entry.type === "Payment" ? entry.credit : 0),
+      0,
+    );
+    const writeOffs = periodEntries.reduce(
+      (sum, entry) => sum + (entry.type === "Write-off" ? entry.credit : 0),
       0,
     );
     const customerName =
@@ -828,6 +849,11 @@ export default function BillingPage() {
         },
         { label: "Charges", value: `${money(charges)} RWF` },
         { label: "Payments received", value: `${money(receipts)} RWF` },
+        ...(writeOffs > 0 ? [{ label: "Balance written off", value: `${money(writeOffs)} RWF` }] : []),
+        ...(account.pendingPayment > 0 ? [
+          { label: "Pending customer cheque (not yet cleared)", value: `${money(account.pendingPayment)} RWF` },
+          { label: "Expected due after cheque clears", value: `${money(account.projectedBalance)} RWF` },
+        ] : []),
         { label: "Closing balance due", value: `${money(runningBalance)} RWF` },
       ],
       table: {
@@ -843,7 +869,7 @@ export default function BillingPage() {
         rows,
       },
       notes:
-        "Debit entries increase the customer balance. Credit entries are cleared payments that reduce the balance. Reversed receipts and uncleared cheques are excluded.",
+        "Debit entries increase the customer balance. Cleared payments and posted write-offs reduce the balance; write-offs are listed separately from cash received. Reversed receipts and uncleared cheques are excluded.",
     });
   };
   const visibleCustomerAccounts = useMemo(() => {
@@ -1145,6 +1171,7 @@ export default function BillingPage() {
                   </td>
                   <td className="truncate px-2 py-2 text-right font-extrabold text-slate-950">
                     {money(account.balance)} RWF
+                    {account.pendingPayment > 0 && <span className="mt-0.5 block text-[9px] font-semibold leading-4 text-amber-700">{money(account.pendingPayment)} pending · after clear {money(account.projectedBalance)}</span>}
                   </td>
                   <td className="px-2 py-2">
                     <span
@@ -2320,12 +2347,37 @@ export default function BillingPage() {
           payments={payments}
           openings={openingBalances}
           onClose={() => setSelectedCustomerAccount(null)}
+          onEditCustomer={() => {
+            const profile = customers.find((item) => item._id === selectedCustomerAccount.customer._id);
+            if (profile) {
+              setSelectedCustomerAccount(null);
+              setCustomerToEdit(profile);
+            } else {
+              setError("Customer profile could not be loaded for editing.");
+            }
+          }}
           onPrint={() => printCustomerStatement(selectedCustomerAccount)}
           onOpenInvoice={(invoice) => {
             setSelectedCustomerAccount(null);
             setInvoiceDetails(invoice);
           }}
         />
+      )}
+      {customerToEdit && (
+        <div className="fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-3 backdrop-blur-sm" onMouseDown={() => setCustomerToEdit(null)}>
+          <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-3 shadow-2xl sm:p-5" onMouseDown={(event) => event.stopPropagation()}>
+            <CustomerForm
+              customer={customerToEdit}
+              onCancel={() => setCustomerToEdit(null)}
+              onCreated={async (updated) => {
+                setCustomers((current) => current.map((item) => item._id === updated._id ? updated : item));
+                setCustomerToEdit(null);
+                await load();
+                toast("Customer profile updated.", "success");
+              }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
@@ -2337,6 +2389,7 @@ function CustomerAccountDetails({
   payments,
   openings,
   onClose,
+  onEditCustomer,
   onPrint,
   onOpenInvoice,
 }: {
@@ -2345,6 +2398,7 @@ function CustomerAccountDetails({
   payments: Payment[];
   openings: OpeningBalance[];
   onClose: () => void;
+  onEditCustomer: () => void;
   onPrint: () => void;
   onOpenInvoice: (invoice: Invoice) => void;
 }) {
@@ -2381,6 +2435,9 @@ function CustomerAccountDetails({
             </p>
           </div>
           <div className="flex shrink-0 gap-1.5">
+            <button type="button" onClick={onEditCustomer} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
+              <Pencil size={13} /> <span className="hidden sm:inline">Edit customer</span>
+            </button>
             <button type="button" onClick={onPrint} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-slate-950 px-3 text-xs font-bold text-white">
               <Printer size={14} /> <span className="hidden sm:inline">Statement</span>
             </button>
@@ -2389,16 +2446,18 @@ function CustomerAccountDetails({
             </button>
           </div>
         </header>
-        <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 border-b border-slate-200 bg-slate-50 sm:grid-cols-4 sm:divide-y-0">
+        <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 border-b border-slate-200 bg-slate-50 sm:grid-cols-3 xl:grid-cols-6 sm:divide-y-0">
           {[
             ["Total charged", account.invoiceTotal + account.openingTotal],
             ["Payments received", account.amountPaid],
-            ["Outstanding balance", account.balance],
+            ["Current outstanding", account.balance],
             ["Invoices", accountInvoices.length],
+            ["Pending cheque", account.pendingPayment],
+            ["After cheque clears", account.projectedBalance],
           ].map(([label, value], index) => (
             <div key={String(label)} className="px-3 py-2.5">
               <p className="text-[9px] font-extrabold uppercase tracking-wide text-slate-500">{label}</p>
-              <p className="mt-0.5 truncate text-sm font-black text-slate-950">
+              <p className={`mt-0.5 truncate text-sm font-black ${index === 4 && Number(value) > 0 ? "text-amber-700" : "text-slate-950"}`}>
                 {index === 3 ? value : `${money(Number(value))} RWF`}
               </p>
             </div>
@@ -2422,7 +2481,7 @@ function CustomerAccountDetails({
                 <div key={payment._id} className="grid grid-cols-[1fr_auto] gap-3 border-t border-slate-100 px-3 py-2 first:border-t-0">
                   <span className="min-w-0">
                     <span className="block truncate text-xs font-extrabold text-slate-950">{payment.receiptNumber}</span>
-                    <span className="block truncate text-[10px] text-slate-500">{new Date(payment.receivedAt).toLocaleDateString("en-RW")} · {payment.method.replaceAll("_", " ")}{payment.invoice?.invoiceNumber ? ` · ${payment.invoice.invoiceNumber}` : ""}</span>
+                    <span className="block truncate text-[10px] text-slate-500">{new Date(payment.receivedAt).toLocaleDateString("en-RW")} · {payment.method.replaceAll("_", " ")}{payment.invoice?.invoiceNumber ? ` · ${payment.invoice.invoiceNumber}` : ""}{payment.chequeNumber ? ` · Cheque ${payment.chequeNumber}` : ""}</span>
                   </span>
                   <span className={`text-right text-xs font-black ${isCompletedPayment(payment) ? "text-emerald-700" : "text-amber-700"}`}>{money(payment.amount)} RWF<span className="block text-[9px] font-medium uppercase">{payment.status || "received"}</span></span>
                 </div>

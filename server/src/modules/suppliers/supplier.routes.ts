@@ -18,7 +18,9 @@ router.get("/", authorizeArea("procurement", "finance"), getSuppliersController)
 
 router.get("/:id", authorizeArea("procurement", "finance"), getSupplierByIdController);
 
-router.put("/:id", authorizeArea("procurement"), updateSupplierController);
+// Procurement owns supplier onboarding; Finance can maintain contact and
+// commercial details because it also needs the supplier register for payments.
+router.put("/:id", authorizeArea("procurement", "finance"), updateSupplierController);
 
 router.delete("/:id", authorizeArea("procurement"), deleteSupplierController);
 

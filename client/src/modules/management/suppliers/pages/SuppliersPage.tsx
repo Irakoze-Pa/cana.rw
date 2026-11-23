@@ -5,6 +5,8 @@ import {
   RefreshCw,
   Truck,
   AlertCircle,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 import SupplierModal from "../components/SupplierModal";
@@ -96,7 +98,7 @@ function SuppliersPage() {
           .toLowerCase()
           .includes(searchValue) ||
         supplier.code
-          .toLowerCase()
+          ?.toLowerCase()
           .includes(searchValue) ||
         supplier.contactPerson
           ?.toLowerCase()
@@ -450,11 +452,58 @@ function SuppliersPage() {
           </p>
         </div>
       ) : (
-        <SupplierTable
-          suppliers={filteredSuppliers}
-          onEdit={handleEditSupplier}
-          onDelete={handleDeleteSupplier}
-        />
+        <>
+          <div className="grid gap-2.5 md:hidden">
+            {filteredSuppliers.length === 0 ? (
+              <div className="cana-panel p-8 text-center text-sm text-slate-500">
+                No suppliers found.
+              </div>
+            ) : (
+              filteredSuppliers.map((supplier) => (
+                <article key={supplier._id} className="cana-panel space-y-3 p-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="truncate text-sm font-extrabold text-slate-950">{supplier.name}</h2>
+                      <p className="mt-0.5 text-[11px] font-semibold text-slate-500">{supplier.code || "No supplier code"}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${supplier.status === "Active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                      {supplier.status}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-y border-slate-100 py-2.5 text-xs">
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Contact</p>
+                      <p className="truncate font-semibold text-slate-800">{supplier.contactPerson || supplier.phone || "—"}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Location</p>
+                      <p className="truncate font-semibold text-slate-800">{[supplier.city, supplier.country].filter(Boolean).join(", ") || "—"}</p>
+                    </div>
+                    <div className="col-span-2 min-w-0">
+                      <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Email · Terms</p>
+                      <p className="truncate text-slate-600">{[supplier.email, supplier.paymentTerms].filter(Boolean).join(" · ") || "—"}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => handleEditSupplier(supplier)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 hover:bg-slate-50" aria-label={`Edit ${supplier.name}`}>
+                      <Pencil size={14} /> Edit
+                    </button>
+                    <button type="button" onClick={() => handleDeleteSupplier(supplier)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-100 px-3 text-xs font-bold text-red-700 hover:bg-red-50" aria-label={`Delete ${supplier.name}`}>
+                      <Trash2 size={14} /> Delete
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+          <div className="hidden md:block">
+            <SupplierTable
+              suppliers={filteredSuppliers}
+              onEdit={handleEditSupplier}
+              onDelete={handleDeleteSupplier}
+            />
+          </div>
+        </>
       )}
 
       {/* MODAL */}

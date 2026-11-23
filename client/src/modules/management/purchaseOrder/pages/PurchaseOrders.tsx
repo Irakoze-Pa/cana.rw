@@ -718,24 +718,24 @@ function PurchaseOrdersPage() {
   // ===================================================
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 pb-6">
+    <div className="w-full min-w-0 max-w-none space-y-4 pb-6">
 
       {/* =================================================
           PAGE HEADER
       ================================================= */}
 
-      <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
 
         <div>
           <div className="flex items-center gap-3">
 
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600">
-              <FileText size={22} />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+              <FileText size={19} />
             </div>
 
             <div>
-              <p className="cana-section-kicker">Procurement & materials</p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
+              <p className="cana-section-kicker">Procurement</p>
+              <h1 className="mt-0.5 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">
                 Purchase Orders
               </h1>
 
@@ -747,7 +747,7 @@ function PurchaseOrdersPage() {
         <button
           type="button"
           onClick={() => { setEditingOrder(null); setIsModalOpen(true); }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-800"
         >
           <Plus size={18} />
           Create Purchase Order
@@ -759,11 +759,11 @@ function PurchaseOrdersPage() {
           STAT CARDS
       ================================================= */}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
 
         {/* TOTAL */}
 
-        <div className="cana-panel p-4">
+        <div className="cana-panel p-3 sm:p-4">
           <div className="flex items-center justify-between">
 
             <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
@@ -777,14 +777,14 @@ function PurchaseOrdersPage() {
 
           </div>
 
-          <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
+          <p className="mt-2 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">
             {stats.total}
           </p>
         </div>
 
         {/* DRAFT */}
 
-        <div className="cana-panel p-4">
+        <div className="cana-panel p-3 sm:p-4">
           <div className="flex items-center justify-between">
 
             <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
@@ -798,14 +798,14 @@ function PurchaseOrdersPage() {
 
           </div>
 
-          <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
+          <p className="mt-2 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">
             {stats.draft}
           </p>
         </div>
 
         {/* PENDING */}
 
-        <div className="cana-panel p-4">
+        <div className="cana-panel p-3 sm:p-4">
           <div className="flex items-center justify-between">
 
             <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
@@ -819,14 +819,14 @@ function PurchaseOrdersPage() {
 
           </div>
 
-          <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
+          <p className="mt-2 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">
             {stats.pending}
           </p>
         </div>
 
         {/* APPROVED */}
 
-        <div className="cana-panel p-4">
+        <div className="cana-panel p-3 sm:p-4">
           <div className="flex items-center justify-between">
 
             <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
@@ -840,14 +840,14 @@ function PurchaseOrdersPage() {
 
           </div>
 
-          <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
+          <p className="mt-2 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">
             {stats.openDeliveries}
           </p>
         </div>
 
         {/* RECEIVED */}
 
-        <div className="cana-panel p-4">
+        <div className="cana-panel p-3 sm:p-4">
           <div className="flex items-center justify-between">
 
             <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
@@ -861,7 +861,7 @@ function PurchaseOrdersPage() {
 
           </div>
 
-          <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">
+          <p className="mt-2 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">
             {stats.received}
           </p>
         </div>
@@ -872,7 +872,7 @@ function PurchaseOrdersPage() {
           FILTER BAR
       ================================================= */}
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
 
@@ -970,7 +970,7 @@ function PurchaseOrdersPage() {
           TABLE
       ================================================= */}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
 
         {/* TABLE HEADER */}
 

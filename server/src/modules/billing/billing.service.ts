@@ -635,7 +635,7 @@ export async function listCustomerBilling(customerId: string) {
 
 /** A consolidated customer receivables view. Sales invoices and opening balances stay distinct. */
 export async function listCustomerAccounts() {
-  const [customers, invoices, openings, payments] = await Promise.all([
+  const [customers, invoices, openings, payments, pendingPayments] = await Promise.all([
     User.find({ role: UserRole.CUSTOMER })
       .select("fullName phone email businessName")
       .sort({ fullName: 1 })
@@ -657,6 +657,13 @@ export async function listCustomerAccounts() {
     })
       .select("customer amount")
       .lean(),
+    Payment.find({
+      status: "pending",
+      method: "bank_cheque",
+      chequeStatus: { $in: ["received", "due", "deposited"] },
+    })
+      .select("customer amount")
+      .lean(),
   ]);
   return customers.map((customer) => {
     const id = String(customer._id);
@@ -668,6 +675,17 @@ export async function listCustomerAccounts() {
     );
     const customerPayments = payments.filter(
       (item) => String(item.customer) === id,
+    );
+    const customerPendingPayments = pendingPayments.filter(
+      (item) => String(item.customer) === id,
+    );
+    const balance = [...customerInvoices, ...customerOpenings].reduce(
+      (sum, item) => sum + Number(item.balance || 0),
+      0,
+    );
+    const pendingPayment = customerPendingPayments.reduce(
+      (sum, item) => sum + Number(item.amount || 0),
+      0,
     );
     return {
       customer,
@@ -683,10 +701,9 @@ export async function listCustomerAccounts() {
         (sum, item) => sum + Number(item.amount || 0),
         0,
       ),
-      balance: [...customerInvoices, ...customerOpenings].reduce(
-        (sum, item) => sum + Number(item.balance || 0),
-        0,
-      ),
+      balance,
+      pendingPayment,
+      projectedBalance: Math.max(0, Number((balance - pendingPayment).toFixed(2))),
     };
   });
 }
